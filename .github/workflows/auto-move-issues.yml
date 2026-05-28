@@ -350,6 +350,7 @@ jobs:
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
@@ -406,13 +407,51 @@ jobs:
             -F number=$PR_NUMBER \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
 
+          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
           if [ -z "$CLOSING_ISSUES" ]; then
-            echo "⚠️ No se encontraron issues vinculadas al PR #$PR_NUMBER"
-            echo "   Asegúrate de usar 'closes #N' o 'fixes #N' en el body del PR"
+            echo "No se encontraron keywords 'closes/fixes' en el body del PR."
+            echo "Buscando número de issue en el nombre de la rama: $PR_BRANCH"
+            
+            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
+            
+            if [ -z "$ISSUE_NUMBER" ]; then
+              echo "⚠️ No se encontró issue ni en el body (closes #N) ni en el nombre de la rama ($PR_BRANCH)"
+              echo "   Recomendación: usa 'closes #N' en el body del PR o incluye el número en el nombre de la rama"
+            else
+              echo "Issue #$ISSUE_NUMBER encontrada en la rama. Validando..."
+              
+              # Validar que la issue existe
+              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
+              if [ "$ISSUE_DATA" = "null" ]; then
+                echo "⚠️ Issue #$ISSUE_NUMBER no existe en este repo"
+              else
+                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
+                # Crear array fake para mantener consistencia con el loop de abajo
+                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
+              fi
+            fi
+          fi
+
+          # Procesar las issues encontradas
+          if [ -z "$CLOSING_ISSUES" ]; then
+            echo "Sin issues para procesar"
           else
-            # Por cada issue vinculada, moverla a IN REVIEW
-            echo "$CLOSING_ISSUES" | jq -r '.id' | while IFS= read -r ISSUE_ID; do
-              ISSUE_NUM=$(echo "$CLOSING_ISSUES" | jq -r "select(.id == \"$ISSUE_ID\") | .number")
+            # Manejar tanto un único objeto como un array
+            if echo "$CLOSING_ISSUES" | jq -e 'type' > /dev/null 2>&1; then
+              # Si es un array, procesarlo normalmente
+              if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
+                ISSUE_LIST="$CLOSING_ISSUES"
+              else
+                # Si es un objeto único, convertirlo a array
+                ISSUE_LIST="[$CLOSING_ISSUES]"
+              fi
+            else
+              ISSUE_LIST="[]"
+            fi
+
+            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
+              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
+              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
 
               ITEM_ID=$(gh api graphql -f query='
                 mutation($project: ID!, $issue: ID!) {
@@ -535,6 +574,7 @@ jobs:
           ORGANIZATION: ${{ vars.ORGANIZATION }}
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
           REVIEWER: ${{ github.event.review.user.login }}
@@ -580,9 +620,29 @@ jobs:
             -F number=$PR_NUMBER \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
 
+          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
+          if [ -z "$CLOSING_ISSUES" ]; then
+            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
+              if [ "$ISSUE_DATA" != "null" ]; then
+                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
+                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
+              fi
+            fi
+          fi
+
           if [ -n "$CLOSING_ISSUES" ]; then
-            echo "$CLOSING_ISSUES" | jq -r '.id' | while IFS= read -r ISSUE_ID; do
-              ISSUE_NUM=$(echo "$CLOSING_ISSUES" | jq -r "select(.id == \"$ISSUE_ID\") | .number")
+            # Manejar tanto un array como un objeto único
+            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
+              ISSUE_LIST="$CLOSING_ISSUES"
+            else
+              ISSUE_LIST="[$CLOSING_ISSUES]"
+            fi
+
+            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
+              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
+              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
 
               ITEM_ID=$(gh api graphql -f query='
                 mutation($project: ID!, $issue: ID!) {
@@ -664,6 +724,7 @@ jobs:
           ORGANIZATION: ${{ vars.ORGANIZATION }}
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
           REVIEWER: ${{ github.event.review.user.login }}
@@ -708,9 +769,29 @@ jobs:
             -F number=$PR_NUMBER \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
 
+          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
+          if [ -z "$CLOSING_ISSUES" ]; then
+            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
+              if [ "$ISSUE_DATA" != "null" ]; then
+                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
+                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
+              fi
+            fi
+          fi
+
           if [ -n "$CLOSING_ISSUES" ]; then
-            echo "$CLOSING_ISSUES" | jq -r '.id' | while IFS= read -r ISSUE_ID; do
-              ISSUE_NUM=$(echo "$CLOSING_ISSUES" | jq -r "select(.id == \"$ISSUE_ID\") | .number")
+            # Manejar tanto un array como un objeto único
+            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
+              ISSUE_LIST="$CLOSING_ISSUES"
+            else
+              ISSUE_LIST="[$CLOSING_ISSUES]"
+            fi
+
+            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
+              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
+              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
 
               ITEM_ID=$(gh api graphql -f query='
                 mutation($project: ID!, $issue: ID!) {
@@ -800,6 +881,7 @@ jobs:
           ORGANIZATION: ${{ vars.ORGANIZATION }}
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
           MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
@@ -844,9 +926,29 @@ jobs:
             -F number=$PR_NUMBER \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
 
+          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
+          if [ -z "$CLOSING_ISSUES" ]; then
+            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
+              if [ "$ISSUE_DATA" != "null" ]; then
+                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
+                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
+              fi
+            fi
+          fi
+
           if [ -n "$CLOSING_ISSUES" ]; then
-            echo "$CLOSING_ISSUES" | jq -r '.id' | while IFS= read -r ISSUE_ID; do
-              ISSUE_NUM=$(echo "$CLOSING_ISSUES" | jq -r "select(.id == \"$ISSUE_ID\") | .number")
+            # Manejar tanto un array como un objeto único
+            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
+              ISSUE_LIST="$CLOSING_ISSUES"
+            else
+              ISSUE_LIST="[$CLOSING_ISSUES]"
+            fi
+
+            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
+              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
+              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
 
               ITEM_ID=$(gh api graphql -f query='
                 mutation($project: ID!, $issue: ID!) {
@@ -912,6 +1014,7 @@ jobs:
           ORGANIZATION: ${{ vars.ORGANIZATION }}
           PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
@@ -955,9 +1058,29 @@ jobs:
             -F number=$PR_NUMBER \
             --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
 
+          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
+          if [ -z "$CLOSING_ISSUES" ]; then
+            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
+              if [ "$ISSUE_DATA" != "null" ]; then
+                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
+                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
+              fi
+            fi
+          fi
+
           if [ -n "$CLOSING_ISSUES" ]; then
-            echo "$CLOSING_ISSUES" | jq -r '.id' | while IFS= read -r ISSUE_ID; do
-              ISSUE_NUM=$(echo "$CLOSING_ISSUES" | jq -r "select(.id == \"$ISSUE_ID\") | .number")
+            # Manejar tanto un array como un objeto único
+            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
+              ISSUE_LIST="$CLOSING_ISSUES"
+            else
+              ISSUE_LIST="[$CLOSING_ISSUES]"
+            fi
+
+            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
+              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
+              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
 
               ITEM_ID=$(gh api graphql -f query='
                 mutation($project: ID!, $issue: ID!) {
