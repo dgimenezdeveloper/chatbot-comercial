@@ -142,7 +142,7 @@ El workflow gestiona automáticamente estos labels en los PRs:
 | `move_to_ready` | `issues.assigned` | Issue → Ready |
 | `move_to_backlog_unassigned` | `issues.unassigned` | Issue → Backlog |
 | `move_to_in_progress` | `create` (branch) | Issue extraída de la branch → In Progress |
-| `move_to_in_review` | `pull_request.opened/reopened` | Issues vinculadas → In Review + notifica QA |
+| `move_to_in_review` | `pull_request.opened/reopened` | Issues vinculadas → IN REVIEW (el PR NO aparece en el board) + notifica QA |
 | `handle_qa_review` | `pull_request_review.submitted` | QA Aprueba → QA Approved + notifica maintainers; QA Rechaza → In Progress + notifica dev |
 | `move_to_done` | `pull_request.closed` (merged=true) | Issues vinculadas → Done |
 | `move_to_backlog_closed_pr` | `pull_request.closed` (merged=false) | Issues vinculadas → Backlog |
