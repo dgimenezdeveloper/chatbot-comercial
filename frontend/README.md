@@ -4,15 +4,15 @@ Este directorio contiene el código fuente y la configuración del frontend del 
 
 ## 🛠️ Tecnologías Core
 
-| Tecnología           | Selección Oficial                                    | Descripción / Justificación |
-|----------------------|-----------------------------------------------------|-----------------------------|
-| **Framework** | React 19 + Vite (SPA)                               | Solución ligera, ágil y de alta performance; evita la sobrecarga de servidor de Next.js. |
-| **Lenguaje** | TypeScript                                          | Tipado estricto para asegurar la robustez del código y consistencia de datos. |
-| **Estilos** | Tailwind CSS + Shadcn/UI                            | Utilidades de diseño atómico alineadas con el sistema de diseño de UX/UI en Figma. |
-| **Estado** | Zustand                                             | Gestor de estado global ultraligero, ideal para el historial de mensajes del chat. |
-| **HTTP / WS** | Axios + WebSockets nativos                          | Conexión con FastAPI y consumo de eventos en tiempo real para el streaming de respuestas. |
-| **Testing** | Vitest + Cypress                                    | Pruebas unitarias veloces e integración end-to-end automatizada desde el inicio. |
-| **Storybook** | Storybook                                           | Entorno de desarrollo aislado para validación directa de componentes con UX/UI. |
+| Tecnología    | Selección Oficial          | Descripción / Justificación                                                               |
+| ------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| **Framework** | React 19 + Vite (SPA)      | Solución ligera, ágil y de alta performance; evita la sobrecarga de servidor de Next.js.  |
+| **Lenguaje**  | TypeScript                 | Tipado estricto para asegurar la robustez del código y consistencia de datos.             |
+| **Estilos**   | Tailwind CSS + Shadcn/UI   | Utilidades de diseño atómico alineadas con el sistema de diseño de UX/UI en Figma.        |
+| **Estado**    | Zustand                    | Gestor de estado global ultraligero, ideal para el historial de mensajes del chat.        |
+| **HTTP / WS** | Axios + WebSockets nativos | Conexión con FastAPI y consumo de eventos en tiempo real para el streaming de respuestas. |
+| **Testing**   | Vitest + Cypress           | Pruebas unitarias veloces e integración end-to-end automatizada desde el inicio.          |
+| **Storybook** | Storybook                  | Entorno de desarrollo aislado para validación directa de componentes con UX/UI.           |
 
 ## 📁 Estructura del Proyecto
 
@@ -61,22 +61,22 @@ frontend/
 
 ## 🚀 Scripts Disponibles
 
-| Script             | Comando | Descripción |
-|--------------------|---------|-------------|
-| **Desarrollo** | `pnpm dev` | Inicia el servidor de desarrollo local con Vite (`http://localhost:5173`). |
-| **Build** | `pnpm build` | Compila y genera el bundle optimizado para producción de la SPA. |
-| **Linter** | `pnpm lint` | Ejecuta el análisis estático de código con ESLint. |
-| **Format** | `pnpm format` | Formatea automáticamente el código utilizando Prettier. |
-| **Storybook** | `pnpm storybook` | Inicia el entorno aislado de componentes en `http://localhost:6006`. |
-| **Testing** | `pnpm test` | Ejecuta las pruebas unitarias y de integración con Vitest. |
-| **Testing E2E** | `pnpm test:e2e` | Abre la interfaz de Cypress para pruebas de extremo a extremo. |
+| Script          | Comando          | Descripción                                                                |
+| --------------- | ---------------- | -------------------------------------------------------------------------- |
+| **Desarrollo**  | `pnpm dev`       | Inicia el servidor de desarrollo local con Vite (`http://localhost:5173`). |
+| **Build**       | `pnpm build`     | Compila y genera el bundle optimizado para producción de la SPA.           |
+| **Linter**      | `pnpm lint`      | Ejecuta el análisis estático de código con ESLint.                         |
+| **Format**      | `pnpm format`    | Formatea automáticamente el código utilizando Prettier.                    |
+| **Storybook**   | `pnpm storybook` | Inicia el entorno aislado de componentes en `http://localhost:6006`.       |
+| **Testing**     | `pnpm test`      | Ejecuta las pruebas unitarias y de integración con Vitest.                 |
+| **Testing E2E** | `pnpm test:e2e`  | Abre la interfaz de Cypress para pruebas de extremo a extremo.             |
 
 ## 🔐 Variables de Entorno
 
-| Variable              | Descripción                                     | Ejemplo                          |
-|-----------------------|-------------------------------------------------|----------------------------------|
-| `VITE_API_BASE_URL`   | URL base de la API REST del backend (FastAPI)   | `http://localhost:8000/api/v1`   |
-| `VITE_WS_CHAT_URL`    | URL del WebSocket para el flujo del chatbot     | `ws://localhost:8000/chat/ws`    |
+| Variable            | Descripción                                   | Ejemplo                        |
+| ------------------- | --------------------------------------------- | ------------------------------ |
+| `VITE_API_BASE_URL` | URL base de la API REST del backend (FastAPI) | `http://localhost:8000/api/v1` |
+| `VITE_WS_CHAT_URL`  | URL del WebSocket para el flujo del chatbot   | `ws://localhost:8000/chat/ws`  |
 
 ## 📋 Convenciones del Proyecto
 
@@ -87,5 +87,79 @@ frontend/
 ## 🔗 Recursos del Equipo
 
 - Documentación de la API (FastAPI - Swagger): _(añadir URL)_
-- Diseños en Figma: [Link](https://www.figma.com/design/MRIDdLhLsGWQbBRt8my5Tm/Dise%C3%B1o-UXUI-Equipo-10-InnovaLab?node-id=27-76&t=PZWYmXb0sUN7mr2N-0) 
+- Diseños en Figma: [Link](https://www.figma.com/design/MRIDdLhLsGWQbBRt8my5Tm/Dise%C3%B1o-UXUI-Equipo-10-InnovaLab?node-id=27-76&t=PZWYmXb0sUN7mr2N-0)
 - Tablero de Gestión: [Link](https://github.com/users/dgimenezdeveloper/projects/6)
+
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+]);
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x';
+import reactDom from 'eslint-plugin-react-dom';
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+]);
+```
