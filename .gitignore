@@ -1,0 +1,395 @@
+# Git ignore recomendado para el proyecto chatbot-comercial
+# Cubre Python/FastAPI, Docker, Postgres, Redis, Node, IDEs y archivos de sistema
+
+########################################
+# Python / FastAPI
+########################################
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+# Distribution / packaging
+build/
+dist/
+eggs/
+.eggs/
+parts/
+wheels/
+pip-wheel-metadata/
+*.egg-info/
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+test-results/
+
+# mypy
+.mypy_cache/
+
+# PEP 582
+__pypackages__/
+
+# virtual envs
+venv/
+ENV/
+env/
+.venv/
+venv.bak/
+env.bak/
+
+# pipenv / poetry
+Pipfile.lock
+poetry.lock
+
+# pyenv
+.python-version
+
+# byte-compiled / optimized
+*.pyc
+
+########################################
+# Environment / Secrets
+########################################
+# Ignore all .env variants but keep the example file
+.env*
+!.env.example
+
+# Local env files inside backend/ or frontend/
+backend/.env
+frontend/.env
+
+# Credentials and keys
+*.pem
+*.key
+*.crt
+google-credentials.json
+credentials.json
+service-account-*.json
+secrets.yml
+secrets.json
+
+########################################
+# Docker
+########################################
+# Docker Compose override files for local dev
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.*.local.yml
+.docker/
+
+# Local data/volumes (if host-mounted folders are used during development)
+postgres_data/
+pgdata/
+redis_data/
+data/
+tmp/
+
+# Docker envs
+*.local.env
+
+########################################
+# Databases
+########################################
+*.sqlite3
+*.db
+*.db-journal
+
+########################################
+# Redis / Cache
+########################################
+# caches and dumps
+dump.rdb
+dump-*.rdb
+appendonly.aof
+
+########################################
+# Node / Frontend
+########################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+package-lock.json
+.pnp/
+.pnp.js
+.next/
+out/
+dist/
+build/
+.parcel-cache/
+.vite/
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.parcel-cache/
+
+########################################
+# IDEs, editors and OS
+########################################
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+*.iml
+
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Swap / backup files
+*~
+*.swp
+*.swo
+*.bak
+*.orig
+
+########################################
+# Logs and local runtime files
+########################################
+logs/
+*.log
+debug.log
+gunicorn.log
+supervisord.log
+
+########################################
+# Misc / tooling
+########################################
+# Sphinx docs
+docs/_build/
+
+# Coverage and reports
+coverage/
+jspm_packages/
+
+# Build artifacts
+dist/
+build/
+
+# Temporary files
+.cache/
+.pytest_cache/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Kubernetes / kubeconfig
+kubeconfig
+
+# Local test output (e.g. Postman, Insomnia)
+insomnia/**/*
+postman_collection.json
+
+# Ignore compiled C extensions
+*.o
+*.a
+*.lib
+
+########################################
+# Allowlist (ejemplos/archivos que queremos trackear)
+########################################
+# Aseguramos que el ejemplo de env y archivos de configuración de ejemplo no se ignoren
+!.env.example
+# .gitignore — Chatbot Comercial
+# Ignora artefactos comunes para Python, Docker, Node, IDEs y secretos
+
+##########################
+# Python
+##########################
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+venv.bak/
+env.bak/
+__pypackages__/
+
+# Local env files (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# Byte-compiled / compiled files
+*.so
+
+# Distribution / packaging
+build/
+dist/
+eggs/
+.eggs/
+parts/
+sdist/
+wheels/
+pip-wheel-metadata/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Type checkers / caches
+.mypy_cache/
+.pyright/
+
+# SQL / DB files
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
+
+# Redis persistence (if used locally)
+dump.rdb
+appendonly.aof
+
+##########################
+# Docker
+##########################
+# Local overrides and dev-only compose files
+docker-compose.override.yml
+docker-compose.*.local.yml
+.docker/
+.dockerignore
+
+# Docker artifacts/volumes that may accidentally appear
+**/docker-compose.override.yml
+
+##########################
+# Node / Frontend
+##########################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log
+
+# Build outputs
+dist/
+build/
+.next/
+.nuxt/
+.out/
+public/
+.cache/
+.vite/
+.esbuild/
+parcel-cache/
+
+##########################
+# IDEs / Editors
+##########################
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.code-workspace
+
+##########################
+# OS files
+##########################
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+##########################
+# Logs
+##########################
+logs/
+*.log
+
+##########################
+# Secrets & keys
+##########################
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.asc
+*.secret
+secrets.yml
+credentials
+*.service_account.json
+.aws/
+.gcloud/
+
+##########################
+# Build / temp files
+##########################
+*.tmp
+*.temp
+*.bak
+*~
+*.orig
+*.rej
+
+##########################
+# Documentation
+##########################
+docs/_build/
+
+##########################
+# Misc
+##########################
+coverage/
+coverage.*
+reports/
