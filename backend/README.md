@@ -11,6 +11,8 @@ Backend desarrollado en Python siguiendo una arquitectura simple y escalable.
 - **Docker**
 - **JWT Authentication**
 
+> Ver en wiki para más detalles sobre la arquitectura y decisiones técnicas [Stack Técnico](https://github.com/dgimenezdeveloper/chatbot-comercial/wiki/Stack-T%C3%A9cnico)
+
 ## 📁 Estructura del Proyecto
 
 ```bash
