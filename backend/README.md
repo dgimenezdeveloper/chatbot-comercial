@@ -17,20 +17,24 @@ Backend desarrollado en Python siguiendo una arquitectura simple y escalable.
 
 ```bash
 backend/
-│
-├── app/
-│   ├── controllers/      # Controladores de la lógica de negocio
-│   ├── services/         # Servicios de aplicación
-│   ├── repositories/     # Capa de acceso a datos
-│   ├── models/           # Modelos de datos / ORM
-│   ├── routes/           # Definición de rutas/endpoints
-│   ├── middlewares/      # Middlewares (autenticación, logging, etc.)
-│   ├── config/           # Configuración de la aplicación
-│   └── main.py           # Punto de entrada de la aplicación
-│
-├── requirements.txt      # Dependencias del proyecto
-├── .env                  # Variables de entorno
-├── Dockerfile            # Configuración Docker
+├─ app/
+│  ├─ api/
+│  │  ├─ v1/
+│  │  │  ├─ admin/        # endpoints del panel del emprendedor
+│  │  │  ├─ chatbot/       # endpoints/webhooks del chatbot WhatsApp
+│  │  │  ├─ catalog/
+│  │  │  ├─ faq/
+│  │  │  ├─ calendar/
+│  │  │  └─ auth/
+│  ├─ core/                # configuración, seguridad, settings
+│  ├─ db/                   # modelos SQLAlchemy, sesiones, migraciones (Alembic)
+│  ├─ services/             # lógica de negocio (catálogo, turnos, contexto conversacional)
+│  ├─ mcp/                  # cliente MCP, definición de tools/resources/prompts
+│  ├─ schemas/              # modelos Pydantic (request/response)
+│  └─ main.py               # entrypoint FastAPI
+├─ tests/
+├─ requirements.txt
+└─ Dockerfile
 └── README.md             # Este archivo
 ```
 
