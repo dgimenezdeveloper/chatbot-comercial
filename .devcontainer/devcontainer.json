@@ -15,7 +15,8 @@
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.analysis.extraPaths": [
           "/app/backend"
-        ]
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash"
       }
     },
     "jetbrains": {
@@ -25,10 +26,15 @@
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/git:1": {}
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": false
+    }
   },
   "remoteUser": "root",
   "remoteEnv": {
     "PYTHONPATH": "/app/backend"
-  }
+  },
+  "postCreateCommand": "curl -s https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -o /root/.git-completion.bash && echo '[ -f /root/.git-completion.bash ] && . /root/.git-completion.bash' >> /root/.bashrc"
 }
