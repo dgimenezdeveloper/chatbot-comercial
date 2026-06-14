@@ -5,9 +5,12 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /backend
 
+# Instalación de dependencias del sistema de desarrollo, base de datos y herramientas de Git/SSH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    openssh-client \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
