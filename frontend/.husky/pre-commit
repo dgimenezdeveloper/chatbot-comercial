@@ -1,2 +1,15 @@
 #!/usr/bin/env sh
+
+echo "[Git Hook] Iniciando revisiones de código pre-commit..."
+echo "Ejecutando pnpm lint-staged, por favor espera..."
+
 pnpm lint-staged
+
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+  echo "❌ [Git Hook] El linter encontró errores. Corrige los problemas y vuelve a intentar el commit."
+  exit $RESULT
+fi
+
+echo "✅ [Git Hook] Revisiones completadas con éxito. Guardando commit..."

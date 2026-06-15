@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.app.json",
-  "include": ["src", ".storybook", "vitest.shims.d.ts", "vite.config.ts"]
-}
