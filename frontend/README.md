@@ -1,165 +1,121 @@
 # Frontend — chatbot-comercial 🎨
 
-Este directorio contiene el código fuente y la configuración del frontend del proyecto **chatbot-comercial**, una aplicación web para la gestión e interacción con chatbots comerciales. Está integrado como un subproyecto dentro de la arquitectura de **Monorepo** del equipo.
+Este directorio contiene el código fuente y la configuración del frontend del proyecto **chatbot-comercial**. La aplicación funciona como una **Landing Page** y un **Panel de Administración (SaaS)** para comercios (actualmente enfocado en la gestión de Peluquerías).
 
-## 🛠️ Tecnologías Core
+> **Nota para Desarrolladores:** El proyecto está diseñado con un enfoque "Backend-heavy". Las integraciones complejas (flujos de WhatsApp, motores de inferencia, Google Calendar) ocurren en el servidor. El Frontend se encarga puramente de la presentación comercial, el onboarding del comercio y la gestión visual de los turnos.
 
-| Tecnología    | Selección Oficial          | Descripción / Justificación                                                               |
-| ------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
-| **Framework** | React 19 + Vite (SPA)      | Solución ligera, ágil y de alta performance; evita la sobrecarga de servidor de Next.js.  |
-| **Lenguaje**  | TypeScript                 | Tipado estricto para asegurar la robustez del código y consistencia de datos.             |
-| **Estilos**   | Tailwind CSS + Shadcn/UI   | Utilidades de diseño atómico alineadas con el sistema de diseño de UX/UI en Figma.        |
-| **Estado**    | Zustand                    | Gestor de estado global ultraligero, ideal para el historial de mensajes del chat.        |
-| **HTTP / WS** | Axios + WebSockets nativos | Conexión con FastAPI y consumo de eventos en tiempo real para el streaming de respuestas. |
-| **Testing**   | Vitest + Cypress           | Pruebas unitarias veloces e integración end-to-end automatizada desde el inicio.          |
-| **Storybook** | Storybook                  | Entorno de desarrollo aislado para validación directa de componentes con UX/UI.           |
+## 🛠️ Stack Tecnológico
 
-## 📁 Estructura del Proyecto
+| Tecnología                   | Caso de Uso                                                                        |
+| :--------------------------- | :--------------------------------------------------------------------------------- |
+| **Next.js (App Router)**     | Framework principal (React). Manejo de rutas, Landing Page optimizada y Dashboard. |
+| **JavaScript (ES6+)**        | Lenguaje principal (Archivos `.js` / `.jsx`).                                      |
+| **Tailwind CSS + Shadcn/UI** | Sistema de diseño, estilos utilitarios y componentes accesibles base.              |
+| **NextAuth.js (Auth.js)**    | Gestión de sesiones y autenticación (Google Provider & Credentials Mock).          |
+| **React Context API**        | Estado global nativo para datos ligeros en el cliente.                             |
+| **TanStack Query**           | Data fetching, caché y sincronización asíncrona con el servidor.                   |
+| **Axios**                    | Cliente HTTP configurado para las peticiones REST al Backend (FastAPI).            |
 
-```bash
-frontend/
-├── .storybook/              # Configuración de Storybook
-├── public/                  # Archivos estáticos (favicon, imágenes del catálogo, etc.)
-├── src/
-│   ├── components/          # Componentes reutilizables e interactivos
-│   │   ├── ui/              # Componentes de base atómica (Shadcn/UI)
-│   │   ├── chatbot/         # Ventana de conversación, burbujas y formularios interactivos
-│   │   └── dashboard/       # Paneles para visualización de métricas y leads comerciales
-│   ├── hooks/               # Custom hooks (ej: useWebSocket, useAuth)
-│   ├── services/            # Clientes de API, abstracción de endpoints y mocks de datos
-│   ├── store/               # Stores de Zustand (historial de chat, UI state)
-│   ├── types/               # Tipos e interfaces globales de TypeScript
-│   ├── utils/               # Funciones utilitarias y formateadores
-│   ├── App.tsx              # Componente raíz
-│   └── main.tsx             # Punto de entrada de Vite
-├── .env.example             # Variables de entorno de ejemplo
-├── .prettierrc              # Configuración estricta de formateo
-├── eslint.config.js         # Configuración de ESLint con TypeScript y React hooks
-├── tsconfig.json            # Configuración de TypeScript
-└── README.md                # Este archivo
-```
+## 📋 Requisitos Previos
 
-## ✅ Requisitos Previos
+Antes de comenzar, asegúrate de tener instalado en tu máquina:
 
-- **Node.js** >= 18.x
-- **pnpm** >= 9.x (Gestor de paquetes exclusivo del Monorepo).
-- ⚠️ **PROHIBIDO EL USO DE NPM / YARN:** Por políticas de consistencia en los workspaces del monorepo, el uso de npm o yarn está prohibido. Toda dependencia externa debe instalarse mediante `pnpm`.
+- **Node.js** (v18.17.0 o superior recomendada).
+- **pnpm** (v9.x).
 
-## ⚙️ Configuración e Instalación
+⚠️ **CRÍTICO:** El uso de `npm` o `yarn` está terminantemente prohibido para mantener la integridad de los workspaces en el Monorepo.
 
-1. **Instala las dependencias desde este directorio:**
+## ⚙️ Configuración Local
+
+Sigue estos pasos para levantar el entorno de desarrollo local sin afectar la base de datos de producción.
+
+1. **Instalar dependencias:**
+   Posicionado en la raíz de la carpeta `/frontend`, ejecuta:
 
    ```bash
    pnpm install
    ```
 
-2. **Copia el archivo de variables de entorno y completa los valores correspondientes:**
+2. **Configurar variables de entorno:**
+   Crea tu archivo de entorno local copiando la plantilla.
 
    ```bash
    cp .env.example .env.local
    ```
 
-## 🚀 Scripts Disponibles
+   _Nota: Solicita al administrador del repositorio los valores reales de los IDs de Google Auth y el Secret de NextAuth._
 
-| Script          | Comando          | Descripción                                                                |
-| --------------- | ---------------- | -------------------------------------------------------------------------- |
-| **Desarrollo**  | `pnpm dev`       | Inicia el servidor de desarrollo local con Vite (`http://localhost:5173`). |
-| **Build**       | `pnpm build`     | Compila y genera el bundle optimizado para producción de la SPA.           |
-| **Linter**      | `pnpm lint`      | Ejecuta el análisis estático de código con ESLint.                         |
-| **Format**      | `pnpm format`    | Formatea automáticamente el código utilizando Prettier.                    |
-| **Storybook**   | `pnpm storybook` | Inicia el entorno aislado de componentes en `http://localhost:6006`.       |
-| **Testing**     | `pnpm test`      | Ejecuta las pruebas unitarias y de integración con Vitest.                 |
-| **Testing E2E** | `pnpm test:e2e`  | Abre la interfaz de Cypress para pruebas de extremo a extremo.             |
+3. **Iniciar el servidor de desarrollo:**
+   ```bash
+   pnpm dev
+   ```
+   La aplicación estará disponible en `http://localhost:3000`.
 
-## 🔐 Variables de Entorno
+## 📁 Estructura del Proyecto
 
-| Variable            | Descripción                                   | Ejemplo                        |
-| ------------------- | --------------------------------------------- | ------------------------------ |
-| `VITE_API_BASE_URL` | URL base de la API REST del backend (FastAPI) | `http://localhost:8000/api/v1` |
-| `VITE_WS_CHAT_URL`  | URL del WebSocket para el flujo del chatbot   | `ws://localhost:8000/chat/ws`  |
+La arquitectura sigue el patrón del App Router de Next.js, agrupando las vistas por contexto lógico y separando la UI de la lógica de peticiones:
 
-## 📋 Convenciones del Proyecto
-
-- **Nomenclatura:** `kebab-case` para nombres de carpetas, archivos de configuración, hooks y utilidades (ej: `use-websocket.ts`). `PascalCase` estrictamente para componentes React y archivos de Storybook (ej: `ChatWindow.tsx`).
-- **Control de Calidad Local:** El proyecto utiliza **Husky** y **lint-staged**. Cualquier commit que contenga errores de sintaxis, tipos o formato será rechazado de manera automática antes de confirmarse en Git.
-- **Mensajes de Commit:** Es mandatorio seguir la especificación de [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`).
-
-## 🔗 Recursos del Equipo
-
-- Documentación de la API (FastAPI - Swagger): _(añadir URL)_
-- Diseños en Figma: [Link](https://www.figma.com/design/MRIDdLhLsGWQbBRt8my5Tm/Dise%C3%B1o-UXUI-Equipo-10-InnovaLab?node-id=27-76&t=PZWYmXb0sUN7mr2N-0)
-- Tablero de Gestión: [Link](https://github.com/users/dgimenezdeveloper/projects/6)
-
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+```text
+frontend/
+├── public/                  # Archivos estáticos (favicon, imágenes, logos)
+├── src/
+│   ├── app/                 # Enrutador principal (Next.js App Router)
+│   │   ├── (marketing)/     # Grupo de rutas: Landing page y pre-venta (Públicas)
+│   │   ├── (auth)/          # Grupo de rutas: Login y Registro (Públicas)
+│   │   └── (dashboard)/     # Grupo de rutas: Onboarding y Panel de control (Privadas)
+│   ├── components/
+│   │   ├── ui/              # Componentes primitivos (Shadcn/UI base)
+│   │   ├── layout/          # Estructuras globales (Sidebar, Navbar, Footers)
+│   │   └── features/        # Componentes complejos (ej. AppointmentsTable, SetupForm)
+│   ├── hooks/               # Custom React hooks (ej. useAppointments)
+│   ├── lib/                 # Configuración de librerías (Axios instance, Tailwind utils)
+│   └── services/            # Funciones de fetching que interactúan con la API
+├── .env.example             # Plantilla segura de variables de entorno
+├── jsconfig.json            # Configuración de path aliases (@/*)
+└── package.json             # Manejo de dependencias y scripts
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🔐 Variables de Entorno (`.env.example`)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
+Asegúrate de que tu archivo `.env.local` contenga la siguiente estructura. Las claves reales no deben subirse a Git.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+### Explicación de Variables:
+
+- **`NEXT_PUBLIC_API_URL`**: Necesaria para que Axios sepa a qué puerto pegarle al backend (FastAPI). Lleva el prefijo `NEXT_PUBLIC_` para que Next.js permita que el código del lado del cliente (navegador) acceda a esta variable.
+- **`NEXTAUTH_URL`**: NextAuth la utiliza internamente para resolver las redirecciones y callbacks de forma segura.
+- **`NEXTAUTH_SECRET`**: Una cadena aleatoria que NextAuth exige para encriptar los JWT (JSON Web Tokens) de las sesiones de usuario.
+- **`GOOGLE_CLIENT_...`**: Credenciales otorgadas por Google Cloud Console para habilitar el login con Gmail en nuestra plataforma.
+
+```env
+# API Config (Expuesta al cliente)
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+
+# NextAuth Config (Solo servidor)
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your_super_secret_key_here
+
+# Google OAuth Credentials (Solo servidor)
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 ```
+
+## 📜 Scripts
+
+| Script   | Comando       | Descripción                                                                  |
+| :------- | :------------ | :--------------------------------------------------------------------------- |
+| `dev`    | `pnpm dev`    | Inicia el servidor de desarrollo con Hot Module Replacement (HMR).           |
+| `build`  | `pnpm build`  | Compila la aplicación para el entorno de producción.                         |
+| `start`  | `pnpm start`  | Inicia el servidor de producción usando los archivos compilados en el build. |
+| `lint`   | `pnpm lint`   | Ejecuta ESLint para analizar estáticamente el código y buscar errores.       |
+| `format` | `pnpm format` | Formatea el código automáticamente usando Prettier.                          |
+
+## 🤝 Convenciones de Desarrollo
+
+Para mantener el código limpio y facilitar el trabajo cruzado entre los miembros del equipo, cumplimos estas reglas estandarizadas:
+
+1. **Idioma Oficial del Código:** Todo el código fuente (nombres de variables, funciones, componentes, nombres de archivos y comentarios técnicos) debe escribirse estrictamente en **inglés** para mantener un estándar profesional en la industria. La documentación (como este README) y los textos visibles para el usuario final van en español. _(Ejemplo: crear el archivo `use-appointments.js` en lugar de `use-turnos.js`)_.
+2. **Componentes "Client" vs "Server":** Por defecto, el App Router de Next.js renderiza componentes en el servidor (Server Components). Si el archivo que estás creando requiere hooks de React (`useState`, `useEffect`) o maneja interactividad del usuario (`onClick`, `onChange`), **debes agregar obligatoriamente la directiva `"use client";`** en la primera línea del archivo.
+3. **Nomenclatura de Archivos:** \* `PascalCase.jsx` para Componentes visuales de React (ej. `DashboardSidebar.jsx`).
+   - `kebab-case.js` para hooks, utilidades y servicios de API (ej. `use-appointments.js`, `api-client.js`).
+4. **Estilos:** Se utilizarán exclusivamente las clases utilitarias de Tailwind CSS. Evitar la creación de archivos `.css` separados a menos que sea estrictamente necesario para variables globales.
+5. **Calidad de Git (Pre-commit hooks):** El repositorio local tiene configurado Husky. El sistema bloqueará cualquier intento de `git commit` si los archivos modificados no pasan las reglas de ESLint o no cumplen con el formato de [Conventional Commits](https://www.conventionalcommits.org/).
