@@ -10,3 +10,5 @@
 /backend/.env.example @dgimenezdeveloper @rcrossa
 /backend/Dockerfile @dgimenezdeveloper @rcrossa
 /no-roles/  
+.gitignore @dgimenezdeveloper @rcrossa
+README.md  @dgimenezdeveloper @rcrossa
