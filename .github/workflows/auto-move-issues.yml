@@ -1,12 +1,12 @@
-name: Auto Move Issues - Project Board (Production)
+name: Auto Move Issues - Project Board (Enterprise)
 
 on:
   issues:
     types: [assigned, unassigned]
-  create:
   pull_request:
     types: [opened, reopened, closed]
     branches: [develop]
+  create:
   pull_request_review:
     types: [submitted]
   workflow_dispatch:
@@ -20,35 +20,36 @@ env:
   GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
   PROJECT_NUMBER: ${{ vars.PROJECT_NUMBER }}
 
-jobs:
+# ============================================================
+# RESOLVE OWNER (ORG / USER SAFE)
+# ============================================================
 
-# ============================================================
-# UTILS: resolve owner (USER OR ORG fallback)
-# ============================================================
+jobs:
 
   resolve-owner:
     runs-on: ubuntu-latest
     outputs:
-      owner: ${{ steps.set.outputs.owner }}
+      owner: ${{ steps.out.outputs.owner }}
+      type: ${{ steps.out.outputs.type }}
     steps:
-      - id: set
+      - id: out
         run: |
-          REPO_OWNER="${{ github.repository_owner }}"
+          OWNER="${{ github.repository_owner }}"
 
-          echo "Probando si es org o user: $REPO_OWNER"
+          echo "Detectando tipo de owner: $OWNER"
 
-          # intentar como org primero
-          if gh api orgs/$REPO_OWNER >/dev/null 2>&1; then
-            echo "owner=$REPO_OWNER" >> $GITHUB_OUTPUT
-            echo "✔ Es ORGANIZATION"
+          if gh api orgs/$OWNER >/dev/null 2>&1; then
+            echo "owner=$OWNER" >> $GITHUB_OUTPUT
+            echo "type=org" >> $GITHUB_OUTPUT
+            echo "✔ ORG detectada"
           else
-            # fallback user
-            echo "owner=$REPO_OWNER" >> $GITHUB_OUTPUT
-            echo "✔ Es USER repo"
+            echo "owner=$OWNER" >> $GITHUB_OUTPUT
+            echo "type=user" >> $GITHUB_OUTPUT
+            echo "✔ USER repo detectado"
           fi
 
 # ============================================================
-# GET PROJECT ID (reusable pattern)
+# GET PROJECT (ROBUST + RETRY + FALLBACK QUERY)
 # ============================================================
 
   get-project:
@@ -66,40 +67,92 @@ jobs:
       - id: p
         env:
           OWNER: ${{ needs.resolve-owner.outputs.owner }}
+          TYPE: ${{ needs.resolve-owner.outputs.type }}
         run: |
-          DATA=$(gh api graphql -f query='
-          query($owner: String!, $number: Int!) {
-            user(login: $owner) {
-              projectV2(number: $number) {
-                id
-                fields(first: 50) {
-                  nodes {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      options { id name }
+          set -e
+
+          echo "Usando OWNER=$OWNER TYPE=$TYPE"
+
+          # -------------------------
+          # QUERY SELECTION SAFE
+          # -------------------------
+          if [ "$TYPE" = "org" ]; then
+            QUERY='
+            query($owner: String!, $number: Int!) {
+              organization(login: $owner) {
+                projectV2(number: $number) {
+                  id
+                  fields(first: 100) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options { id name }
+                      }
                     }
                   }
                 }
               }
-            }
-          }' -f owner="$OWNER" -F number=$PROJECT_NUMBER)
+            }'
+            ROOT="organization"
+          else
+            QUERY='
+            query($owner: String!, $number: Int!) {
+              user(login: $owner) {
+                projectV2(number: $number) {
+                  id
+                  fields(first: 100) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options { id name }
+                      }
+                    }
+                  }
+                }
+              }
+            }'
+            ROOT="user"
+          fi
 
-          echo "$DATA" > project.json
+          # -------------------------
+          # EXECUTION + RETRY
+          # -------------------------
+          for i in 1 2 3; do
+            echo "Intento $i de obtener Project..."
 
-          PROJECT_ID=$(jq -r '.data.user.projectV2.id' project.json)
-          STATUS_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name=="Status").id' project.json)
+            gh api graphql -f query="$QUERY" \
+              -f owner="$OWNER" \
+              -F number=$PROJECT_NUMBER > project.json && break
+
+            echo "Falló intento $i, retry..."
+            sleep 2
+          done
+
+          # -------------------------
+          # VALIDATION SAFE READ
+          # -------------------------
+          PROJECT_ID=$(jq -r ".data.${ROOT}.projectV2.id // empty" project.json)
+
+          if [ -z "$PROJECT_ID" ]; then
+            echo "❌ No se pudo obtener Project ID"
+            cat project.json
+            exit 1
+          fi
+
+          STATUS=$(jq -c ".data.${ROOT}.projectV2.fields.nodes[]
+            | select(.name==\"Status\")" project.json | head -n 1)
+
+          FIELD_ID=$(echo "$STATUS" | jq -r '.id')
 
           get_opt () {
-            echo $(jq -r ".data.user.projectV2.fields.nodes[]
-              | select(.name==\"Status\")
-              | .options[]
-              | select(.name==\"$1\")
-              | .id" project.json)
+            echo "$STATUS" | jq -r ".options[] | select(.name==\"$1\") | .id"
           }
 
           echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
-          echo "status_field=$STATUS_ID" >> $GITHUB_OUTPUT
+          echo "status_field=$FIELD_ID" >> $GITHUB_OUTPUT
+
           echo "ready=$(get_opt Ready)" >> $GITHUB_OUTPUT
           echo "in_progress=$(get_opt 'In Progress')" >> $GITHUB_OUTPUT
           echo "in_review=$(get_opt 'In Review')" >> $GITHUB_OUTPUT
@@ -107,78 +160,137 @@ jobs:
           echo "backlog=$(get_opt Backlog)" >> $GITHUB_OUTPUT
 
 # ============================================================
-# ISSUE ASSIGNED → READY
+# CORE FUNCTION (REUSABLE LOGIC VIA SHELL BLOCK)
 # ============================================================
 
-  issue-assigned:
+  move-core:
     runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'issues' && github.event.action == 'assigned'
+    needs: [resolve-owner, get-project]
+    if: github.event_name != 'workflow_dispatch'
     steps:
-      - run: echo "Issue → READY (simplificado base production)"
+      - name: Execute routing engine
+        env:
+          OWNER: ${{ needs.resolve-owner.outputs.owner }}
+          PROJECT_ID: ${{ needs.get-project.outputs.project_id }}
+          STATUS_FIELD: ${{ needs.get-project.outputs.status_field }}
+          READY: ${{ needs.get-project.outputs.ready }}
+          IN_PROGRESS: ${{ needs.get-project.outputs.in_progress }}
+          IN_REVIEW: ${{ needs.get-project.outputs.in_review }}
+          DONE: ${{ needs.get-project.outputs.done }}
+          BACKLOG: ${{ needs.get-project.outputs.backlog }}
+        run: |
+          set -e
+
+          echo "🚀 Event: ${{ github.event_name }}"
+
+          # =====================================================
+          # SAFE ISSUE HANDLING
+          # =====================================================
+
+          ISSUE_ID=""
+          ISSUE_NUM=""
+
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            ISSUE_ID="${{ github.event.issue.node_id }}"
+            ISSUE_NUM="${{ github.event.issue.number }}"
+          fi
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "No issue event → skip"
+            exit 0
+          fi
+
+          echo "Processing issue $ISSUE_NUM"
+
+          # =====================================================
+          # ADD TO PROJECT (idempotente)
+          # =====================================================
+
+          ITEM_ID=$(gh api graphql -f query='
+          mutation($project:ID!, $issue:ID!) {
+            addProjectV2ItemById(input:{
+              projectId:$project,
+              contentId:$issue
+            }) {
+              item { id }
+            }
+          }' \
+          -f project="$PROJECT_ID" \
+          -f issue="$ISSUE_ID" \
+          --jq '.data.addProjectV2ItemById.item.id')
+
+          echo "Item: $ITEM_ID"
+
+          # =====================================================
+          # ROUTING LOGIC
+          # =====================================================
+
+          if [ "${{ github.event.action }}" = "assigned" ]; then
+            OPTION="$READY"
+            echo "→ READY"
+
+          elif [ "${{ github.event.action }}" = "unassigned" ]; then
+            OPTION="$BACKLOG"
+            echo "→ BACKLOG"
+          else
+            echo "No routing rule"
+            exit 0
+          fi
+
+          # =====================================================
+          # UPDATE STATUS (SAFE)
+          # =====================================================
+
+          gh api graphql -f query='
+          mutation($project:ID!, $item:ID!, $field:ID!, $value:String!) {
+            updateProjectV2ItemFieldValue(input:{
+              projectId:$project,
+              itemId:$item,
+              fieldId:$field,
+              value:{ singleSelectOptionId:$value }
+            }) {
+              projectV2Item { id }
+            }
+          }' \
+          -f project="$PROJECT_ID" \
+          -f item="$ITEM_ID" \
+          -f field="$STATUS_FIELD" \
+          -f value="$OPTION" \
+          --silent
+
+          echo "✅ Updated successfully"
 
 # ============================================================
-# ISSUE UNASSIGNED → BACKLOG
+# PR → IN REVIEW / DONE / BACKLOG
 # ============================================================
 
-  issue-unassigned:
+  pr-core:
     runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'issues' && github.event.action == 'unassigned'
+    needs: [resolve-owner, get-project]
+    if: github.event_name == 'pull_request'
     steps:
-      - run: echo "Issue → BACKLOG"
+      - name: Handle PR lifecycle
+        env:
+          PROJECT_ID: ${{ needs.get-project.outputs.project_id }}
+        run: |
+          echo "PR event: ${{ github.event.action }}"
+
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            echo "→ IN REVIEW"
+
+          elif [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            echo "→ DONE"
+
+          elif [ "${{ github.event.action }}" = "closed" ]; then
+            echo "→ BACKLOG"
+          fi
 
 # ============================================================
-# BRANCH CREATED → IN PROGRESS
-# ============================================================
-
-  branch-created:
-    runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'create'
-    steps:
-      - run: echo "Branch → IN PROGRESS (hook base listo)"
-
-# ============================================================
-# PR OPENED → IN REVIEW
-# ============================================================
-
-  pr-opened:
-    runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
-    steps:
-      - run: echo "PR → IN REVIEW"
-
-# ============================================================
-# PR MERGED → DONE
-# ============================================================
-
-  pr-merged:
-    runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
-    steps:
-      - run: echo "DONE"
-
-# ============================================================
-# PR CLOSED NO MERGE → BACKLOG
-# ============================================================
-
-  pr-closed:
-    runs-on: ubuntu-latest
-    needs: get-project
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == false
-    steps:
-      - run: echo "BACKLOG"
-
-# ============================================================
-# REVIEW QA
+# QA REVIEW (SKELETON READY FOR EXPANSION)
 # ============================================================
 
   qa-review:
     runs-on: ubuntu-latest
-    needs: get-project
     if: github.event_name == 'pull_request_review'
     steps:
-      - run: echo "QA REVIEW HANDLER READY"
+      - run: echo "QA pipeline ready (hook base enterprise)"
