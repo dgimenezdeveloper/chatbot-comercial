@@ -9,7 +9,9 @@
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "github.copilot",
+        "saoudrizwan.claude-dev"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
@@ -20,9 +22,7 @@
       }
     },
     "jetbrains": {
-      "backend": {
-        "service": "api"
-      }
+      "backend": "api"
     }
   },
   "features": {

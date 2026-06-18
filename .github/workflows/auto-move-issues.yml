@@ -94,21 +94,7 @@ jobs:
           # Obtener datos del proyecto y del campo Status
           gh api graphql -f query='\
             query($owner: String!, $number: Int!) {\
-              organization: organization(login: $owner) {\
-                projectV2(number: $number) {\
-                  id\
-                  fields(first: 50) {\
-                    nodes {\
-                      ... on ProjectV2SingleSelectField {\
-                        id\
-                        name\
-                        options { id name }\
-                      }\
-                    }\
-                  }\
-                }\
-              }\
-              user: user(login: $owner) {\
+              repositoryOwner(login: $owner) {\
                 projectV2(number: $number) {\
                   id\
                   fields(first: 50) {\
@@ -127,9 +113,8 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
-          # Extraer IDs de forma robusta (soporta Organization o User)
-          PROJECT_ID=$(jq -r 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.id elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.id else empty end' project_data.json)
-          STATUS_DATA=$(jq -c 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.fields.nodes[] elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.fields.nodes[] else empty end | select(.name == "Status")' project_data.json | head -n 1)
+          PROJECT_ID=$(jq -r '.data.repositoryOwner.projectV2.id' project_data.json)
+          STATUS_DATA=$(jq -c '.data.repositoryOwner.projectV2.fields.nodes[] | select(.name == "Status")' project_data.json | head -n 1)
           STATUS_FIELD_ID=$(echo "$STATUS_DATA" | jq -r '.id')
           READY_OPTION_ID=$(echo "$STATUS_DATA" | jq -r '.options[] | select(.name == "Ready") | .id')
 
@@ -186,21 +171,7 @@ jobs:
         run: |
           gh api graphql -f query='\
             query($owner: String!, $number: Int!) {\
-              organization: organization(login: $owner) {\
-                projectV2(number: $number) {\
-                  id\
-                  fields(first: 50) {\
-                    nodes {\
-                      ... on ProjectV2SingleSelectField {\
-                        id\
-                        name\
-                        options { id name }\
-                      }\
-                    }\
-                  }\
-                }\
-              }\
-              user: user(login: $owner) {\
+              repositoryOwner(login: $owner) {\
                 projectV2(number: $number) {\
                   id\
                   fields(first: 50) {\
@@ -219,8 +190,8 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
-          PROJECT_ID=$(jq -r 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.id elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.id else empty end' project_data.json)
-          STATUS_DATA=$(jq -c 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.fields.nodes[] elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.fields.nodes[] else empty end | select(.name == "Status")' project_data.json | head -n 1)
+          PROJECT_ID=$(jq -r '.data.repositoryOwner.projectV2.id' project_data.json)
+          STATUS_DATA=$(jq -c '.data.repositoryOwner.projectV2.fields.nodes[] | select(.name == "Status")' project_data.json | head -n 1)
           STATUS_FIELD_ID=$(echo "$STATUS_DATA" | jq -r '.id')
           BACKLOG_OPTION_ID=$(echo "$STATUS_DATA" | jq -r '.options[] | select(.name == "Backlog") | .id')
 
@@ -310,21 +281,7 @@ jobs:
         run: |
           gh api graphql -f query='\
             query($owner: String!, $number: Int!) {\
-              organization: organization(login: $owner) {\
-                projectV2(number: $number) {\
-                  id\
-                  fields(first: 50) {\
-                    nodes {\
-                      ... on ProjectV2SingleSelectField {\
-                        id\
-                        name\
-                        options { id name }\
-                      }\
-                    }\
-                  }\
-                }\
-              }\
-              user: user(login: $owner) {\
+              repositoryOwner(login: $owner) {\
                 projectV2(number: $number) {\
                   id\
                   fields(first: 50) {\
@@ -343,8 +300,8 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
-          PROJECT_ID=$(jq -r 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.id elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.id else empty end' project_data.json)
-          STATUS_DATA=$(jq -c 'if .data.organization != null and .data.organization.projectV2 != null then .data.organization.projectV2.fields.nodes[] elif .data.user != null and .data.user.projectV2 != null then .data.user.projectV2.fields.nodes[] else empty end | select(.name == "Status")' project_data.json | head -n 1)
+          PROJECT_ID=$(jq -r '.data.repositoryOwner.projectV2.id' project_data.json)
+          STATUS_DATA=$(jq -c '.data.repositoryOwner.projectV2.fields.nodes[] | select(.name == "Status")' project_data.json | head -n 1)
           STATUS_FIELD_ID=$(echo "$STATUS_DATA" | jq -r '.id')
           IN_PROGRESS_OPTION_ID=$(echo "$STATUS_DATA" | jq -r '.options[] | select(.name == "In Progress") | .id')
 
