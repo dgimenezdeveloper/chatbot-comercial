@@ -2,6 +2,7 @@
 import "../src/app/globals.css";
 
 const preview = {
+  tags: ["autodocs"],
   parameters: {
     backgrounds: {
       default: "light",
