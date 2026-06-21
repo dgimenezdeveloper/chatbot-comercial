@@ -11,7 +11,7 @@ export default {
   },
 };
 
-export const Default = {
+export const Base = {
   args: {
     children: "Etiqueta que acompaña a un Input",
   },
