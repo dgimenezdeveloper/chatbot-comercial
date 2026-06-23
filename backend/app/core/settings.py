@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str
     WHATSAPP_PHONE_NUMBER_ID: str
     WHATSAPP_BUSINESS_ACCOUNT_ID: str
-    META_API_VERSION: str = "v20.0"
+    META_API_VERSION: str = "v25.0"
 
     # Google Calendar API
     GOOGLE_CLIENT_ID: str
@@ -27,5 +27,8 @@ class Settings(BaseSettings):
     GOOGLE_CALENDAR_ID: str = "primary"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Entorno de la aplicación
+    APP_ENV: str = "development"
 
 settings = Settings()
