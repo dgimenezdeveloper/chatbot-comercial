@@ -393,3 +393,7 @@ docs/_build/
 coverage/
 coverage.*
 reports/
+
+# cline
+*.cline
+.clinerules/
