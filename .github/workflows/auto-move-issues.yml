@@ -479,24 +479,16 @@ jobs:
             --add-label "needs-qa" \
             --repo ${{ github.repository }}
 
-      - name: Dejar comentario informativo en el PR
+      - name: Dejar comentario informativo en el PR (asignación QA manual)
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          QA_USERS: ${{ vars.QA_GITHUB_USERS }}
         run: |
           PR_URL="${{ github.event.pull_request.html_url }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
           BRANCH="${{ github.event.pull_request.head.ref }}"
           AUTHOR="${{ github.event.pull_request.user.login }}"
 
-          # Mostrar lista de QA disponibles
-          QA_LIST=""
-          for USER in $QA_USERS; do
-            QA_LIST="${QA_LIST}
-- @${USER}"
-          done
-
-          COMMENT="## 🔍 PR listo para revisión QA
+          COMMENT="## 🔍 PR en In Review
 
 **PR:** [$PR_TITLE]($PR_URL)
 **Branch:** \`$BRANCH\` → \`develop\`
@@ -505,15 +497,14 @@ jobs:
 ---
 
 ### Asignación de QA (manual)
-Por favor, asigna este PR a uno o más QA para su revisión:
-$QA_LIST
+Este PR fue movido a **In Review**.
 
-**Pasos para revisar:**
-1. Revisar los cambios en este PR
-2. Si está OK → **Approve** el PR (botón 'Review Changes' → 'Approve')
-3. Si necesita correcciones → **Request Changes** (botón 'Review Changes' → 'Request changes') con comentario explicando qué corregir
+Si requiere validación de QA, asignen manualmente los reviewers desde la interfaz de GitHub:
+1. Abrir el panel **Reviewers** del PR
+2. Seleccionar el/los usuarios de QA correspondientes
+3. QA realiza **Approve** o **Request changes**
 
-La card en el Project Board se moverá automáticamente según la decisión de QA."
+> Nota: no todos los PRs requieren testing de QA."
 
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "$COMMENT" \
@@ -998,84 +989,4 @@ La card del Project Board ha sido movida de vuelta a **In Progress**."
                     nodes {
                       ... on ProjectV2SingleSelectField {
                         id
-                        name
-                        options { id name }
-                      }
-                    }
-                  }
-                }
-              }
-            }' \
-            -f org="$ORGANIZATION" \
-            -F number=$PROJECT_NUMBER \
-            > project_data.json
-
-          PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
-          STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
-          BACKLOG_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id' project_data.json)
-
-          CLOSING_ISSUES=$(gh api graphql -f query='
-            query($owner: String!, $repo: String!, $number: Int!) {
-              repository(owner: $owner, name: $repo) {
-                pullRequest(number: $number) {
-                  closingIssuesReferences(first: 25) {
-                    nodes { id number }
-                  }
-                }
-              }
-            }' \
-            -f owner="$REPO_OWNER" \
-            -f repo="$REPO_NAME" \
-            -F number=$PR_NUMBER \
-            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]')
-
-          # Si no encontró issues via "Closes #N", intentar extraer del nombre de la rama
-          if [ -z "$CLOSING_ISSUES" ]; then
-            ISSUE_NUMBER=$(echo "$PR_BRANCH" | grep -oP '(?<![0-9])\d+(?![0-9])' | head -1)
-            if [ -n "$ISSUE_NUMBER" ]; then
-              ISSUE_DATA=$(gh api /repos/${{ github.repository }}/issues/$ISSUE_NUMBER 2>/dev/null || echo "null")
-              if [ "$ISSUE_DATA" != "null" ]; then
-                ISSUE_ID=$(echo "$ISSUE_DATA" | jq -r '.node_id')
-                CLOSING_ISSUES="{\"id\":\"$ISSUE_ID\",\"number\":$ISSUE_NUMBER}"
-              fi
-            fi
-          fi
-
-          if [ -n "$CLOSING_ISSUES" ]; then
-            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
-            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
-
-            echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
-              ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
-              ISSUE_NUM=$(echo "$ISSUE_OBJ" | jq -r '.number')
-
-              ITEM_ID=$(gh api graphql -f query='
-                mutation($project: ID!, $issue: ID!) {
-                  addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
-                    item { id }
-                  }
-                }' \
-                -f project="$PROJECT_ID" \
-                -f issue="$ISSUE_ID" \
-                --jq '.data.addProjectV2ItemById.item.id')
-
-              gh api graphql -f query='
-                mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
-                  updateProjectV2ItemFieldValue(input: {
-                    projectId: $project,
-                    itemId: $item,
-                    fieldId: $field,
-                    value: { singleSelectOptionId: $option }
-                  }) {
-                    projectV2Item { id }
-                  }
-                }' \
-                -f project="$PROJECT_ID" \
-                -f item="$ITEM_ID" \
-                -f field="$STATUS_FIELD_ID" \
-                -f option="$BACKLOG_OPTION_ID" \
-                --silent
-
-              echo "📋 Issue #$ISSUE_NUM movida de vuelta a BACKLOG (PR cerrado)"
-            done
-          fi
+... (truncated)
