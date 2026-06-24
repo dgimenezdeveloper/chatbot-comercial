@@ -27,7 +27,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - chatbot_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-chatbot} -d $${POSTGRES_DB:-chatbot_db}"]
       interval: 5s
@@ -39,7 +39,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - chatbot_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -47,5 +47,15 @@ services:
       retries: 5
 
 volumes:
-  postgres_data:
-  redis_data:
+  chatbot_postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/tmp/chatbot_postgres_data
+  chatbot_redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/tmp/chatbot_redis_data
