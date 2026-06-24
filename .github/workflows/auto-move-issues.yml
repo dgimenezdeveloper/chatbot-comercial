@@ -117,6 +117,7 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           READY_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Ready") | .id' project_data.json)
 
+
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
           echo "STATUS_FIELD_ID=$STATUS_FIELD_ID" >> $GITHUB_ENV
           echo "READY_OPTION_ID=$READY_OPTION_ID" >> $GITHUB_ENV
@@ -192,6 +193,7 @@ jobs:
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           BACKLOG_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id' project_data.json)
+
 
           ITEM_ID=$(gh api graphql -f query='
             mutation($project: ID!, $issue: ID!) {
@@ -302,6 +304,7 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_PROGRESS_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id' project_data.json)
 
+
           ITEM_ID=$(gh api graphql -f query='
             mutation($project: ID!, $issue: ID!) {
               addProjectV2ItemById(input: {projectId: $project, contentId: $issue}) {
@@ -371,6 +374,20 @@ jobs:
                   }
                 }
               }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
@@ -379,6 +396,7 @@ jobs:
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_REVIEW_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Review") | .id' project_data.json)
+
 
           # Obtener issues que cierra este PR (via "closes #N", "fixes #N", etc.)
           CLOSING_ISSUES=$(gh api graphql -f query='
@@ -425,18 +443,8 @@ jobs:
           if [ -z "$CLOSING_ISSUES" ]; then
             echo "Sin issues para procesar"
           else
-            # Manejar tanto un único objeto como un array
-            if echo "$CLOSING_ISSUES" | jq -e 'type' > /dev/null 2>&1; then
-              # Si es un array, procesarlo normalmente
-              if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
-                ISSUE_LIST="$CLOSING_ISSUES"
-              else
-                # Si es un objeto único, convertirlo a array
-                ISSUE_LIST="[$CLOSING_ISSUES]"
-              fi
-            else
-              ISSUE_LIST="[]"
-            fi
+            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
+            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
 
             echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
               ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
@@ -589,9 +597,24 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           QA_APPROVED_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "QA Approved") | .id' project_data.json)
+
 
           # Obtener issues vinculadas
           CLOSING_ISSUES=$(gh api graphql -f query='
@@ -622,12 +645,8 @@ jobs:
           fi
 
           if [ -n "$CLOSING_ISSUES" ]; then
-            # Manejar tanto un array como un objeto único
-            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
-              ISSUE_LIST="$CLOSING_ISSUES"
-            else
-              ISSUE_LIST="[$CLOSING_ISSUES]"
-            fi
+            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
+            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
 
             echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
               ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
@@ -739,9 +758,24 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_PROGRESS_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id' project_data.json)
+
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -771,12 +805,8 @@ jobs:
           fi
 
           if [ -n "$CLOSING_ISSUES" ]; then
-            # Manejar tanto un array como un objeto único
-            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
-              ISSUE_LIST="$CLOSING_ISSUES"
-            else
-              ISSUE_LIST="[$CLOSING_ISSUES]"
-            fi
+            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
+            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
 
             echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
               ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
@@ -896,9 +926,24 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           DONE_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id' project_data.json)
+
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -928,12 +973,8 @@ jobs:
           fi
 
           if [ -n "$CLOSING_ISSUES" ]; then
-            # Manejar tanto un array como un objeto único
-            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
-              ISSUE_LIST="$CLOSING_ISSUES"
-            else
-              ISSUE_LIST="[$CLOSING_ISSUES]"
-            fi
+            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
+            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
 
             echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
               ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
@@ -1023,6 +1064,20 @@ jobs:
                   }
                 }
               }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
@@ -1031,6 +1086,7 @@ jobs:
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           BACKLOG_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id' project_data.json)
+
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -1060,12 +1116,8 @@ jobs:
           fi
 
           if [ -n "$CLOSING_ISSUES" ]; then
-            # Manejar tanto un array como un objeto único
-            if echo "$CLOSING_ISSUES" | jq -e '.[0]' > /dev/null 2>&1; then
-              ISSUE_LIST="$CLOSING_ISSUES"
-            else
-              ISSUE_LIST="[$CLOSING_ISSUES]"
-            fi
+            # Convertir stream de objetos JSON a un array JSON válido de forma robusta
+            ISSUE_LIST=$(echo "$CLOSING_ISSUES" | jq -s -c '.')
 
             echo "$ISSUE_LIST" | jq -c '.[]' | while IFS= read -r ISSUE_OBJ; do
               ISSUE_ID=$(echo "$ISSUE_OBJ" | jq -r '.id')
@@ -1139,6 +1191,20 @@ jobs:
                   }
                 }
               }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
@@ -1149,6 +1215,7 @@ jobs:
           READY_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Ready") | .id' project_data.json)
           IN_PROGRESS_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id' project_data.json)
           IN_REVIEW_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Review") | .id' project_data.json)
+
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_OUTPUT
           echo "STATUS_FIELD_ID=$STATUS_FIELD_ID" >> $GITHUB_OUTPUT
