@@ -41,7 +41,7 @@ on:
   # Trigger 3: Branch creada → IN PROGRESS (si el nombre contiene número de issue)
   create:
 
-  # Trigger 4: PR abierto/reabierto → IN REVIEW + notifica QA
+  # Trigger 4: PR abierto/reabierto → IN REVIEW
   # Trigger 5: PR mergeado a develop → DONE
   # Trigger 6: PR cerrado sin merge → BACKLOG
   pull_request:
@@ -337,10 +337,10 @@ jobs:
   # ============================================================
   # JOB 4: IN PROGRESS → IN REVIEW
   # Se activa cuando se abre un PR hacia develop
-  # También agrega el PR al proyecto y notifica a los QA
+  # También agrega el PR al proyecto.
   # ============================================================
   move_to_in_review:
-    name: "PR abierto → IN REVIEW + Notifica QA"
+    name: "PR abierto → IN REVIEW"
     if: |
       github.event_name == 'pull_request' &&
       (github.event.action == 'opened' || github.event.action == 'reopened')
@@ -374,20 +374,6 @@ jobs:
                   }
                 }
               }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
@@ -497,42 +483,6 @@ jobs:
             --add-label "needs-qa" \
             --repo ${{ github.repository }}
 
-      - name: Notificar a QA reviewers con comentario en el PR
-        env:
-          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          QA_USERS: ${{ vars.QA_GITHUB_USERS }}
-        run: |
-          # Formatear menciones de QA
-          QA_MENTIONS=""
-          for USER in $QA_USERS; do
-            QA_MENTIONS="$QA_MENTIONS @$USER"
-          done
-
-          PR_URL="${{ github.event.pull_request.html_url }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          AUTHOR="${{ github.event.pull_request.user.login }}"
-
-          COMMENT="## 🔍 PR listo para revisión QA
-
-          **PR:** [$PR_TITLE]($PR_URL)
-          **Branch:** \`$BRANCH\` → \`develop\`
-          **Autor:** @$AUTHOR
-
-          ---
-          $QA_MENTIONS, este PR requiere vuestra revisión antes de poder ser mergeado.
-
-          **Pasos para revisar:**
-          1. Revisar los cambios en este PR
-          2. Si está OK → **Approve** el PR (botón 'Review Changes' → 'Approve')
-          3. Si necesita correcciones → **Request Changes** (botón 'Review Changes' → 'Request changes') con comentario explicando qué corregir
-
-          La card en el Project Board se moverá automáticamente según vuestra decisión."
-
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "$COMMENT" \
-            --repo ${{ github.repository }}
-
   # ============================================================
   # JOB 5: IN REVIEW → QA APPROVED o IN PROGRESS
   # Se activa cuando alguien submite una review en el PR
@@ -596,20 +546,6 @@ jobs:
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
             > project_data.json
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
@@ -757,20 +693,6 @@ jobs:
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
             > project_data.json
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
@@ -926,20 +848,6 @@ jobs:
             -F number=$PROJECT_NUMBER \
             > project_data.json
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           DONE_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id' project_data.json)
@@ -1064,20 +972,6 @@ jobs:
                   }
                 }
               }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
@@ -1191,20 +1085,6 @@ jobs:
                   }
                 }
               }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             }' \
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
