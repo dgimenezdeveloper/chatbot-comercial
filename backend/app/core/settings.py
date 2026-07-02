@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str
 
-    # Seguridad
+    # Seguridad JWT
     SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     # WhatsApp Business API
     WHATSAPP_TOKEN: str
@@ -20,15 +22,12 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: str
     META_API_VERSION: str = "v25.0"
 
-    # Google Calendar API
+    # Google OAuth2
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
-    GOOGLE_CALENDAR_ID: str = "primary"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    # Entorno de la aplicación
     APP_ENV: str = "development"
 
 settings = Settings()
