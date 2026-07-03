@@ -1,3 +1,5 @@
+import "../src/app/globals.css"
+
 /** @type { import('@storybook/nextjs-vite').StorybookConfig } */
 const config = {
   stories: ["../src/**/*.mdx", "../src/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
