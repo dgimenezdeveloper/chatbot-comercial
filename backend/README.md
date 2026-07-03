@@ -1,7 +1,24 @@
-```markdown
+Aquí tienes una versión mejorada, profesional y detallada del `README.md`. He añadido el índice con hipervínculos, organizado las secciones para una mejor legibilidad y profundizado en la configuración de WhatsApp para que cualquier desarrollador (o tú mismo en el futuro) pueda replicar el entorno sin tropiezos.
+
+---
+
 # Chatbot Comercial Backend 🚀
 
 Backend dockerizado para el Chatbot Comercial, desarrollado con FastAPI, PostgreSQL y Redis.
+
+## 📋 Índice
+
+- [🛠️ Tecnologías](#️-tecnologías)
+- [📁 Estructura del Proyecto](#-estructura-del-proyecto)
+- [⚙️ Configuración del Entorno (Onboarding)](#️-configuración-del-entorno-onboarding)
+- [🔄 Live Reload](#-live-reload)
+- [🗄️ Migraciones de Base de Datos (Alembic)](#️-migraciones-de-base-de-datos-alembic)
+- [🌐 Integración con WhatsApp (Desarrollo Local)](#-integración-con-whatsapp-desarrollo-local)
+- [📝 Notas Técnicas y Solución de Problemas](#-notas-técnicas-y-solución-de-problemas)
+- [💻 Consideraciones de Entorno y Multiplataforma](#-consideraciones-de-entorno-y-multiplataforma)
+- [🛑 Detener Servicios](#-detener-servicios)
+
+---
 
 ## 🛠️ Tecnologías
 
@@ -20,127 +37,111 @@ backend/
 ├── app/
 │   ├── api/
 │   │   ├── v1/
-│   │   │   ├── admin/        # endpoints del panel del emprendedor
-│   │   │   ├── chatbot/       # endpoints/webhooks del chatbot WhatsApp
-│   │   │   ├── catalog/
-│   │   │   ├── faq/
-│   │   │   ├── calendar/
-│   │   │   └── auth/
-│   ├── core/                # configuración, seguridad, settings
-│   ├── db/                   # modelos SQLAlchemy, sesiones, migraciones (Alembic)
-│   ├── services/             # lógica de negocio (catálogo, turnos, contexto conversacional)
-│   ├── mcp/                  # cliente MCP, definición de tools/resources/prompts
-│   ├── schemas/              # modelos Pydantic (request/response)
-│   └── main.py               # entrypoint FastAPI
-├── tests/
-├── requirements.txt
-└── Dockerfile
-
+│   │   │   ├── admin/        # Endpoints del panel del emprendedor
+│   │   │   ├── chatbot/      # Endpoints y Webhooks de WhatsApp
+│   │   │   ├── catalog/      # Gestión de productos/servicios
+│   │   │   ├── faq/          # Preguntas frecuentes
+│   │   │   ├── calendar/     # Integración con Google Calendar
+│   │   │   └── auth/         # Autenticación JWT y OAuth
+│   ├── core/                 # Configuración, seguridad y settings (Pydantic)
+│   ├── db/                   # Modelos SQLAlchemy, sesiones y migraciones
+│   ├── services/             # Lógica de negocio y clientes de API externas
+│   ├── mcp/                  # Cliente Model Context Protocol
+│   ├── schemas/              # Modelos Pydantic (Request/Response)
+│   └── main.py               # Punto de entrada de la aplicación
+├── tests/                    # Pruebas unitarias y de integración
+├── requirements.txt          # Dependencias de Python
+└── Dockerfile                # Receta de la imagen Docker
 ```
 
 ## ⚙️ Configuración del Entorno (Onboarding)
 
-Sigue estos pasos para levantar el entorno de desarrollo:
-
 ### 1. Clonar el repositorio
-
 ```bash
 git clone <repo-url> && cd chatbot-comercial/backend
-
 ```
 
 ### 2. Crear .env local
-
-Copia el archivo de ejemplo y ajusta las variables si es necesario (el default funciona con Docker).
-**NUNCA** commitees el archivo `.env`.
-
+Copia el archivo de ejemplo y ajusta las variables. **Importante:** Solicita las credenciales de Meta a los administradores o sigue la guía de WhatsApp más abajo.
 ```bash
 cp .env.example .env
-
 ```
 
 ### 3. Levantar servicios con Docker
-
-Este comando construye la imagen y levanta la API, PostgreSQL y Redis.
-
 ```bash
 docker compose up --build
-
 ```
 
 ### 4. Verificar funcionamiento
+- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+- **Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-* **Health Check**: [http://localhost:8000/health](https://www.google.com/search?q=http://localhost:8000/health)
-* **Documentación Interactiva (Swagger)**: [http://localhost:8000/docs](https://www.google.com/search?q=http://localhost:8000/docs)
-* **Documentación Alternativa (Redoc)**: [http://localhost:8000/redoc](https://www.google.com/search?q=http://localhost:8000/redoc)
+---
 
-## 🔄 Live Reload
+## 🌐 Integración con WhatsApp (Desarrollo Local)
 
-El código fuente local está mapeado al contenedor en `/backend`. Cualquier cambio que realices en los archivos `.py` locales reiniciará automáticamente el servidor Uvicorn dentro del contenedor.
+Para que Meta (Facebook) pueda enviar mensajes a tu computadora local, necesitamos un túnel seguro con **ngrok**.
 
-## 🗄️ Migraciones de Base de Datos (Alembic)
+### 1. Configurar el túnel ngrok
+1. Inicia sesión en [ngrok dashboard](https://dashboard.ngrok.com).
+2. Obtén tu `Authtoken` y agrégalo a tu `.env` como `NGROK_AUTHTOKEN`.
+3. Levanta el túnel apuntando al puerto de la API (8000):
+   ```bash
+   ngrok http 8000
+   ```
+4. Copia la URL generada (ej: `https://abcd-123.ngrok-free.app`).
 
-Para generar y aplicar migraciones, utiliza los siguientes comandos (dentro del contenedor o vía `docker compose exec`):
+### 2. Configurar el Webhook en Meta Developers
+En el panel de tu App en [Meta for Developers](https://developers.facebook.com/apps/):
+1. Ve a **WhatsApp > Configuración**.
+2. En **Webhook**, haz clic en "Editar":
+   - **URL de devolución de llamada**: `https://<tu-url-ngrok>/api/v1/chatbot/webhook`
+   - **Token de verificación**: El valor de `WHATSAPP_VERIFY_TOKEN` en tu `.env`.
+3. Haz clic en **"Verificar y guardar"**.
+4. **IMPORTANTE:** En la tabla de campos, busca **`messages`** y haz clic en **Suscribirse**. Sin esto, no recibirás mensajes.
 
-```bash
-# Generar una nueva migración
-docker compose exec api alembic revision --autogenerate -m "descripción"
+### 3. Abrir la ventana de 24 horas
+WhatsApp solo permite que el bot responda si el usuario inició la conversación o si envías una plantilla aprobada.
+- **Opción A:** Envía un mensaje de prueba ("Hello World") desde el panel de Meta a tu número.
+- **Opción B:** Escribe "Hola" directamente al número de Sandbox desde tu celular.
 
-# Aplicar migraciones
-docker compose exec api alembic upgrade head
+---
 
-```
+## 📝 Notas Técnicas y Solución de Problemas
+
+### 🇦🇷 Manejo de numeración (Argentina Sandbox)
+Existe una discrepancia conocida en el **Sandbox de Meta** para números de Argentina:
+- El Webhook recibe los mensajes con el formato `54 9 11 ...` (formato móvil internacional).
+- El Sandbox a menudo solo permite responder si se usa el formato `54 11 5 ...` o quitando el `9`.
+
+**Solución Implementada:**
+En `app/api/v1/chatbot/webhook.py` existe una lógica de sanitización dinámica que detecta si el entorno es `development` y ajusta el prefijo automáticamente. 
+> ⚠️ **Nota:** Esta lógica se desactiva en `production` para no interferir con la numeración real de la API de producción.
+
+### 🔑 Token Permanente vs Temporal
+- **No utilices** el token que aparece en la pantalla "Configuración de la API" de Meta, ya que expira en 24 horas.
+- **Utiliza** el Token de **Usuario del Sistema** generado en el Business Manager con permisos `whatsapp_business_messaging`. Este token es permanente y debe ir en `WHATSAPP_TOKEN`.
+
+---
+
+## 💻 Consideraciones de Entorno y Multiplataforma
+
+### VS Code Dev Containers (Recomendado)
+El proyecto incluye soporte nativo. Al abrir la carpeta, VS Code detectará el entorno. Selecciona **"Reopen in Container"** para tener todas las herramientas configuradas automáticamente.
+
+### Usuarios de Windows (WSL 2)
+Es **indispensable** usar WSL 2. Si no usas Dev Containers, clona el repositorio dentro del sistema de archivos de Linux (ej: `\\wsl$\Ubuntu\home\user\...`) para que la recarga automática de Uvicorn (`--reload`) funcione correctamente.
+
+---
 
 ## 🛑 Detener Servicios
 
-Para detener los contenedores:
-
+Para detener los contenedores manteniendo los datos:
 ```bash
 docker compose down
-
 ```
 
-Para borrar volúmenes (limpiar base de datos):
-
+Para limpiar todo (incluyendo base de datos y volúmenes):
 ```bash
 docker compose down -v
-
-```
-
----
-
-> 💡 **Nota importante**: No es necesario (ni está permitido según la política del proyecto) instalar Python, PostgreSQL o Redis directamente en tu máquina local. Todo se gestiona a través de Docker.
-
----
-
-## Consideraciones de Entorno y Multiplataforma
-
-Para garantizar que el entorno de desarrollo corra de forma optima y las herramientas de recarga en vivo funcionen correctamente, lee los siguientes requisitos segun tu configuracion.
-
-### Metodo Recomendado: VS Code Dev Containers
-
-El repositorio cuenta con soporte nativo para Dev Containers. Si utilizas VS Code, se recomienda abrir el proyecto dentro del contenedor. Esto automatiza la configuracion del interprete de Python, las extensiones del editor y el mapeo de herramientas como Git de forma aislada.
-
-* Requiere la extension "Dev Containers" instalada en VS Code y Docker corriendo en segundo plano.
-* Al abrir la carpeta del proyecto, presiona F1, selecciona "Dev Containers: Rebuild and Reopen in Container" y deja que el editor configure el entorno.
-
-### Si usas Windows
-1. Requisito obligatorio: Es indispensable tener instalado WSL 2 (Windows Subsystem for Linux) y Docker Desktop configurado para utilizar el backend de WSL 2. Sin esto, Docker no podra ejecutarse en tu sistema.
-2. Si usas Dev Containers (Recomendado): Puedes abrir el proyecto directamente. Para obtener el maximo rendimiento de lectura/escritura y evitar demoras, se recomienda utilizar la opcion "Dev Containers: Clone Repository in Container Volume..." desde la paleta de comandos de VS Code.
-3. Si NO usas Dev Containers: Al levantar el entorno mediante comandos tradicionales de Docker Compose en la terminal de Windows (CMD o PowerShell), NO clones este repositorio en el disco local de Windows (por ejemplo: C:/Users/...). Si lo haces, los volumenes compartidos impediran que el comando --reload de Uvicorn detecte los cambios en tus archivos.
-4. Solucion sin Dev Containers: Abre tu terminal de WSL 2 (Ubuntu), muévete a tu directorio de usuario en Linux (cd ~), clona el proyecto dentro del sistema de archivos de Linux y ejecuta "docker compose up" desde alli. Esto garantiza que los volumenes compartidos funcionen correctamente y el entorno de desarrollo sea fluido.
-
-### Si usas Mac (M1 / M2 / M3)
-
-1. Asegurate de tener activada la opcion "Use Rosetta for x86/amd64 emulation on Apple Silicon" en la configuracion de Docker Desktop (General) para evitar fallos de compatibilidad con binarios especificos.
-2. Las imagenes base del Dockerfile poseen soporte multiplataforma, por lo que el rendimiento en entornos ARM de Apple sera nativo y fluido.
-
-### Si usas Linux Nativo o Dev Containers como Root
-
-1. El contenedor de desarrollo corre internamente con el usuario root. Si ejecutas comandos dentro de la terminal del contenedor que generen archivos nuevos en el disco (tales como inicializaciones de Alembic, creacion de modelos o entornos virtuales), estos archivos se guardaran en tu sistema operativo host con permisos de administrador bloqueados.
-2. Si experimentas problemas para editar o eliminar archivos creados por el contenedor desde tu entorno local, puedes recuperar la propiedad de los mismos ejecutando en tu terminal local:
-sudo chown -R $USER:$USER .
-
-```
-
 ```

@@ -1,7 +1,7 @@
 import Page from "./page";
 
 const meta = {
-  title: "Landing Page/Landing Page",
+  title: "Dashboard/Dashboard",
   component: Page,
 };
 

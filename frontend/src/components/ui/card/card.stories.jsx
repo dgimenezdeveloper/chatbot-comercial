@@ -6,13 +6,27 @@ import { Card,
   CardDescription,
   CardContent, } from "./card";
 
-export default {
-  title: "UI/Card",
+const CardStories = {
+  title: "Component/UI/Card",
   component: Card,
 };
 
+export default CardStories;
+
 export const Default = () => (
   <Card>
-    <CardContent>Contenido de la tarjeta</CardContent>
+    <CardHeader>
+      <CardTitle>Producto 1</CardTitle>
+      <CardDescription>Resumen breve del producto o servicio.</CardDescription>
+      <CardAction>
+        <button className="rounded-md bg-primary px-3 py-1 text-white">Ver más</button>
+      </CardAction>
+    </CardHeader>
+    <CardContent>
+      <p>Este es el contenido principal de la tarjeta.</p>
+    </CardContent>
+    <CardFooter>
+      <span className="text-sm text-muted-foreground">Actualizado hace 2 horas</span>
+    </CardFooter>
   </Card>
 );

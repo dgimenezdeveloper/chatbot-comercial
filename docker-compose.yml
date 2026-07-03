@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    working_dir: /app/backend 
     volumes:
       - .:/app
     env_file:
