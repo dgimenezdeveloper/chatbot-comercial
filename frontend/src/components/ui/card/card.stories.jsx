@@ -4,11 +4,10 @@ import { Card,
   CardTitle,
   CardAction,
   CardDescription,
-  CardContent, } from "./card";
+  CardContent, } from "@/components/ui/card/card";
 
 const CardStories = {
-  title: "Component/UI/Card",
-  component: Card,
+  title: "Components/UI/Card",
 };
 
 export default CardStories;

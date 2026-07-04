@@ -7,10 +7,10 @@ import {
     TableRow,
     TableCell,
     TableCaption,
-} from "../../../components/ui/table/table.jsx";
+} from "@/components/ui/table/table";
 
 export default {
-    title: "Component/UI/Table",
+    title: "Components/UI/Table",
 };
 
 export const Default = () => (

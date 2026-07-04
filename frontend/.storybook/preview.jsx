@@ -1,5 +1,3 @@
-import "../src/app/globals.css"
-
 /** @type { import('@storybook/nextjs-vite').Preview } */
 import "../src/app/globals.css";
 

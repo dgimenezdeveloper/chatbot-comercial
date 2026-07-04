@@ -1,9 +1,7 @@
-import {
-    Badge, 
-    badgeVariants,} from "../../../components/ui/badge/badge.jsx";
+import { Badge, badgeVariants } from "@/components/ui/badge/badge";
 
 export default  {
-    title: "Component/UI/Badge",
+    title: "Components/UI/Badge",
 }
 
 export const Default = () => <Badge>Default Badge</Badge>;
