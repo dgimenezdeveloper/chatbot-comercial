@@ -1,5 +1,6 @@
 ﻿import { Input } from "./input";
 const meta = {
+  title: "Components/UI/Input",
   component: Input,
 };
 export default meta;
