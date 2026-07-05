@@ -1,5 +1,6 @@
 ﻿import { Button } from "./button";
 const meta = {
+  title: "Components/UI/Button",
   component: Button,
 };
 export default meta;
