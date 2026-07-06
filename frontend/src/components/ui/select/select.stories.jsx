@@ -9,6 +9,7 @@ import {
 } from "./select";
 
 const meta = {
+  title: "Components/UI/Select",
   component: Select,
 };
 export default meta;
