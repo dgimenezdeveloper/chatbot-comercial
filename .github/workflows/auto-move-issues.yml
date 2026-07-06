@@ -117,6 +117,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           READY_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Ready") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "READY_OPTION_ID: $READY_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$READY_OPTION_ID" ] || [ "$READY_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'Ready'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
           echo "STATUS_FIELD_ID=$STATUS_FIELD_ID" >> $GITHUB_ENV
@@ -194,6 +203,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           BACKLOG_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "BACKLOG_OPTION_ID: $BACKLOG_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$BACKLOG_OPTION_ID" ] || [ "$BACKLOG_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'Backlog'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           ITEM_ID=$(gh api graphql -f query='
             mutation($project: ID!, $issue: ID!) {
@@ -304,6 +322,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_PROGRESS_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "IN_PROGRESS_OPTION_ID: $IN_PROGRESS_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$IN_PROGRESS_OPTION_ID" ] || [ "$IN_PROGRESS_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'In Progress'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           ITEM_ID=$(gh api graphql -f query='
             mutation($project: ID!, $issue: ID!) {
@@ -383,6 +410,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_REVIEW_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Review") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "IN_REVIEW_OPTION_ID: $IN_REVIEW_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$IN_REVIEW_OPTION_ID" ] || [ "$IN_REVIEW_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'In Review'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           # Obtener issues que cierra este PR (via "closes #N", "fixes #N", etc.)
           CLOSING_ISSUES=$(gh api graphql -f query='
@@ -485,7 +521,7 @@ jobs:
 
   # ============================================================
   # JOB 5: IN REVIEW → QA APPROVED o IN PROGRESS
-  # Se activa cuando alguien submite una review en el PR
+  # Se activa cuando se envía una revisión de PR.
   # ============================================================
   handle_qa_review:
     name: "Review QA → QA APPROVED o IN PROGRESS"
@@ -551,6 +587,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           QA_APPROVED_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "QA Approved") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "QA_APPROVED_OPTION_ID: $QA_APPROVED_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$QA_APPROVED_OPTION_ID" ] || [ "$QA_APPROVED_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'QA Approved'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           # Obtener issues vinculadas
           CLOSING_ISSUES=$(gh api graphql -f query='
@@ -698,6 +743,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           IN_PROGRESS_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "In Progress") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "IN_PROGRESS_OPTION_ID: $IN_PROGRESS_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$IN_PROGRESS_OPTION_ID" ] || [ "$IN_PROGRESS_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'In Progress'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -852,6 +906,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           DONE_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Done") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "DONE_OPTION_ID: $DONE_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$DONE_OPTION_ID" ] || [ "$DONE_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'Done'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -981,6 +1044,15 @@ jobs:
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
           BACKLOG_OPTION_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == "Backlog") | .id' project_data.json)
 
+          echo "=== DEBUG INFO ==="
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+          echo "BACKLOG_OPTION_ID: $BACKLOG_OPTION_ID"
+          if [ -z "$STATUS_FIELD_ID" ] || [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$BACKLOG_OPTION_ID" ] || [ "$BACKLOG_OPTION_ID" = "null" ]; then
+            echo "⚠️ Alerta: No se pudo mapear el campo 'Status' o la opción 'Backlog'."
+            cat project_data.json
+          fi
+          echo "=================="
 
           CLOSING_ISSUES=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -1089,6 +1161,10 @@ jobs:
             -f org="$ORGANIZATION" \
             -F number=$PROJECT_NUMBER \
             > project_data.json
+
+          echo "=== 🔍 DETECTANDO COLUMNAS Y OPCIONES DEL TABLERO ==="
+          cat project_data.json | jq '.data.user.projectV2.fields.nodes[] | {campo: .name, opciones: [.options[].name]}'
+          echo "====================================================="
 
           PROJECT_ID=$(jq -r '.data.user.projectV2.id' project_data.json)
           STATUS_FIELD_ID=$(jq -r '.data.user.projectV2.fields.nodes[] | select(.name == "Status") | .id' project_data.json)
