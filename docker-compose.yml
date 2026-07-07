@@ -54,13 +54,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: dev
+      args:
+        - NEXT_PUBLIC_API_URL
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     env_file:
       - ./frontend/.env
     extra_hosts:
