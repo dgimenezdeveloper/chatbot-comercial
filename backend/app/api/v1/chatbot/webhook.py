@@ -281,6 +281,7 @@ async def receive_webhook(payload: dict):
             phone_number = message.get("from")
             message_type = message.get("type")
             
+            # Sanitización de número de teléfono
             # Saneamiento del número telefónico de origen
             # --- SANITIZACIÓN DE TELÉFONO ANTES DE INTERACTUAR CON EL ESTADO ---
             # TODO: Remover este bloque al pasar a Producción con número real.
