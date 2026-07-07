@@ -1,11 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # Base de datos
+    # Base de datos (Obligatorios sin default para cargarlos de .env o sistema)
     DATABASE_URL: str
-    POSTGRES_USER: str = "chatbot"
-    POSTGRES_PASSWORD: str = "chatbot123"
-    POSTGRES_DB: str = "chatbot_db"
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
 
     # Redis
     REDIS_URL: str
