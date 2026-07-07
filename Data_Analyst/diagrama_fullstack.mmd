@@ -8,7 +8,6 @@ flowchart LR
     subgraph ExternalWorld["External World"]
         Meta["WhatsApp Cloud API (Meta Business)"]
         Users["End Users<br/>(Whatsapp Mobile/Desktop/Landing)"]
-        Slack["Slack Analytics Alerts"]
     end
 
     style ExternalWorld fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px
@@ -138,6 +137,25 @@ flowchart LR
     style BE fill:#fff9c4,stroke:#f57f17,stroke-width:2px
 
     %% ============================
+    %% DEPLOYMENT - Docker Compose
+    %% ============================
+
+    subgraph DockerDeploy["Deployment (Docker Compose)"]
+        direction TB
+        
+        DockerCompose["docker-compose.yml<br/>Orquestación de 3 servicios"]
+        
+        APIContainer["API Container<br/>backend/Dockerfile<br/>Python 3.11-slim<br/>Port: 8000"]
+        DBContainer["PostgreSQL Container<br/>postgres:16-alpine<br/>Port: 5432"]
+        RedisContainer["Redis Container<br/>redis:7-alpine<br/>Port: 6379"]
+        
+        DBVolumen[("Volume: chatbot_postgres_data<br/>(/var/tmp/chatbot_postgres_data)")]
+        RedisVolumen[("Volume: chatbot_redis_data<br/>(/var/tmp/chatbot_redis_data)")]
+    end
+
+    style DockerDeploy fill:#e8eaf6,stroke:#5c6bc0,stroke-width:2px
+
+    %% ============================
     %% EVENT TRACKING POINTS (10 BASE - Estándar del Proyecto)
     %% ============================
 
@@ -192,9 +210,6 @@ flowchart LR
         Events[(Events - Event Log)]
     end
 
-    subgraph "Alerting System"
-        SlackAlerts["Slack Alerts<br/>Real-time Notifications"]
-    end
 
     %% ============================
     %% CONEXIONES - Leyenda: --> = implementado | -.- = pendiente
@@ -216,6 +231,21 @@ flowchart LR
     ChatbotRouter -.- DB_Logic
     Security -.- Webhook
     Settings -.- Webhook
+
+    %% ============================
+    %% DEPLOYMENT CONNECTIONS
+    %% ============================
+
+    DockerCompose -->|Orquesta| APIContainer
+    DockerCompose -->|Orquesta| DBContainer
+    DockerCompose -->|Orquesta| RedisContainer
+    
+    APIContainer -->|Ejecuta| Webhook
+    DBContainer -->|Persiste datos| DBVolumen
+    RedisContainer -->|Persiste datos| RedisVolumen
+    
+    DBContainer -.-|Backend conecta vía| PG
+    RedisContainer -.-|Backend conecta vía| Redis
 
     %% ============================
     %% INTEGRACIÓN DE EVENTOS EN METRICS DB
@@ -257,7 +287,6 @@ flowchart LR
     %% ============================
 
     MetricsDB -.- Grafana
-    Grafana -.- SlackAlerts
     
     MetricsDB -.-|Stores Data| PG
     MetricsDB -.-|Caches Data| Redis
