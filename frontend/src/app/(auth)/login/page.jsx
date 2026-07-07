@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button/button";
 import { Input } from "@/components/ui/input/input";
 import { Label } from "@/components/ui/label/label";
+import { GoogleButton } from "@/components/auth/GoogleButton/GoogleButton";
 import {
   Card,
   CardContent,
@@ -11,13 +12,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card/card";
+import { useState } from "react";
 
 export default function LoginPage() {
   const handleCredentialsSubmit = (e) => {
     e.preventDefault();
   };
 
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+
   const handleGoogleSignIn = () => {
+    setIsGoogleLoading(true);
     signIn("google", { redirectTo: "/dashboard" });
   };
 
@@ -59,14 +64,7 @@ export default function LoginPage() {
               </span>
             </div>
           </div>
-          <Button
-            variant="outline"
-            type="button"
-            className="w-full"
-            onClick={handleGoogleSignIn}
-          >
-            Google
-          </Button>
+          <GoogleButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} />
         </CardContent>
       </Card>
     </div>
