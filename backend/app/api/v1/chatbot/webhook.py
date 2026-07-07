@@ -45,6 +45,8 @@ async def receive_webhook(payload: dict):
             message_type = message.get("type")
             
             # Sanitización de número de teléfono
+            # --- SANITIZACIÓN DE TELÉFONO ANTES DE INTERACTUAR CON EL ESTADO ---
+            # TODO: Remover este bloque al pasar a Producción con número real.
             if settings.APP_ENV == "development" and phone_number.startswith("549"):
                 area_code = phone_number[3:5] 
                 local_number = phone_number[5:]
