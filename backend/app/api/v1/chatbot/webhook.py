@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Query, Response, status
 from app.core.settings import settings
 from app.services.whatsapp import send_message
+from app.services.state_manager import get_user_state, set_user_state
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,7 +44,6 @@ async def receive_webhook(payload: dict):
     logger.info(f"Payload del Webhook recibido: {payload}")
     
     try:
-        # Navegación defensiva del payload de Meta
         entry = payload.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
         value = changes.get("value", {})
@@ -54,24 +54,41 @@ async def receive_webhook(payload: dict):
             phone_number = message.get("from")
             message_type = message.get("type")
             
+            # --- SANITIZACIÓN DE TELÉFONO ANTES DE INTERACTUAR CON EL ESTADO ---
+            # TODO: Remover este bloque al pasar a Producción con número real.
+            if settings.APP_ENV == "development" and phone_number.startswith("549"):
+                area_code = phone_number[3:5] 
+                local_number = phone_number[5:]
+                phone_number = f"54{area_code}15{local_number}"
+                logger.info(f"Aplicado parche Sandbox Argentina: {phone_number}")
+            else:
+                phone_number = clean_phone_number(phone_number)
+            
+            # --- CONSULTAR ESTADO DEL USUARIO EN REDIS ---
+            user_state = await get_user_state(phone_number)
+            
+            if not user_state:
+                # Si el usuario no tiene una sesión activa, inicializamos en MENU_PRINCIPAL con paso 1
+                user_state = {"estado": "MENU_PRINCIPAL", "step": 1}
+                await set_user_state(phone_number, user_state)
+                logger.info(f"Sesión conversacional nueva inicializada para el número {phone_number}")
+            else:
+                # Si ya tiene una sesión iniciada, incrementamos el paso
+                user_state["step"] += 1
+                await set_user_state(phone_number, user_state)
+                logger.info(f"Sesión conversacional existente actualizada para el número {phone_number}: {user_state}")
+            
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "")
-                phone_number = message.get("from")
                 
-                # --- FIX TEMPORAL: ARGENTINA SANDBOX ---
-                # TODO: Remover este bloque al pasar a Producción con número real.
-                if settings.APP_ENV == "development" and phone_number.startswith("549"):
-                    area_code = phone_number[3:5] 
-                    local_number = phone_number[5:]
-                    phone_number = f"54{area_code}15{local_number}"
-                    logger.info(f"Aplicado parche Sandbox Argentina: {phone_number}")
-                # ---------------------------------------
-
-                echo_text = f"Hola, soy tu chatbot. Recibí tu mensaje: '{user_text}'"
+                # Respuesta mock que incluye información del estado actual recuperado de Redis
+                echo_text = (
+                    f"Hola, soy tu chatbot. Recibí tu mensaje: '{user_text}'. "
+                    f"Tu estado actual es: {user_state['estado']} (Paso conversacional: {user_state['step']})"
+                )
                 await send_message(phone=phone_number, text=echo_text)
                 
     except Exception as e:
         logger.error(f"Error procesando el webhook entrante: {str(e)}")
         
-    # Meta exige retornar siempre HTTP 200 rápidamente para confirmar recepción
     return {"status": "success"}
