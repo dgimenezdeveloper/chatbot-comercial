@@ -1,0 +1,263 @@
+flowchart LR
+    %% ============================
+    %% DIAGRAMA UNIFICADO V1.0
+    %% chatbot-comercial - Full Stack Integration
+    %% Stack: Next.js 16 + FastAPI 0.110 + WhatsApp Cloud API
+    %% ============================
+
+    subgraph ExternalWorld["External World"]
+        Meta["WhatsApp Cloud API (Meta Business)"]
+        Users["End Users<br/>(Whatsapp Mobile/Desktop/Landing)"]
+        Slack["Slack Analytics Alerts"]
+    end
+
+    style ExternalWorld fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px
+
+    %% ============================
+    %% FRONTEND: chatbot-comercial
+    %% Stack: Next.js 16 + React 19 + TailwindCSS 4 + shadcn/ui
+    %% ============================
+
+    subgraph FrontendApp["Frontend - App Router Routes"]
+        direction TB
+        
+        Layout["src/app/layout.js"]:::done
+        
+        subgraph "(marketing) - Landing Page"
+            MarketingPage["(marketing)/page.jsx"]:::done
+            MarketingPageStory["(marketing)/page.stories.jsx"]:::done
+        end
+        
+        subgraph "(auth) - Authentication"
+            direction TB
+            LoginPage["((auth)/login/page.jsx"]:::done
+            RegisterPage["((auth)/register/page.jsx"]:::done
+            
+            LoginPageStory["((auth)/login/page.stories.jsx"]:::done
+            RegisterPageStory["((auth)/register/page.stories.jsx"]:::done
+        end
+        
+        subgraph "(dashboard) - Admin Dashboard"
+            direction TB
+            DashboardPage["(dashboard)/dashboard/page.jsx"]:::done
+            OnboardingPage["(dashboard)/onboarding/page.jsx"]:::done
+            
+            DashboardPageStory["(dashboard)/dashboard/page.stories.jsx"]:::done
+            OnboardingPageStory["(dashboard)/onboarding/page.stories.jsx"]:::done
+        end
+        
+        Icons["src/app/favicon.ico"]:::done
+        GlobalStyles["src/app/globals.css"]:::done
+    end
+
+    style FrontendApp fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
+    subgraph FrontendComponents["Frontend - Components Structure"]
+        direction TB
+        
+        DashboardComp["src/components/dashboard/ (.gitkeep)"]:::placeholder
+        FeaturesComp["src/components/features/ (.gitkeep)"]:::placeholder
+        FormComp["src/components/forms/ (.gitkeep)"]:::placeholder
+        LayoutComp["src/components/layout/ (.gitkeep)"]:::placeholder
+        MarketingComp["src/components/marketing/ (.gitkeep)"]:::placeholder
+    end
+
+    style FrontendComponents fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
+    subgraph FrontendUI["Frontend - UI Components (shadcn/ui + Tailwind)"]
+        direction TB
+        
+        Checkbox["ui/checkbox/"]:::done
+        Label["ui/label/"]:::done
+        Separator["ui/separator/"]:::done
+        Switch["ui/switch/"]:::done
+        Badge["ui/badge/"]:::done
+        Button["ui/button/"]:::done
+        Card["ui/card/"]:::done
+        Input["ui/input/"]:::done
+        Select["ui/select/"]:::done
+        Table["ui/table/"]:::done
+    end
+
+    style FrontendUI fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
+    subgraph FrontendLib["Frontend - Libraries & Utilities"]
+        ComponentsJSON["components.json (shadcn config)"]:::done
+        Utils["src/lib/utils.js (cn helper)"]:::done
+        Hooks["src/hooks/ (.gitkeep)"]:::placeholder
+        Services["src/services/ (.gitkeep)"]:::placeholder
+        Vitest["vitest.config.js"]:::done
+        ESLint["eslint.config.mjs"]:::done
+        JSConfig["jsconfig.json"]:::done
+        NextConfig["next.config.mjs"]:::done
+        PostCSS["postcss.config.mjs"]:::done
+        GitIgnore["frontend/.gitignore"]:::done
+    end
+
+    style FrontendLib fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
+    %% ============================
+    %% BACKEND Application (FastAPI)
+    %% ============================
+
+    subgraph BE["Backend (FastAPI 0.110)"]
+        subgraph "API Routers"
+            Auth["/api/v1/auth/login.py<br/>Auth (mock + Google)"]
+            Catalog["/api/v1/catalog/<br/>productos.py + servicios.py"]
+            Calendar["/api/v1/calendar/turnos.py<br/>Calendar"]
+            FAQ["/api/v1/faq/router.py<br/>FAQ"]
+            ChatbotRouter["/api/v1/chatbot/<br/>chat.py + webhook.py"]
+            Admin["/api/v1/admin/negocio.py<br/>Admin"]
+        end
+
+        Webhook["Webhook Entry<br/>GET verify + POST receive"]
+
+        subgraph "Core Services"
+            WhatsAppService["services/whatsapp.py<br/>(WhatsApp Integration ✓)"]
+            DB_Logic["app/db/database.py<br/>(Engine síncrono SQLAlchemy)<br/>app/db/models/ (VACÍO ❌)"]
+        end
+
+        subgraph "Infrastructure"
+            Settings["app/core/settings.py<br/>(Configuration ✓)"]
+            Security["app/core/security.py<br/>(JWT + OAuth2 ✓)"]
+            Schemas["app/schemas/<br/>auth, catalog, calendar, chat, faq, admin"]
+        end
+
+        subgraph "Databases / External APIs"
+            PG[(PostgreSQL - Main DB)]
+            Redis[(Redis Cache)]
+        end
+
+        subgraph "Permissions"
+            AdminRole["ADMIN: Full Access"]
+            OperatorRole["OPERATOR: Limited"]
+            GuestRole["GUEST: Read-Only"]
+        end
+    end
+
+    style BE fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+
+    %% ============================
+    %% EVENT TRACKING POINTS (10 BASE - Estándar del Proyecto)
+    %% ============================
+
+    subgraph EventTracking["Event Tracking (10 Base) - POR IMPLEMENTAR"]
+        ConvStarted["conversation_started"]:::event
+        MenuOption["menu_option_selected"]:::event
+        ServiceSel["service_selected"]:::event
+        FallbackTrig["fallback_triggered"]:::event
+        AppointmentCreated["appointment_created"]:::event
+        Escalation["escalation_to_human"]:::event
+        CSAT["csat_submitted"]:::event
+        ReminderSent["reminder_sent"]:::event
+        ReminderResp["reminder_response"]:::event
+        ConvClosed["conversation_closed"]:::event
+    end
+
+    classDef event fill:#fff3e0,stroke:#ff9800,stroke-width:2px;
+
+    %% ============================
+    %% MÉTRICAS CRÍTICAS (12 Total)
+    %% ============================
+
+    subgraph "Metrics Database"
+        MetricsDB[(Metrics DB - PostgreSQL)]
+        
+        ConvRate["#1: Conversión inicio→turno"]:::metric
+        PctBotTurnos["#2: % turnos creados por bot"]:::metric
+        AbandonoRate["#3: Abandono por paso"]:::metric
+        FallbackRate["#4: Tasa fallback"]:::metric
+        TopFallbacks["#5: Top 10 fallbacks"]:::metric
+        NocturnoPct["#6: % turnos nocturnos"]:::metric
+        ResolucionRate["#7: Resolución autónoma"]:::metric
+        CancelRate["#8: Tasa cancelación"]:::metric
+        NoShowRate["#9: Tasa no-show"]:::metric
+        ConfirmRate["#10: Confirmación recordatorio"]:::metric
+        TopServicios["#11: Servicios más reservados"]:::metric
+        CSATAvg["#12: CSAT promedio"]:::metric
+    end
+
+    classDef metric fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px;
+
+    %% ============================
+    %% DASHBOARD & REPORTING
+    %% ============================
+
+    subgraph "Analytics Engine"
+        Grafana["Grafana Dashboard"]
+        Stats["Conversation Statistics<br/>Aggregated Metrics"]
+    end
+
+    subgraph "Event Store"
+        Events[(Events - Event Log)]
+    end
+
+    subgraph "Alerting System"
+        SlackAlerts["Slack Alerts<br/>Real-time Notifications"]
+    end
+
+    %% ============================
+    %% CONEXIONES - Leyenda: --> = implementado | -.- = pendiente
+    %% ============================
+
+    Users -->|Sends Message| Meta
+    MarketingPage -.- Users
+    LoginPage & RegisterPage -.- Users
+    DashboardPage & OnboardingPage -.- OperatorRole
+    
+    Meta -->|Webhook Event| Webhook
+    Webhook -->|Processes Data| ChatbotRouter
+    Webhook -.-|Calls API| Catalog
+    Auth & Catalog & Calendar & FAQ & Admin -.- DB_Logic
+    
+    ChatbotRouter -->|Internal Logic| WhatsAppService
+    WhatsAppService -->|Calls API| Meta
+    
+    ChatbotRouter -.- DB_Logic
+    Security -.- Webhook
+    Settings -.- Webhook
+
+    %% ============================
+    %% INTEGRACIÓN DE EVENTOS EN METRICS DB
+    %% ============================
+
+    Events -.- ConvStarted
+    Events -.- MenuOption
+    Events -.- ServiceSel
+    Events -.- FallbackTrig
+    Events -.- AppointmentCreated
+    Events -.- Escalation
+    Events -.- CSAT
+    Events -.- ReminderSent
+    Events -.- ReminderResp
+    Events -.- ConvClosed
+
+    %% ============================
+    %% CÁLCULO DE MÉTRICAS
+    %% ============================
+
+    ChatbotRouter -.- Stats
+    Stats -.-|Calculates| MetricsDB
+    
+    ConvRate ~~~ Stats
+    PctBotTurnos ~~~ Stats
+    AbandonoRate ~~~ Stats
+    FallbackRate ~~~ Stats
+    TopFallbacks ~~~ Stats
+    NocturnoPct ~~~ Stats
+    ResolucionRate ~~~ Stats
+    CancelRate ~~~ Stats
+    NoShowRate ~~~ Stats
+    ConfirmRate ~~~ Stats
+    TopServicios ~~~ Stats
+    CSATAvg ~~~ Stats
+
+    %% ============================
+    %% PERSISTENCIA Y VISUALIZACIÓN
+    %% ============================
+
+    MetricsDB -.- Grafana
+    Grafana -.- SlackAlerts
+    
+    MetricsDB -.-|Stores Data| PG
+    MetricsDB -.-|Caches Data| Redis

@@ -1,0 +1,181 @@
+graph LR
+    %% ============================
+    %% MODO DE OPERACIÓN: PRODUCCIÓN
+    %% con Métricas y Dashboarding - Backend Real v1.0
+    %% ============================
+
+    subgraph ExternalWorld["External World"]
+        Meta["WhatsApp Cloud API (Meta Business)"]
+        Users["End Users<br/>(Whatsapp Mobile/Desktop)"]
+        Slack["Slack Analytics Alerts"]
+    end
+
+    style ExternalWorld fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px
+
+    subgraph BE["Backend Application (FastAPI)"]
+        %% ============================
+        %% ENTRY POINT
+        
+        Webhook["/api/v1/chatbot/webhook.py<br/>Entry Point"]
+
+        subgraph "Routing & Logic - API Routers"
+            Auth["/auth/login.py<br/>File: app/api/v1/auth/"]
+            Catalog["productos.py / servicios.py<br/>File: app/api/v1/catalog/"]
+            Calendar["turnos.py<br/>File: app/api/v1/calendar/"]
+            FAQ["router.py<br/>File: app/api/v1/faq/"]
+            ChatbotRouter["chat.py + webhook.py<br/>Core Router"]
+            Admin["negocio.py<br/>File: app/api/v1/admin/"]
+        end
+
+        subgraph "Core Services"
+            WhatsAppService["services/whatsapp.py<br/>(WhatsApp Integration)"]
+            DB_Logic["app/db/database.py<br/>app/db/models/ (vacío)<br/>(Data Logic - Sin Modelos)"]
+        end
+
+        subgraph "Infrastructure"
+            Settings["app/core/settings.py<br/>(Configuration)"]
+            Middleware["app/middlewares/.gitkeep<br/>(Request Handling)"]
+            Schemas["app/schemas/<br/>auth/catalog/calendar/chat/faq/admin"]
+        end
+
+        subgraph "Databases / External APIs"
+            PG[(PostgreSQL - Main DB)]
+            Redis[(Redis Cache)]
+        end
+
+        subgraph "Security & Permissions"
+            AdminRole["ADMIN: Full Access"]
+            OperatorRole["OPERATOR: Limited Chatbot Access"]
+            GuestRole["GUEST: Read-Only Chat Logs"]
+        end
+
+    end
+
+    style BE fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+
+    %% ============================
+    %% 10 PUNTOS DE INSTRUMENTACIÓN DE EVENTOS (BASE)
+    %% ============================
+
+    subgraph "Event Tracking Points"
+        ConvStarted["EVENT: conversation_started"]:::event
+        MenuOption["EVENT: menu_option_selected"]:::event
+        ServiceSel["EVENT: service_selected"]:::event
+        FallbackTrig["EVENT: fallback_triggered"]:::event
+        AppointmentCreated["EVENT: appointment_created"]:::event
+        Escalation["EVENT: escalation_to_human"]:::event
+        CSAT["EVENT: csat_submitted"]:::event
+        ReminderSent["EVENT: reminder_sent"]:::event
+        ReminderResp["EVENT: reminder_response"]:::event
+        ConvClosed["EVENT: conversation_closed"]:::event
+    end
+
+    classDef event fill:#f0fdf4,stroke:#16a34a,stroke-width:2px;
+
+    %% ============================
+    %% MÉTRICAS CRÍTICAS (12 Total)
+    %% ============================
+
+    subgraph "Metrics Database"
+        MetricsDB[(Metrics DB - PostgreSQL)]
+        
+        ConvRate["#1: Tasa conversión inicio→turno<br/>(< 20% = alerta)"]:::metric
+        PctBotTurnos["#2: % turnos creados por bot<br/>(< 40% = alerta)"]:::metric
+        AbandonoRate["#3: Tasa abandono por paso<br/>(> 40% = alerta)"]:::metric
+        FallbackRate["#4: Tasa fallback<br/>(> 25% = alerta)"]:::metric
+        TopFallbacks["#5: Top 10 mensajes fallback"]:::metric
+        NocturnoPct["#6: % turnos nocturnos (20-8hs)<br/>(< 30% = sin valor)"]:::metric
+        ResolucionRate["#7: Tasa resolución autónoma<br/>(< 50% = necesita humano)"]:::metric
+        CancelRate["#8: Tasa cancelación<br/>(> 20% = alerta)"]:::metric
+        NoShowRate["#9: Tasa no-show<br/>(> 15% = pérdida)"]:::metric
+        ConfirmRate["#10: Confirmación recordatorio<br/>(< 50% = problema)"]:::metric
+        TopServicios["#11: Servicios más reservados"]:::metric
+        CSATAvg["#12: CSAT promedio<br/>(< 3.5/5 = baja satisfacción)"]:::metric
+    end
+
+    classDef metric fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px;
+
+    %% ============================
+    %% DASHBOARD & REPORTING
+    %% ============================
+
+    subgraph "Analytics Engine"
+        Grafana["Grafana Dashboard"]
+        Stats["Conversation Statistics<br/>Aggregated Metrics"]
+    end
+
+    %% ============== PERSISTENCIA DE EVENTOS ====%%
+
+    subgraph "Event Store"
+        Events[(Events - Event Log)]
+    end
+
+    subgraph "Alerting System"
+        SlackAlerts["Slack Alerts<br/>Real-time Notifications"]
+    end
+
+    %% ============================
+    %% CONEXIONES - Leyenda: --> = implementado | -.- = pendiente
+    %% ============================
+
+    Users -->|Sends Message| Meta
+    Meta -->|Webhook Event| Webhook
+    
+    Webhook -->|Processes Data| ChatbotRouter
+    Webhook -.-|Calls API| Catalog
+    Auth & Catalog & Calendar & FAQ & Admin -.- DB_Logic
+    
+    ChatbotRouter -->|Internal Logic| WhatsAppService
+    WhatsAppService -->|Calls API| Meta
+    
+    ChatbotRouter -.- DB_Logic
+    Middleware -.- Webhook
+    Settings -.- Webhook
+    Schemas -.- ChatbotRouter
+    
+    Calendar -.- GoogleCal
+
+    %% ============================
+    %% INTEGRACIÓN DE EVENTOS EN METRICS DB
+    %% ============================
+
+    Events -.- ConvStarted
+    Events -.- MenuOption
+    Events -.- ServiceSel
+    Events -.- FallbackTrig
+    Events -.- AppointmentCreated
+    Events -.- Escalation
+    Events -.- CSAT
+    Events -.- ReminderSent
+    Events -.- ReminderResp
+    Events -.- ConvClosed
+
+    %% ============================
+    %% CÁLCULO DE MÉTRICAS DESDE EVENTS & STATS
+    %% ============================
+
+    ChatbotRouter -.- Stats
+    Stats -.-|Calculates| MetricsDB
+    
+    ConvRate ~~~ Stats
+    PctBotTurnos ~~~ Stats
+    AbandonoRate ~~~ Stats
+    FallbackRate ~~~ Stats
+    TopFallbacks ~~~ Stats
+    NocturnoPct ~~~ Stats
+    ResolucionRate ~~~ Stats
+    CancelRate ~~~ Stats
+    NoShowRate ~~~ Stats
+    ConfirmRate ~~~ Stats
+    TopServicios ~~~ Stats
+    CSATAvg ~~~ Stats
+
+    %% ============================
+    %% PERSISTENCIA Y VISUALIZACIÓN
+    %% ============================
+
+    MetricsDB -.- Grafana
+    Grafana -.- SlackAlerts
+    
+    MetricsDB -.-|Stores Data| PG
+    MetricsDB -.-|Caches Data| Redis
