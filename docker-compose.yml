@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    working_dir: /app/backend 
+    working_dir: /app/backend
     volumes:
       - .:/app
     env_file:
@@ -29,7 +29,11 @@ services:
     volumes:
       - chatbot_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-chatbot} -d $${POSTGRES_DB:-chatbot_db}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-chatbot} -d $${POSTGRES_DB:-chatbot_db}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,6 +49,24 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - ./frontend/.env
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      - api
 
 volumes:
   chatbot_postgres_data:
