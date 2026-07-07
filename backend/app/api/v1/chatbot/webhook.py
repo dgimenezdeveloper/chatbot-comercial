@@ -7,6 +7,243 @@ from app.services.state_manager import get_user_state, set_user_state, clear_use
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# =============================================================================
+# CONSTANTES DE CONFIGURACIÓN (ÁRBOL DE NAVEGACIÓN ESTÁTICO)
+# =============================================================================
+BOTONES_PRINCIPALES = [
+    {"id": "btn_turnos", "title": "📅 Turnos"},
+    {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
+    {"id": "btn_faq", "title": "❓ FAQ"}
+]
+
+BOTONES_TURNOS = [
+    {"id": "btn_turno_reservar", "title": "➕ Reservar"},
+    {"id": "btn_turno_ver", "title": "👀 Ver próximo"},
+    {"id": "btn_turno_cancelar", "title": "❌ Cancelar"}
+]
+
+SECCIONES_SERVICIOS = [
+    {
+        "title": "Servicios Individuales",
+        "rows": [
+            {"id": "srv_corte", "title": "Corte Masculino", "description": "Corte clásico o moderno - 30 min | $15.000"},
+            {"id": "srv_barba", "title": "Perfilado de Barba", "description": "Arreglo con toalla caliente - 20 min | $8.000"}
+        ]
+    },
+    {
+        "title": "Combos Promocionales",
+        "rows": [
+            {"id": "srv_combo_completo", "title": "Combo Estilo Completo", "description": "Corte + Barba + Toalla - 50 min | $20.000"},
+            {"id": "srv_combo_color", "title": "Combo Coloración", "description": "Corte + Tintura Premium - 90 min | $32.000"}
+        ]
+    }
+]
+
+SECCIONES_PRODUCTOS = [
+    {
+        "title": "Cuidado Capilar",
+        "rows": [
+            {"id": "prod_shampoo", "title": "Shampoo Premium 300ml", "description": "Shampoo anticaída con ortiga | $3.500"},
+            {"id": "prod_crema", "title": "Crema de Peinar", "description": "Modelado e hidratación profunda | $2.800"}
+        ]
+    },
+    {
+        "title": "Estilizado y Barba",
+        "rows": [
+            {"id": "prod_cera", "title": "Cera Modeladora Matte", "description": "Fijación fuerte efecto seco | $3.200"},
+            {"id": "prod_aceite", "title": "Aceite para Barba", "description": "Suaviza y nutre el vello facial | $3.000"}
+        ]
+    }
+]
+
+
+# =============================================================================
+# MANEJADORES DE ESTADO (HANDLERS)
+# =============================================================================
+
+async def handle_welcome_flow(phone: str):
+    """Envia el mensaje de bienvenida y el menú de botones principal (Criterio 1)."""
+    await clear_user_state(phone)
+    initial_state = {"estado": "MENU_PRINCIPAL", "step": 1}
+    await set_user_state(phone, initial_state)
+    
+    await send_interactive_buttons(
+        phone=phone,
+        body_text="¡Hola! Bienvenido a la Peluquería Estilo. ¿En qué podemos ayudarte hoy?",
+        buttons=BOTONES_PRINCIPALES
+    )
+
+async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
+    """
+    Manejador de Fallback para capturar texto libre no transaccional (Criterio 3).
+    Prepara la interfaz para la posterior conexión con LLM y servidores MCP.
+    """
+    logger.info(f"Enrutamiento de Fallback activado. Entrada: '{user_text}'. Estado: {user_state}")
+    
+    fallback_message = (
+        "Por ahora soy un bot básico, pronto usaré IA para responder esto 🧠.\n\n"
+        "Por favor, selecciona una de las opciones del menú interactivo para continuar. "
+        "Si deseas volver al inicio, escribe *Menú*."
+    )
+    await send_message(phone=phone, text=fallback_message)
+
+async def handle_main_menu_selection(phone: str, button_id: str, user_state: dict):
+    """Procesa las interacciones del Menú Principal."""
+    if button_id == "btn_turnos":
+        user_state["estado"] = "MENU_TURNOS"
+        user_state["step"] += 1
+        await set_user_state(phone, user_state)
+        
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="Seleccionaste Agenda de Turnos. ¿Qué deseas hacer?",
+            buttons=BOTONES_TURNOS
+        )
+        
+    elif button_id == "btn_catalogo":
+        user_state["estado"] = "MENU_CATALOGO"
+        user_state["step"] += 1
+        await set_user_state(phone, user_state)
+        
+        await send_interactive_list(
+            phone=phone,
+            body_text="Bienvenido a nuestro catálogo de productos. Selecciona un producto para iniciar tu pedido:",
+            button_label="Ver Productos 🛍️",
+            sections=SECCIONES_PRODUCTOS,
+            header_text="Productos de Venta",
+            footer_text="Peluquería Estilo"
+        )
+        
+    elif button_id == "btn_faq":
+        user_state["estado"] = "ESPERANDO_FAQ"
+        user_state["step"] += 1
+        await set_user_state(phone, user_state)
+        
+        await send_message(
+            phone=phone,
+            text="Escribe tu consulta sobre la peluquería (Ej: horarios, dirección, métodos de pago)."
+        )
+
+async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: dict):
+    """Procesa el árbol transaccional de la agenda de turnos."""
+    if button_id == "btn_turno_reservar":
+        user_state["estado"] = "RESERVANDO_TURNO"
+        user_state["step"] += 1
+        await set_user_state(phone, user_state)
+        
+        await send_interactive_list(
+            phone=phone,
+            body_text="Por favor, selecciona el servicio individual o combo que deseas agendar:",
+            button_label="Ver Servicios 💇‍♀️",
+            sections=SECCIONES_SERVICIOS,
+            header_text="Reserva de Turnos",
+            footer_text="Peluquería Estilo"
+        )
+    elif button_id in ["btn_turno_ver", "btn_turno_cancelar"]:
+        action_title = "Ver Turno" if button_id == "btn_turno_ver" else "Cancelar Turno"
+        await send_message(
+            phone=phone,
+            text=f"Procesando opción '{action_title}'... Lógica en desarrollo para conectar con tu agenda real."
+        )
+        await clear_user_state(phone)
+
+async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state: dict):
+    """Maneja la confirmación de la reserva de productos físicos."""
+    if button_id == "btn_prod_confirmar":
+        await send_message(
+            phone=phone,
+            text="✅ ¡Pedido registrado con éxito! Tu reserva de stock ha sido asentada. Puedes retirarlo por el local. ¡Gracias por tu compra!"
+        )
+        await clear_user_state(phone)
+    elif button_id == "btn_prod_volver":
+        await handle_welcome_flow(phone)
+
+async def handle_date_selection(phone: str, button_title: str, user_state: dict):
+    """Guarda la fecha seleccionada por botón y solicita el horario."""
+    user_state["estado"] = "ELIGE_HORARIO"
+    user_state["step"] += 1
+    user_state["fecha_seleccionada"] = button_title
+    await set_user_state(phone, user_state)
+    
+    botones_horarios = [
+        {"id": "btn_hora_10", "title": "10:00 hs"},
+        {"id": "btn_hora_15", "title": "15:00 hs"},
+        {"id": "btn_hora_18", "title": "18:00 hs"}
+    ]
+    await send_interactive_buttons(
+        phone=phone,
+        body_text=f"Elegiste: *{button_title}*.\n\nPor favor, selecciona uno de nuestros horarios disponibles para tu cita:",
+        buttons=botones_horarios
+    )
+
+async def handle_time_selection(phone: str, button_title: str, user_state: dict):
+    """Guarda la hora seleccionada por botón y solicita el nombre por teclado."""
+    user_state["estado"] = "ESPERANDO_NOMBRE"
+    user_state["step"] += 1
+    user_state["hora_seleccionada"] = button_title
+    await set_user_state(phone, user_state)
+    
+    await send_message(
+        phone=phone,
+        text=f"Elegiste las *{button_title}*.\n\nPara finalizar el registro, por favor **escribe tu Nombre y Apellido** por teclado:"
+    )
+
+async def handle_appointment_confirmation(phone: str, user_text: str, user_state: dict):
+    """Confirma el agendamiento del turno con los parámetros consolidados."""
+    fecha = user_state.get("fecha_seleccionada", "Hoy")
+    hora = user_state.get("hora_seleccionada", "10:00 hs")
+    servicio = user_state.get("servicio_seleccionado", "Combo Estilo Completo")
+    
+    confirmacion_text = (
+        f"🎉 *¡Turno Agendado con Éxito!*\n\n"
+        f"👤 *Cliente:* {user_text}\n"
+        f"💇‍♀️ *Servicio:* {servicio}\n"
+        f"📅 *Día:* {fecha}\n"
+        f"⏰ *Hora:* {hora}\n\n"
+        f"Te enviaremos un recordatorio antes de tu cita. ¡Muchas gracias por elegirnos! 💇‍♀️✨"
+    )
+    await send_message(phone=phone, text=confirmacion_text)
+    await clear_user_state(phone)
+
+async def handle_list_selection(phone: str, selected_id: str, row_title: str, user_state: dict):
+    """Maneja las selecciones efectuadas en los menús de tipo lista desplegable."""
+    if selected_id.startswith("srv_"):
+        user_state["estado"] = "ELIGE_FECHA"
+        user_state["step"] += 1
+        user_state["servicio_seleccionado"] = row_title
+        await set_user_state(phone, user_state)
+        
+        botones_fechas = [
+            {"id": "btn_fecha_hoy", "title": "Hoy"},
+            {"id": "btn_fecha_manana", "title": "Mañana"},
+            {"id": "btn_fecha_otro", "title": "Otro día"}
+        ]
+        await send_interactive_buttons(
+            phone=phone,
+            body_text=f"Elegiste: *{row_title}*.\n\nPor favor, selecciona qué día deseas agendar tu turno:",
+            buttons=botones_fechas
+        )
+        
+    elif selected_id.startswith("prod_"):
+        user_state["estado"] = "CONFIRMA_PRODUCTO"
+        user_state["step"] += 1
+        await set_user_state(phone, user_state)
+        
+        botones_confirmacion = [
+            {"id": "btn_prod_confirmar", "title": "🛒 Confirmar Pedido"},
+            {"id": "btn_prod_volver", "title": "🔄 Volver"}
+        ]
+        await send_interactive_buttons(
+            phone=phone,
+            body_text=f"Seleccionaste: *{row_title}*.\n\nContamos con stock disponible. ¿Deseas confirmar tu pedido para retiro presencial?",
+            buttons=botones_confirmacion
+        )
+
+
+# =============================================================================
+# ENRUTADOR ASÍNCRONO DEL WEBHOOK (STATE ROUTER)
+# =============================================================================
+
 # 1. Endpoint GET: Verificación técnica de Meta (Handshake)
 @router.get("/webhook")
 async def verify_webhook(
@@ -28,7 +265,7 @@ def clean_phone_number(phone: str) -> str:
     return phone
 
 
-# 2. Endpoint POST: Recepción de eventos y mensajes en tiempo real
+# 2. Endpoint POST: Recepción y Enrutamiento asíncrono de Eventos
 @router.post("/webhook")
 async def receive_webhook(payload: dict):
     logger.info(f"Payload del Webhook recibido: {payload}")
@@ -45,6 +282,7 @@ async def receive_webhook(payload: dict):
             message_type = message.get("type")
             
             # Sanitización de número de teléfono
+            # Saneamiento del número telefónico de origen
             # --- SANITIZACIÓN DE TELÉFONO ANTES DE INTERACTUAR CON EL ESTADO ---
             # TODO: Remover este bloque al pasar a Producción con número real.
             if settings.APP_ENV == "development" and phone_number.startswith("549"):
@@ -55,39 +293,28 @@ async def receive_webhook(payload: dict):
             else:
                 phone_number = clean_phone_number(phone_number)
             
-            # Consultar o inicializar estado conversacional del usuario
+            # Consultar o inicializar estado conversacional de Redis
             user_state = await get_user_state(phone_number)
-            if not user_state:
-                user_state = {"estado": "MENU_PRINCIPAL", "step": 1}
-                await set_user_state(phone_number, user_state)
+            current_step = user_state.get("estado") if user_state else "NUEVO"
             
-            # --- PARSEO DE EVENTOS SEGÚN SU TIPO ---
+            # --- CASO A: MENSAJES DE TEXTO PLANO ---
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
                 logger.info(f"Mensaje de texto de {phone_number}: '{user_text}'")
                 
-                # Comandos rápidos para invocar el menú
-                if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar"]:
-                    await clear_user_state(phone_number)
-                    user_state = {"estado": "MENU_PRINCIPAL", "step": 1}
-                    await set_user_state(phone_number, user_state)
-                    
-                    botones_principales = [
-                        {"id": "btn_turnos", "title": "📅 Turnos"},
-                        {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
-                        {"id": "btn_faq", "title": "❓ FAQ"}
-                    ]
-                    await send_interactive_buttons(
-                        phone=phone_number,
-                        body_text="¡Hola! Bienvenido a la Peluquería Estilo. ¿En qué podemos ayudarte hoy?",
-                        buttons=botones_principales
-                    )
+                # Comandos de reinicio explícito o inicialización por defecto (Criterio 1)
+                if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar", "salir"] or current_step == "NUEVO":
+                    await handle_welcome_flow(phone_number)
+                
+                # Captura del nombre del usuario (Fin del árbol transaccional)
+                elif current_step == "ESPERANDO_NOMBRE":
+                    await handle_appointment_confirmation(phone_number, user_text, user_state)
+                
+                # Enrutamiento al Fallback Híbrido para textos no estructurados (Criterio 3)
                 else:
-                    await send_message(
-                        phone=phone_number,
-                        text="Disculpa, por ahora no comprendo texto libre 😅. Escribe 'Menú' para interactuar usando mis botones."
-                    )
+                    await handle_text_fallback(phone_number, user_text, user_state)
                     
+            # --- CASO B: RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS) ---
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})
                 interactive_type = interactive_data.get("type")
@@ -98,122 +325,25 @@ async def receive_webhook(payload: dict):
                     button_title = reply.get("title", "")
                     logger.info(f"Botón presionado: ID={selected_id}, Título='{button_title}'")
                     
-                    # ==========================================
-                    # RAMA 1: AGENDA DE TURNOS
-                    # ==========================================
-                    if selected_id == "btn_turnos":
-                        user_state["estado"] = "MENU_TURNOS"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
+                    # Enrutamiento basado en la máquina de estados (Criterio 4)
+                    if current_step == "MENU_PRINCIPAL":
+                        await handle_main_menu_selection(phone_number, selected_id, user_state)
                         
-                        botones_turnos = [
-                            {"id": "btn_turno_reservar", "title": "➕ Reservar"},
-                            {"id": "btn_turno_ver", "title": "👀 Ver próximo"},
-                            {"id": "btn_turno_cancelar", "title": "❌ Cancelar"}
-                        ]
-                        await send_interactive_buttons(
-                            phone=phone_number,
-                            body_text="Seleccionaste Agenda de Turnos. ¿Qué deseas hacer?",
-                            buttons=botones_turnos
-                        )
+                    elif current_step == "MENU_TURNOS":
+                        await handle_turnos_menu_selection(phone_number, selected_id, user_state)
                         
-                    elif selected_id == "btn_turno_reservar":
-                        user_state["estado"] = "RESERVANDO_TURNO"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
+                    elif current_step == "CONFIRMA_PRODUCTO":
+                        await handle_catalogo_menu_selection(phone_number, selected_id, user_state)
                         
-                        # Mostrar servicios y combos según tu flujo de Figma
-                        secciones_servicios = [
-                            {
-                                "title": "Servicios Individuales",
-                                "rows": [
-                                    {"id": "srv_corte", "title": "Corte Masculino", "description": "Corte clásico o moderno - 30 min | $15.000"},
-                                    {"id": "srv_barba", "title": "Perfilado de Barba", "description": "Arreglo con toalla caliente - 20 min | $8.000"}
-                                ]
-                            },
-                            {
-                                "title": "Combos Promocionales",
-                                "rows": [
-                                    {"id": "srv_combo_completo", "title": "Combo Estilo Completo", "description": "Corte + Barba + Toalla - 50 min | $20.000"},
-                                    {"id": "srv_combo_color", "title": "Combo Coloración", "description": "Corte + Tintura Premium - 90 min | $32.000"}
-                                ]
-                            }
-                        ]
-                        await send_interactive_list(
-                            phone=phone_number,
-                            body_text="Por favor, selecciona el servicio individual o combo que deseas agendar:",
-                            button_label="Ver Servicios 💇‍♀️",
-                            sections=secciones_servicios,
-                            header_text="Reserva de Turnos",
-                            footer_text="Peluquería Estilo"
-                        )
-                    
-                    elif selected_id in ["btn_turno_ver", "btn_turno_cancelar"]:
-                        await send_message(
-                            phone=phone_number,
-                            text=f"Procesando opción '{button_title}'... Lógica en desarrollo para conectar con tu agenda real."
-                        )
-                        await clear_user_state(phone_number)
+                    elif current_step == "ELIGE_FECHA" and selected_id.startswith("btn_fecha_"):
+                        await handle_date_selection(phone_number, button_title, user_state)
                         
-                    # ==========================================
-                    # RAMA 2: CATÁLOGO DE PRODUCTOS (Figma venta)
-                    # ==========================================
-                    elif selected_id == "btn_catalogo":
-                        user_state["estado"] = "MENU_CATALOGO"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
+                    elif current_step == "ELIGE_HORARIO" and selected_id.startswith("btn_hora_"):
+                        await handle_time_selection(phone_number, button_title, user_state)
                         
-                        # Productos físicos para reventa de peluquería
-                        secciones_productos = [
-                            {
-                                "title": "Cuidado Capilar",
-                                "rows": [
-                                    {"id": "prod_shampoo", "title": "Shampoo Premium 300ml", "description": "Shampoo anticaída con ortiga | $3.500"},
-                                    {"id": "prod_crema", "title": "Crema de Peinar", "description": "Modelado e hidratación profunda | $2.800"}
-                                ]
-                            },
-                            {
-                                "title": "Estilizado y Barba",
-                                "rows": [
-                                    {"id": "prod_cera", "title": "Cera Modeladora Matte", "description": "Fijación fuerte efecto seco | $3.200"},
-                                    {"id": "prod_aceite", "title": "Aceite para Barba", "description": "Suaviza y nutre el vello facial | $3.000"}
-                                ]
-                            }
-                        ]
-                        await send_interactive_list(
-                            phone=phone_number,
-                            body_text="Bienvenido a nuestro catálogo de productos. Selecciona un producto para iniciar tu pedido:",
-                            button_label="Ver Productos 🛍️",
-                            sections=secciones_productos,
-                            header_text="Productos de Venta",
-                            footer_text="Peluquería Estilo"
-                        )
-                        
-                    elif selected_id == "btn_prod_confirmar":
-                        await send_message(
-                            phone=phone_number,
-                            text="✅ ¡Pedido registrado con éxito! Tu reserva de stock ha sido asentada. Puedes retirarlo por el local. ¡Gracias por tu compra!"
-                        )
-                        await clear_user_state(phone_number)
-                        
-                    elif selected_id == "btn_prod_volver":
-                        # Limpiar estado y forzar el menú de productos nuevamente
-                        user_state["estado"] = "MENU_PRINCIPAL"
-                        await set_user_state(phone_number, user_state)
-                        await send_message(phone=phone_number, text="Operación cancelada. Escribe 'Menú' para volver a empezar.")
-                        
-                    # ==========================================
-                    # RAMA 3: PREGUNTAS FRECUENTES (FAQ)
-                    # ==========================================
-                    elif selected_id == "btn_faq":
-                        user_state["estado"] = "ESPERANDO_FAQ"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
-                        
-                        await send_message(
-                            phone=phone_number,
-                            text="Escribe tu consulta sobre la peluquería (Ej: horarios, dirección, métodos de pago)."
-                        )
+                    else:
+                        # Fallback de seguridad ante estados desincronizados: re-enviar bienvenida
+                        await handle_welcome_flow(phone_number)
                         
                 elif interactive_type == "list_reply":
                     reply = interactive_data.get("list_reply", {})
@@ -221,40 +351,8 @@ async def receive_webhook(payload: dict):
                     row_title = reply.get("title", "")
                     logger.info(f"Opción de lista seleccionada por {phone_number}: ID={selected_id}, Título='{row_title}'")
                     
-                    # Flujo de selección de servicio (Turnos)
-                    if selected_id.startswith("srv_"):
-                        user_state["estado"] = "ELIGE_FECHA"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
-                        
-                        botones_fechas = [
-                            {"id": "btn_fecha_hoy", "title": "Hoy"},
-                            {"id": "btn_fecha_manana", "title": "Mañana"},
-                            {"id": "btn_fecha_otro", "title": "Otro día"}
-                        ]
-                        await send_interactive_buttons(
-                            phone=phone_number,
-                            body_text=f"Elegiste: *{row_title}*.\n\nPor favor, selecciona qué día deseas agendar tu turno:",
-                            buttons=botones_fechas
-                        )
-                        
-                    # Flujo de selección de producto (Catálogo)
-                    elif selected_id.startswith("prod_"):
-                        user_state["estado"] = "CONFIRMA_PRODUCTO"
-                        user_state["step"] += 1
-                        await set_user_state(phone_number, user_state)
-                        
-                        # Botones para simular el check de stock y confirmación de compra
-                        botones_confirmacion = [
-                            {"id": "btn_prod_confirmar", "title": "🛒 Confirmar Pedido"},
-                            {"id": "btn_prod_volver", "title": "🔄 Volver"}
-                        ]
-                        await send_interactive_buttons(
-                            phone=phone_number,
-                            body_text=f"Seleccionaste: *{row_title}*.\n\nContamos con stock disponible. ¿Deseas confirmar tu pedido para retiro presencial?",
-                            buttons=botones_confirmacion
-                        )
-                        
+                    await handle_list_selection(phone_number, selected_id, row_title, user_state)
+                    
     except Exception as e:
         logger.error(f"Error procesando el webhook entrante: {str(e)}")
         
