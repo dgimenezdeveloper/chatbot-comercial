@@ -1,7 +1,8 @@
 # Detalles Pendientes - Exploración del Proyecto Chatbot Comercial
 
-**Fecha:** 5 de julio 2026  
-**Estado:** Exploración inicial completada  
+**Fecha:** 8 de julio 2026
+**Estado:** Actualizado tras merge de 9 PRs a develop (PRs #40-#50)
+**Rama actual:** Feature/Data-initial (sincronizada con origin/develop hasta 4 PRs: #40, #43, #46, #47)
 
 ---
 
@@ -10,26 +11,42 @@
 ### **Backend API (FastAPI)** ✅ Completado
 
 #### **Archivo: `/backend/app/main.py`**
-- **Estado:** Implementado con endpoints mock
+- **Estado:** Implementado con routers definidos
 - **Routers activados:**
-  - `/api/v1/auth` - Autenticación (login OAuth2)
-  - `/api/v1/chatbot` - Chatbot (endpoint público con respuesta mock)
+  - `/api/v1/auth` - Autenticación (JWT + Google OAuth2)
+  - `/api/v1/chatbot` - Chatbot (webhook + chat)
   - `/api/v1/catalog` - Productos/Servicios (protegido con JWT)
   - `/api/v1/faq` - Preguntas frecuentes (protegido con JWT)
   - `/api/v1/calendar` - Gestión de turnos (protegido con JWT)
   - `/api/v1/admin` - Panel administrativo (protegido con JWT)
 
-#### **Archivo: `/backend/app/api/v1/chatbot/chat.py`**
-- **Estado:** Endpoint básico con respuesta mock
-- **Endpoint actual:** `POST /chat` → devuelve `"¡Hola! Recibí tu mensaje..."`
+#### **Archivo: `/backend/app/api/v1/chatbot/webhook.py`**
+- **Estado:** ✅ COMPLETO — State Router con 8 handlers específicos
+- **Implementaciones:**
+  - GET verify + POST receive para Meta WhatsApp Cloud API
+  - State Router con if/elif basado en user_state (Redis)
+  - Estados: INITIAL, MENU_SELECTION, SERVICE_SELECTION, DATE_SELECTION, TIME_SELECTION, CONFIRMATION, FALLBACK_1, FALLBACK_2, HUMAN_ESCALATION
+  - Soporte para mensajes interactivos (botones y listas)
+  - Flujo híbrido árbol de decisión MVP + placeholder IA
+  - Fallback handling: 2 intentos → escalamiento a humano
 
-#### **Archivo: `/backend/app/schemas/faq.py`**
-- **Estado:** Schemas Pydantic definidos
-- **Classes:** `FAQRequest`, `FAQResponse` con campos: `pregunta`, `respuesta`, `id`
+#### **Archivo: `/backend/app/services/whatsapp.py`**
+- **Estado:** ✅ COMPLETO
+- **Funciones:** `send_message`, `send_interactive_buttons`, `send_interactive_list`
+- **Integración:** Meta WhatsApp Cloud API v25.0
 
-#### **Archivo: `/backend/app/api/v1/faq/router.py`**
-- **Estado:** CRUD básico implementado
-- **Endpoints:** GET, POST, PUT, DELETE para / (lista de FAQs hard-coded)
+#### **Archivo: `/backend/app/services/state_manager.py`**
+- **Estado:** ✅ COMPLETO
+- **Funciones:** `get_user_state`, `set_user_state`, `clear_user_state`
+- **Backend:** Redis 7+ con TTL configurable
+
+#### **Archivo: `/backend/app/core/security.py`**
+- **Estado:** ✅ COMPLETO
+- **Implementaciones:** JWT token generation/validation + Google OAuth2 verification
+
+#### **Archivo: `/backend/app/core/settings.py`**
+- **Estado:** ✅ Configurado con 19 variables de entorno
+- **Incluye:** DATABASE_URL, REDIS_URL, WhatsApp credentials, JWT secrets, Google OAuth2
 
 ---
 
@@ -39,225 +56,232 @@
 El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
 
 - ❌ `business.py` - Modelo Negocio (clientela del chatbot)
-- ❌ `turno.py` - Modelo Turno/Apuesta
-- ❌ `producto.py` - Modelo Producto
+- ❌ `turno.py` - Modelo Turno/Appointment
 - ❌ `servicio.py` - Modelo Servicio
-- ❌ `faq.py` - Modelo FAQ (aunque el schema ya existe)
+- ❌ `producto.py` - Modelo Producto
 - ❌ `usuario.py` - Modelo Usuario
+- ❌ `faq.py` - Modelo FAQ
+- ❌ `events.py` - Modelo Event (métricas)
+- ❌ `sessions.py` - Modelo Session
+- ❌ `feedback.py` - Modelo Feedback/CSAT
+- ❌ `turno_apuesta.py` - Modelo Apuesta a Turnos
 
 ### **Services de Negocio** - `/backend/app/services/`
-Faltan servicios que conecten los endpoints con la base de datos:
-
-- ❌ `catalog.py` - Servicios para productos/servicios
-- ❌ `negocio.py` - Lógica de negocio del chatbot
-- ❌ `faq.py` - Servicio CRUD para FAQs
+- ✅ `whatsapp.py` - Integración con WhatsApp (COMPLETO)
+- ✅ `state_manager.py` - Redis State Manager (COMPLETO)
+- ❌ `catalog.py` - CRUD para productos/servicios
 - ❌ `calendar.py` - Gestión de turnos y disponibilidad
-- ✅ `whatsapp.py` - Integración con WhatsApp (ya existe)
+- ❌ `negocio.py` - Lógica de orquestación del chatbot conectada a DB
+- ❌ `faq.py` - Servicio CRUD para FAQs
 
-### **Schemas adicionales** - `/backend/app/schemas/`
-Faltan schemas para:
-- ❌ Negocio (Business)
-- ❌ Turnos (Calendar)
-- ❌ Productos/Servicios (Catalog)
+### **Scheduler de Recordatorios**
+- ❌ No existe scheduler (Celery/APScheduler)
+- ⚠️ La lógica de envío de mensaje WhatsApp ya está implementada en whatsapp.py
+- ⚠️ El webhook tiene placeholder para recordatorios T-24hs
 
----
-
-## 📋 Checklist de Implementación Recomendado
-
-### **Prioridad ALTA (MVP Básico)**
-
-#### 1. Modelos SQLAlchemy - Crear DB schema
-```
-❌ database.py - Configurar conexión PostgreSQL (engine síncrono actual, no async)
-❌ business.py - Negocio con campos: name, description, active
-❌ turno.py - Turno con fecha/hora, negocio_id, status
-❌ servicio.py - Servicio con duracion, precio, slots disponibles
-❌ producto.py - Producto con stock, precio, imagen
-❌ usuario.py - Usuario con rol (admin/cliente)
-```
-
-#### 2. Servicios de Negocio
-```
-❌ catalog.py - Listar/Crear productos y servicios
-❌ negocio.py - Lógica del chatbot (rutas, fallback, escalada)
-❌ faq.py - CRUD completo para preguntas frecuentes
-❌ calendar.py - Gestión de turnos y disponibilidad
-```
-
-#### 3. Conectar Endpoints con DB
-```
-❌ chat/chat.py - Sustituir mock por llamada a DB
-❌ faq/router.py - Usar servicio faq_service.FAQService
-❌ catalog/productos.py - Implementar CRUD con SQLAlchemy
-❌ catalog/servicios.py - Implementar CRUD con SQLAlchemy
-❌ calendar/turnos.py - Implementar gestión de turnos
-```
-
-#### 4. Migrations Alembic
-```
-❌ Configurar versiones iniciales para todas las tablas
-```
+### **Migrations Alembic**
+- ❌ No hay initial migration para las tablas base
+- ✅ Alembic configurado (`alembic.ini`, `env.py`, `script.py.mako`)
 
 ---
 
-## 🎯 Funcionalidades del Chatbot (según Documentación)
+## 📋 Estructura Explorada del Frontend
 
-### **Caso de uso 1: Agendar turno nuevo** ✅ Prioridad Crítica
-- ✅ Tasa conversión inicio → turno
-- ⚠️ Fallback handling
-- ⚠️ Escalamiento a humano
-- ⚠️ Recordatorios T-24hs
+### **Frontend (Next.js 16 + React 19)** ✅ Parcialmente completado
 
-### **Caso de uso 2: Modificar turno existente** - No implementado
-- ⚠️ Buscar turno por usuario
-- ⚠️ Disponibilidad para re-agendar
-- ⚠️ Confirmación del cambio
+#### **Rutas del App Router:**
+- ✅ `(landingpage)/` - Landing page pública con layout + página principal
+- ✅ `(marketing)/` - Marketing page (legacy)
+- ✅ `(auth)/` - Login + Register con layout y stories
+- ✅ `(dashboard)/` - Dashboard + Onboarding con stories
 
-### **Caso de uso 3: Cancelar turno** - No implementado
-- ⚠️ Validar cancelación antes de fecha/hora
-- ⚠️ Notificación al negocio
+#### **Autenticación (NUEVO - PR #48):**
+- ✅ `src/auth.js` - NextAuth v5 config con Google Provider + backend token exchange
+- ✅ `src/app/api/auth/[...nextauth]/route.js` - Route handlers GET/POST
+- ✅ `components/auth/google-button/` - GoogleButton component + stories
+- ✅ `components/auth/login-form/` - LoginForm component + stories
 
-### **Caso de uso 4: Recordatorio automático T-24hs** - No implementado
-- ⚠️ Scheduler para disparar recordatorios
-- ⚠️ Leer read receipts de WhatsApp
+#### **Componentes (NUEVO - PR #48):**
+- ✅ `components/landing-page/` - 5 secciones: hero, features, how-to, onboarding, contact
+- ✅ `components/layout/` - Navbar + Footer
 
-### **Caso de uso 5: Consultar disponibilidad sin agendar** - No implementado
-- ⚠️ Mostrar slots disponibles por día/hora
-- ⚠️ Filtrado por servicio
+#### **UI Components (shadcn/ui):**
+- ✅ badge, button, card, checkbox, input, label, select, separator, switch, table (10 componentes)
 
-### **Caso de uso 6: Consultar precios** - Parcial (mock)
-- ✅ Devuelve precio desde catálogo (hard-coded)
-- ⚠️ Debe venir de DB real
+#### **Librerías y Utilidades (NUEVO - PR #48):**
+- ✅ `src/lib/logger.js` - Pino logger para traceo
+- ✅ `src/proxy.js` - API proxy configuration
+- ✅ `frontend/Dockerfile` - Node 22-alpine container
+- ✅ `frontend/.env.example` - Variables de entorno frontend
 
-### **Caso de uso 7: Consultar profesionales/empleados** - No implementado
+#### **CI/CD (NUEVO - PR #50):**
+- ✅ `.github/workflows/ci-cd.yml` - Lint + Test + Build + Deploy pipeline
+
+---
+
+## 🔑 Estado de Funcionalidades del Chatbot
+
+### Caso de uso 1: Agendar turno nuevo ✅ Implementado en webhook
+- ✅ State Router con 8 handlers
+- ✅ Soporte para mensajes interactivos (botones/listas)
+- ✅ Flujo híbrido árbol de decisión + placeholder IA
+- ⚠️ Conectado a DB real (usa Redis para estado, pero no persiste turnos en PostgreSQL)
+- ⚠️ Recordatorios T-24hs (solo placeholder)
+
+### Caso de uso 2: Modificar turno existente ❌ No implementado
+- ❌ Buscar turno por usuario
+- ❌ Disponibilidad para re-agendar
+- ❌ Confirmación del cambio
+
+### Caso de uso 3: Cancelar turno ❌ No implementado
+- ❌ Validar cancelación antes de fecha/hora
+- ❌ Notificación al negocio
+
+### Caso de uso 4: Recordatorio automático T-24hs ⚠️ Placeholder
+- ✅ Lógica de envío de mensaje WhatsApp implementada
+- ❌ Scheduler automático (Celery/APScheduler)
+- ⚠️ Solo funciona dentro de ventana 24h de WhatsApp
+
+### Caso de uso 5: Consultar disponibilidad sin agendar ❌ No implementado
+- ❌ Mostrar slots disponibles por día/hora
+- ❌ Filtrado por servicio
+
+### Caso de uso 6: Consultar precios ❌ No implementado
+- ❌ Debe venir de DB real
+
+### Caso de uso 7: Consultar profesionales/empleados ❌ No implementado
 - ❌ No existe modelo de profesionales aún
 
-### **Caso de uso 8: Interacción bot vs escalamiento** - Parcial (mock)
-- ⚠️ Lógica de fallback no implementada
-- ⚠️ No hay orquestación de flujo
+### Caso de uso 8: Interacción bot vs escalamiento ✅ Parcial
+- ✅ Lógica de fallback implementada (FALLBACK_1 → FALLBACK_2 → HUMAN_ESCALATION)
+- ✅ Escalamiento automático tras 2 fallbacks consecutivos
+- ⚠️ Notificación al humano no implementada
 
 ---
 
-## 🔑 Eventos que el Backend debe Emitir (según métricas)
+## 📊 Infraestructura y DevOps
 
-Estos eventos son cruciales para el dashboard de métricas:
+### Docker Compose ✅ Parcial
+- ✅ Backend container (Python 3.11-slim, port 8000)
+- ✅ PostgreSQL container (postgres:16-alpine, port 5432)
+- ✅ Redis container (redis:7-alpine, port 6379)
+- ✅ Frontend container (Node 22-alpine, port 3000) — NUEVO PR #48
 
-| Evento | Momento de disparo | Campos necesarios |
-|--------|-------------------|------------------|
-| `conversation_started` | Primer mensaje usuario | session_id, business_id, timestamp, channel, is_new_user |
-| `menu_option_selected` | Usuario elige opción | session_id, option_name |
-| `service_selected` | Confirma servicio | service_id, confidence_score |
-| `fallback_triggered` | Bot no entiende | message_original, previous_state, fallback_n |
-| `appointment_created` | Turno confirmado | appointment_id, via_bot=true, duration_flujo_seg, horario_nocturno |
-| `escalation_to_human` | Escala a humano | reason, n_fallbacks_previos, current_flow_state |
-| `csat_submitted` | Usuario califica | score 1-5, outcome (turno/escalado/abandonado) |
-| `reminder_sent` | Envío T-24hs | appointment_id, timestamp, channel |
-| `reminder_response` | Respuesta al recordatorio | response_type (confirmo/cancelo/cambio), timestamp |
-
-**Total: 10 eventos base para instrumentar el backend.**
+### CI/CD ✅ Implementado
+- ✅ GitHub Actions workflow (`.github/workflows/ci-cd.yml`)
+- ✅ Pipeline: Lint + Test + Build + Deploy
 
 ---
 
-## 📊 Métricas Críticas a Instrumentar
+## 🔑 Eventos a Instrumentar (10 Base)
 
-### **Métricas MVP (día 1):**
-1. Tasa conversión inicio → turno (< 20% = alerta)
-2. % turnos creados por bot (< 40% = alerta)
-3. Tasa abandono por paso (> 40% = alerta)
-4. Tasa fallback (> 25% = alerta)
-5. Top 10 mensajes con fallback
-6. % turnos nocturnos (20-8hs) (< 30% = sin valor agregado)
-7. Tasa resolución autónoma (< 50% = necesita humano)
-8. Tasa cancelación (> 20% = alerta)
-9. Tasa no-show (> 15% = pérdida ingresos)
-10. Confirmación recordatorio (< 50% = problema)
-11. Servicios más reservados (ranking volumen)
-12. CSAT promedio (< 3.5/5 = baja satisfacción)
+| Evento | Estado | Momento de disparo | Campos necesarios |
+|--------|--------|-------------------|------------------|
+| `conversation_started` | ⚠️ Parcial (Redis) | Primer mensaje usuario | session_id, business_id, timestamp, channel, is_new_user |
+| `menu_option_selected` | ⚠️ Parcial (Redis) | Usuario elige opción | session_id, option_name |
+| `service_selected` | ⚠️ Parcial (Redis) | Confirma servicio | service_id, confidence_score |
+| `fallback_triggered` | ⚠️ Parcial (Redis) | Bot no entiende | message_original, previous_state, fallback_n |
+| `appointment_created` | ❌ Pendiente | Turno confirmado | appointment_id, via_bot=true, duration_flujo_seg, horario_nocturno |
+| `escalation_to_human` | ⚠️ Parcial (Redis) | Escala a humano | reason, n_fallbacks_previos, current_flow_state |
+| `csat_submitted` | ❌ Pendiente | Usuario califica | score 1-5, outcome (turno/escalado/abandonado) |
+| `reminder_sent` | ❌ Pendiente | Envío T-24hs | appointment_id, timestamp, channel |
+| `reminder_response` | ❌ Pendiente | Respuesta al recordatorio | response_type (confirmo/cancelo/cambio), timestamp |
+| `conversation_closed` | ⚠️ Parcial (Redis) | Cierre conversación | duration_seg, n_mensajes, n_fallbacks, resultado_final |
 
-### **Métricas de Engagement y Conversión:**
-13. **Tasa respuesta inicial** (% usuarios que responden tras mensaje del bot) → Meta: >60%
-14. **Tiempo medio respuesta usuario** (segundos desde último mensaje bot) → Meta: <2min
-15. **Duración promedio sesión** (tiempo total en conversación activa) → Meta: 3-8 min
-16. **Mensajes por sesión** (cantidad total de intercambios) → Meta: 8-15 mensajes
-17. **Tasa retención D1/D7** (% usuarios que vuelven tras primer uso) → Meta: D1>25%, D7>10%
-18. **Frecuencia de uso semanal** (sesiones/usuario/semana) → Meta: 2-4 sesiones
-19. **Tasa completación flujo** (% que llegan al final sin abandonar) → Meta: >60%
-20. **Puntos de fricción** (etapas con mayor abandono en funnel) → Identificar top 3
-21. **Conversión por tipo de mensaje** (texto vs botón vs quick_reply) → Optimizar CTA
-22. **Tasa interacción elementos UI** (% que tocan botones/menus) → Meta: >40%
-
-### **Métricas de Negocio:**
-23. **Ingreso promedio por turno** (valor monetario del servicio reservado)
-24. **ROI chatbot** ((ingresos adicionales - costo operacion) / costo)
-25. **Reducción tiempo reserva manual** (comparativo bot vs humano) → Meta: -70%
-26. **Costo por conversación resuelta** (operación total / conversaciones completadas)
-27. **Tasa upsell cross-sell** (% que agregan servicios adicionales al turno base)
-
-### **Métricas de Calidad:**
-28. **Precisión intent detection** (% correctamente identificados vs totales) → Meta: >85%
-29. **Tiempo resolución problema** (desde inicio hasta solución confirmada) → Meta: <5min
-30. **Tasa escalado exitoso** (% que tras escalamiento resuelven con humano) → Meta: >90%
+**Resumen:** 5/10 eventos parcialmente instrumentados en Redis. 5/10 pendientes. Ninguno persiste en PostgreSQL.
 
 ---
 
-## � Próximos Pasos Recomendados
+## 📊 Métricas Críticas (12 MVP)
 
-### **Opción A: Implementar MVP Completo**
-1. Crear modelos SQLAlchemy para todas las tablas
-2. Implementar servicios de negocio con SQLAlchemy ORM
-3. Conectar todos los endpoints con la DB real
-4. Configurar Alembic migrations
-5. Implementar lógica del chatbot con fallback y orquestación
-
-### **Opción B: Priorizar Chatbot Primero**
-1. Refactorizar `/chat/chat.py` con lógica de orquestación completa
-2. Implementar fallback, intent detection, entity extraction
-3. Crear modelos mínimos para negocio + turno
-4. Agregar FAQs desde DB
-5. Conectar con WhatsApp API real (webhook handler existente)
-
-### **Opción C: Primero la Infraestructura**
-1. Configurar DB schema completo primero
-2. Implementar todos los CRUD de servicios
-3. Luego integrar lógica del chatbot sobre esa infraestructura
-4. Final: conectar webhook WhatsApp
+| # | Métrica | Estado | Umbral de Alerta |
+|---|---------|--------|-----------------|
+| 1 | Tasa conversión inicio → turno | ❌ Sin datos | < 20% |
+| 2 | % turnos creados por bot | ❌ Sin datos | < 40% |
+| 3 | Tasa abandono por paso | ❌ Sin datos | > 40% |
+| 4 | Tasa fallback | ❌ Sin datos | > 25% |
+| 5 | Top 10 mensajes con fallback | ❌ Sin datos | - |
+| 6 | % turnos nocturnos (20-8hs) | ❌ Sin datos | < 30% |
+| 7 | Tasa resolución autónoma | ❌ Sin datos | < 50% |
+| 8 | Tasa cancelación | ❌ Sin datos | > 20% |
+| 9 | Tasa no-show | ❌ Sin datos | > 15% |
+| 10 | Confirmación recordatorio | ❌ Sin datos | < 50% |
+| 11 | Servicios más reservados | ❌ Sin datos | - |
+| 12 | CSAT promedio | ❌ Sin datos | < 3.5/5 |
 
 ---
 
-## �� Preguntas para Decidir el Roadmap
+## 🎯 Próximos Pasos Recomendados (Actualizado 8 julio 2026)
 
-1. **¿Qué base de datos se usará?** (PostgreSQL recomendado para producción, SQLite para desarrollo)
-2. **¿Cuántos clientes/businesses soportar?** (multi-tenant desde inicio o uno por vez?)
-3. **¿El chatbot es lineal o usa NLU/LLM?** (flujo predefinido vs inteligencia artificial)
-4. **¿Recordatorio T-24hs es obligatorio desde MVP?** (impacta en WhatsApp Business API)
-5. **¿Profesionales/empleados son necesarios desde el inicio?**
+### Prioridad 1 - Modelos SQLAlchemy (Día 1-2)
+1. Crear modelos SQLAlchemy completos:
+   - `business.py`, `usuario.py`, `servicio.py`, `producto.py`, `turno.py`, `faq.py`, `events.py`, `sessions.py`, `feedback.py`, `turno_apuesta.py`
+2. Configurar Base metadata compartida en database.py
+3. Migrar a async engine (actualmente create_engine síncrono)
 
----
+### Prioridad 2 - Migrations + Servicios CRUD (Días 3-4)
+1. Crear initial migration Alembic para todas las tablas
+2. Implementar servicios CRUD con SQLAlchemy ORM:
+   - `catalog.py`, `calendar.py`, `negocio.py`, `faq.py`
 
-## 📂 Archivos Clave a Revisar
+### Prioridad 3 - Scheduler de Recordatorios (Día 5)
+1. Implementar Celery/APScheduler para recordatorios T-24hs
+2. Conectar con `send_message` de whatsapp.py (ya implementado)
 
-### **Ya revisados:**
-- ✅ `backend/app/main.py` - Estructura de routers
-- ✅ `backend/app/api/v1/chatbot/chat.py` - Endpoint chat actual (mock)
-- ✅ `backend/app/schemas/faq.py` - Schemas Pydantic definidos
-- ✅ `backend/app/api/v1/faq/router.py` - CRUD hard-coded
-
-### **Por revisar:**
-- ⏳ `backend/app/core/settings.py` - Configuración del app
-- ⏳ `backend/app/core/security.py` - Implementación OAuth2/JWT
-- ⏳ `backend/app/db/database.py` - Configuración de conexión DB
-- ⏳ `backend/requirements.txt` - Dependencias actuales
+### Prioridad 4 - Métricas y Eventos (Día 6+)
+1. Persistir eventos de Redis a PostgreSQL
+2. Implementar eventos faltantes (appointment_created, csat_submitted, reminder_sent, reminder_response)
+3. Dashboard con 12 métricas críticas
 
 ---
 
-## 📌 Notas Importantes
+## 📂 Archivos Clave del Proyecto
 
-- **Estado actual:** Backend con endpoints funcionales pero todos usando datos hard-coded/mock
-- **Próximo bloqueador:** Crear modelos SQLAlchemy antes de implementar servicios
-- **Dependencia externa:** WhatsApp API (hay `whatsapp.py` en services - revisar implementación)
-- **Multi-tenant:** La arquitectura parece soportar múltiples negocios desde el inicio
+### Backend (revisados y verificados):
+- ✅ `backend/app/main.py` — Estructura de routers
+- ✅ `backend/app/api/v1/chatbot/webhook.py` — State Router + 8 handlers
+- ✅ `backend/app/services/whatsapp.py` — WhatsApp integration
+- ✅ `backend/app/services/state_manager.py` — Redis state management
+- ✅ `backend/app/core/settings.py` — 19 variables de entorno
+- ✅ `backend/app/core/security.py` — JWT + Google OAuth2
+- ✅ `backend/app/db/database.py` — Engine síncrono (requiere async)
+- ✅ `backend/requirements.txt` — Dependencias completas
+- ⏳ `backend/app/db/models/` — VACÍO, requiere implementación
+- ⏳ `backend/app/db/migrations/` — Configurado pero sin migraciones
+
+### Frontend (revisados y verificados):
+- ✅ `frontend/src/auth.js` — NextAuth v5 + Google Provider
+- ✅ `frontend/src/app/api/auth/[...nextauth]/route.js` — Auth handlers
+- ✅ `frontend/src/components/auth/` — GoogleButton + LoginForm
+- ✅ `frontend/src/components/landing-page/` — 5 secciones
+- ✅ `frontend/src/components/layout/` — Navbar + Footer
+- ✅ `frontend/src/lib/logger.js` — Pino logger
+- ✅ `frontend/src/proxy.js` — API proxy
+- ✅ `frontend/Dockerfile` — Node 22-alpine
+- ✅ `.github/workflows/ci-cd.yml` — CI/CD pipeline
+
+### Documentación (Data_Analyst):
+- ✅ `Data_Analyst/Documentacion_de_proyecto.md` — 60+ métricas, 12 críticas, 3 escenarios
+- ✅ `Data_Analyst/schema_db.md` — 10 modelos SQLAlchemy documentados
+- ✅ `Data_Analyst/Detalles_pendientes.md` — Este archivo
+- ✅ `Data_Analyst/diagrama_fullstack.mmd` — Diagrama Mermaid unificado v2.0
+- ✅ `Data_Analyst/README.md` — Índice del directorio
 
 ---
 
-**Última actualización:** 5 de julio 2026, 4:02 PM  
-**Próxima acción recomendada:** Crear modelos SQLAlchemy para la base de datos principal
+## 📌 Resumen de PRs Mergeados a Develop
+
+| PR | Commit | Descripción | Estado en Feature/Data-initial |
+|----|--------|-------------|-------------------------------|
+| #40 | `0b80bca` | Endpoints REST principales | ✅ Sincronizado |
+| #43 | `121415e` | Máquina de estados WhatsApp + Redis | ✅ Sincronizado |
+| #46 | `ade4640` | Mensajes interactivos botones/listas | ✅ Sincronizado |
+| #47 | `c74559f` | Flujo híbrido árbol decisión + placeholder IA | ✅ Sincronizado |
+| #48 | `6924bc2` | Google OAuth2 frontend (NextAuth v5) | ❌ Pendiente sincronizar |
+| #49 | `a623c5f` | Test integración auth | ❌ Pendiente sincronizar |
+| #50 | `431823` | CI/CD + test integración auth | ❌ Pendiente sincronizar |
+
+---
+
+**Última actualización:** 8 de julio 2026, 6:30 PM (America/Buenos_Aires)
+**Próxima acción recomendada:** Sincronizar Feature/Data-initial con origin/develop para incorporar PRs #48, #49, #50

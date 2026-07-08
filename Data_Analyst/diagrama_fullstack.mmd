@@ -1,13 +1,16 @@
 flowchart LR
     %% ============================
-    %% DIAGRAMA UNIFICADO V1.0
+    %% DIAGRAMA UNIFICADO V2.0
     %% chatbot-comercial - Full Stack Integration
     %% Stack: Next.js 16 + FastAPI 0.110 + WhatsApp Cloud API
+    %% Última actualización: 8 de julio 2026
+    %% Refleja PRs #48, #49, #50 (Google Auth + CI/CD + Landing Page)
     %% ============================
 
     subgraph ExternalWorld["External World"]
         Meta["WhatsApp Cloud API (Meta Business)"]
         Users["End Users<br/>(Whatsapp Mobile/Desktop/Landing)"]
+        GoogleAuth["Google OAuth2"]
     end
 
     style ExternalWorld fill:#e8f4fc,stroke:#3b82f6,stroke-width:2px
@@ -22,18 +25,24 @@ flowchart LR
         
         Layout["src/app/layout.js"]:::done
         
-        subgraph "(marketing) - Landing Page"
+        subgraph "(landingpage) - Landing Page"
+            LandingPage["(landingpage)/page.jsx"]:::done
+            LandingLayout["(landingpage)/layout.jsx"]:::done
+        end
+
+        subgraph "(marketing) - Marketing Page"
             MarketingPage["(marketing)/page.jsx"]:::done
             MarketingPageStory["(marketing)/page.stories.jsx"]:::done
         end
         
         subgraph "(auth) - Authentication"
             direction TB
-            LoginPage["((auth)/login/page.jsx"]:::done
-            RegisterPage["((auth)/register/page.jsx"]:::done
+            AuthLayout["(auth)/layout.jsx"]:::done
+            LoginPage["(auth)/login/page.jsx"]:::done
+            RegisterPage["(auth)/register/page.jsx"]:::done
             
-            LoginPageStory["((auth)/login/page.stories.jsx"]:::done
-            RegisterPageStory["((auth)/register/page.stories.jsx"]:::done
+            LoginPageStory["(auth)/login/page.stories.jsx"]:::done
+            RegisterPageStory["(auth)/register/page.stories.jsx"]:::done
         end
         
         subgraph "(dashboard) - Admin Dashboard"
@@ -51,14 +60,29 @@ flowchart LR
 
     style FrontendApp fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
 
+    subgraph FrontendAuth["Frontend - Authentication (NextAuth v5)"]
+        direction TB
+        
+        AuthConfig["src/auth.js<br/>(NextAuth v5 + Google Provider)"]:::done
+        AuthRoute["src/app/api/auth/[...nextauth]/route.js<br/>(handlers GET/POST)"]:::done
+        
+        GoogleBtn["components/auth/google-button/<br/>GoogleButton.jsx + stories"]:::done
+        LoginForm["components/auth/login-form/<br/>LoginForm.jsx + stories"]:::done
+    end
+
+    style FrontendAuth fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
     subgraph FrontendComponents["Frontend - Components Structure"]
         direction TB
         
-        DashboardComp["src/components/dashboard/ (.gitkeep)"]:::placeholder
-        FeaturesComp["src/components/features/ (.gitkeep)"]:::placeholder
-        FormComp["src/components/forms/ (.gitkeep)"]:::placeholder
-        LayoutComp["src/components/layout/ (.gitkeep)"]:::placeholder
-        MarketingComp["src/components/marketing/ (.gitkeep)"]:::placeholder
+        LandingComponents["components/landing-page/<br/>├─ hero-section<br/>├─ features-section<br/>├─ how-to-section<br/>├─ onboarding-section<br/>└─ contact-section"]:::done
+        
+        LayoutComponents["components/layout/<br/>├─ navbar/Navbar.jsx<br/>└─ footer/Footer.jsx"]:::done
+        
+        DashboardComp["components/dashboard/ (.gitkeep)"]:::placeholder
+        FeaturesComp["components/features/ (.gitkeep)"]:::placeholder
+        FormComp["components/forms/ (.gitkeep)"]:::placeholder
+        MarketingComp["components/marketing/ (.gitkeep)"]:::placeholder
     end
 
     style FrontendComponents fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
@@ -83,6 +107,8 @@ flowchart LR
     subgraph FrontendLib["Frontend - Libraries & Utilities"]
         ComponentsJSON["components.json (shadcn config)"]:::done
         Utils["src/lib/utils.js (cn helper)"]:::done
+        Logger["src/lib/logger.js<br/>(pino logger)"]:::done
+        Proxy["src/proxy.js<br/>(API proxy config)"]:::done
         Hooks["src/hooks/ (.gitkeep)"]:::placeholder
         Services["src/services/ (.gitkeep)"]:::placeholder
         Vitest["vitest.config.js"]:::done
@@ -91,6 +117,8 @@ flowchart LR
         NextConfig["next.config.mjs"]:::done
         PostCSS["postcss.config.mjs"]:::done
         GitIgnore["frontend/.gitignore"]:::done
+        EnvExample["frontend/.env.example"]:::done
+        DockerfileFront["frontend/Dockerfile"]:::done
     end
 
     style FrontendLib fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
@@ -101,7 +129,7 @@ flowchart LR
 
     subgraph BE["Backend (FastAPI 0.110)"]
         subgraph "API Routers"
-            Auth["/api/v1/auth/login.py<br/>Auth (mock + Google)"]
+            Auth["/api/v1/auth/login.py<br/>Auth (JWT + Google OAuth2 ✓)"]
             Catalog["/api/v1/catalog/<br/>productos.py + servicios.py"]
             Calendar["/api/v1/calendar/turnos.py<br/>Calendar"]
             FAQ["/api/v1/faq/router.py<br/>FAQ"]
@@ -113,6 +141,7 @@ flowchart LR
 
         subgraph "Core Services"
             WhatsAppService["services/whatsapp.py<br/>(WhatsApp Integration ✓)"]
+            StateManager["services/state_manager.py<br/>(Redis State Manager ✓)"]
             DB_Logic["app/db/database.py<br/>(Engine síncrono SQLAlchemy)<br/>app/db/models/ (VACÍO ❌)"]
         end
 
@@ -137,20 +166,31 @@ flowchart LR
     style BE fill:#fff9c4,stroke:#f57f17,stroke-width:2px
 
     %% ============================
+    %% CI/CD Pipeline
+    %% ============================
+
+    subgraph CICD["CI/CD (GitHub Actions)"]
+        CIWorkflow[".github/workflows/ci-cd.yml<br/>Lint + Test + Build + Deploy"]:::done
+    end
+
+    style CICD fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+
+    %% ============================
     %% DEPLOYMENT - Docker Compose
     %% ============================
 
     subgraph DockerDeploy["Deployment (Docker Compose)"]
         direction TB
         
-        DockerCompose["docker-compose.yml<br/>Orquestación de 3 servicios"]
+        DockerCompose["docker-compose.yml<br/>Orquestación de 4 servicios"]
         
         APIContainer["API Container<br/>backend/Dockerfile<br/>Python 3.11-slim<br/>Port: 8000"]
+        FrontContainer["Frontend Container<br/>frontend/Dockerfile<br/>Node 22-alpine<br/>Port: 3000"]
         DBContainer["PostgreSQL Container<br/>postgres:16-alpine<br/>Port: 5432"]
         RedisContainer["Redis Container<br/>redis:7-alpine<br/>Port: 6379"]
         
-        DBVolumen[("Volume: chatbot_postgres_data<br/>(/var/tmp/chatbot_postgres_data)")]
-        RedisVolumen[("Volume: chatbot_redis_data<br/>(/var/tmp/chatbot_redis_data)")]
+        DBVolumen[("Volume: chatbot_postgres_data")]
+        RedisVolumen[("Volume: chatbot_redis_data")]
     end
 
     style DockerDeploy fill:#e8eaf6,stroke:#5c6bc0,stroke-width:2px
@@ -216,31 +256,43 @@ flowchart LR
     %% ============================
 
     Users -->|Sends Message| Meta
-    MarketingPage -.- Users
+    LandingPage & MarketingPage -.- Users
+    GoogleAuth -->|OAuth Flow| AuthConfig
+    AuthConfig -->|POST /auth/google| Auth
     LoginPage & RegisterPage -.- Users
     DashboardPage & OnboardingPage -.- OperatorRole
     
     Meta -->|Webhook Event| Webhook
     Webhook -->|Processes Data| ChatbotRouter
     Webhook -.-|Calls API| Catalog
-    Auth & Catalog & Calendar & FAQ & Admin -.- DB_Logic
     
     ChatbotRouter -->|Internal Logic| WhatsAppService
+    ChatbotRouter -->|State Management| StateManager
     WhatsAppService -->|Calls API| Meta
     
     ChatbotRouter -.- DB_Logic
+    StateManager -.- Redis
     Security -.- Webhook
     Settings -.- Webhook
+
+    %% ============================
+    %% CI/CD CONNECTIONS
+    %% ============================
+
+    CIWorkflow -.-|Runs on push| FrontendApp
+    CIWorkflow -.-|Runs on push| BE
 
     %% ============================
     %% DEPLOYMENT CONNECTIONS
     %% ============================
 
     DockerCompose -->|Orquesta| APIContainer
+    DockerCompose -->|Orquesta| FrontContainer
     DockerCompose -->|Orquesta| DBContainer
     DockerCompose -->|Orquesta| RedisContainer
     
     APIContainer -->|Ejecuta| Webhook
+    FrontContainer -->|Sirve| FrontendApp
     DBContainer -->|Persiste datos| DBVolumen
     RedisContainer -->|Persiste datos| RedisVolumen
     

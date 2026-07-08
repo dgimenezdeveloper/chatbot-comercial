@@ -23,14 +23,28 @@ Backend: Python 3.11+
 ORM: SQLAlchemy 2.0.28
 Async: FastAPI 0.110.0
 Migrations: Alembic 1.13.1
-Cache: Redis 7+ (sesiones, caché)
+Cache: Redis 7+ (sesiones, state management)
+
+Frontend: Next.js 16.2.9 (App Router)
+Auth: NextAuth v5 (beta) + Google OAuth2
+UI: React 19.2.4, TailwindCSS 4, shadcn/ui 4.11.0
+Logger: Pino
+
+DevOps: Docker Compose (4 servicios), GitHub Actions CI/CD
 ```
 
 ### Estado Actual
-- ✅ **Estructura de backend**: Estructuras de routers y endpoints definidos
+- ✅ **Estructura de backend**: Routers y endpoints definidos, webhook funcional con State Router
+- ✅ **WhatsApp Integration**: `services/whatsapp.py` completo (send_message, interactivos)
+- ✅ **State Manager**: `services/state_manager.py` con Redis (get/set/clear user_state)
+- ✅ **Webhook**: State Router con 8 handlers + mensajes interactivos + flujo híbrido árbol/IA
+- ✅ **Google OAuth2**: Backend (JWT + Google verification) + Frontend (NextAuth v5)
+- ✅ **Frontend**: Next.js 16 con landing page, auth components, dashboard, UI kit (10 componentes)
+- ✅ **CI/CD**: GitHub Actions workflow (`.github/workflows/ci-cd.yml`)
+- ✅ **Docker**: 4 servicios (API, Frontend, PostgreSQL, Redis)
 - ⚠️ **Modelos SQLAlchemy**: `/backend/app/db/models/` está vacío
-- ⚠️ **Schemas Pydantic**: Schemas existen para auth/faq pero faltan para negocio/catalog/calendar
-- ⚠️ **Services**: Implementados como mock/hard-coded, no conectados con DB real
+- ⚠️ **Schemas Pydantic**: Existen para auth/faq/chat/calendar/catalog/admin, falta conectar con DB
+- ⚠️ **Services**: whatsapp.py y state_manager.py completos. Faltan catalog, calendar, negocio, faq
 
 ---
 
@@ -851,4 +865,4 @@ backend/app/db/models/
 
 ---
 
-*Última actualización: 7 de julio 2026, 2:52 PM (America/Buenos_Aires)*
+*Última actualización: 8 de julio 2026, 6:30 PM (America/Buenos_Aires)* — Refleja PRs #48, #49, #50 (Google OAuth2 frontend, CI/CD, tests integración)
