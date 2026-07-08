@@ -68,8 +68,7 @@ jobs:
           POSTGRES_PASSWORD: "test"
           POSTGRES_DB: "test"
         run: |
-          # Verificamos si la carpeta existe Y contiene archivos de prueba reales (test_*.py o *_test.py)
-          if [ -d "backend/tests" ] && find backend/tests -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+          if [ -d "backend/tests" ] && find backend/tests -name "test_*.py" -o -name "*_test.py" | grep_search -q .; then
             pytest backend/tests/
           else
             echo "No se encontraron archivos de pruebas unitarias (test_*.py o *_test.py). Continuando..."
@@ -99,7 +98,7 @@ jobs:
           pnpm build
 
   # =============================================================================
-  # ETAPA 2: DESPLIEGUE CONTINUO (CD) - DOCKER HUB & AZURE DEPLOY
+  # ETAPA 2: DESPLIEGUE CONTINUO (CD) - DOS SERVIDORES EN AZURE
   # =============================================================================
   deploy:
     name: Despliegue Continuo (CD)
@@ -120,7 +119,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- Compilar y subir BACKEND ---
+      # --- 1. Compilar y subir imagen del BACKEND ---
       - name: Construir y Subir Imagen Backend
         uses: docker/build-push-action@v5
         with:
@@ -133,7 +132,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Compilar y subir FRONTEND (Inyectando la URL real de pymebot) ---
+      # --- 2. Compilar y subir imagen del FRONTEND ---
       - name: Construir y Subir Imagen Frontend
         uses: docker/build-push-action@v5
         with:
@@ -144,18 +143,25 @@ jobs:
             dgimenezdeveloper/chatbot-frontend:latest
             dgimenezdeveloper/chatbot-frontend:${{ github.sha }}
           build-args: |
+            # Apuntamos Next.js a la URL pública de tu API en Azure
             NEXT_PUBLIC_API_URL=https://pymebot.azurewebsites.net/api/v1
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Despliegue en Azure ---
+      # --- 3. Autenticar en Azure ---
       - name: Iniciar Sesión en Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Desplegar en Azure Web App para Contenedores
-        uses: azure/webapps-deploy@v2
+      # --- 4. Desplegar BACKEND a 'pymebot' ---
+      - name: Desplegar Backend
+        uses: azure/webapps-deploy@v3
         with:
           app-name: 'pymebot'
-          configuration-file: 'infra/docker-compose.yml'
+
+      # --- 5. Desplegar FRONTEND a 'pymebot-chat' ---
+      - name: Desplegar Frontend
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'pymebot-chat'

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Frontend forzado a escuchar en el puerto 80 nativo de Azure
+  frontend:
+    image: dgimenezdeveloper/chatbot-frontend:latest
+    ports:
+      - "80:80"
+    environment:
+      - PORT=80
+      - HOSTNAME=0.0.0.0
+
+  # Backend privado
+  api:
+    image: dgimenezdeveloper/chatbot-backend:latest
+    expose:
+      - "8000"
+    environment:
+      - PYTHONPATH=/app/backend
+
+  # Base de datos
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chatbot
+      POSTGRES_PASSWORD: chatbot123
+      POSTGRES_DB: chatbot_db
+
+  # Redis
+  redis:
+    image: redis:7-alpine
