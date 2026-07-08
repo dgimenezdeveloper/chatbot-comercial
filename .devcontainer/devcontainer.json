@@ -1,0 +1,43 @@
+{
+  "name": "Chatbot Comercial Monorepo",
+  "dockerComposeFile": [
+    "../docker-compose.yml"
+  ],
+  "service": "api",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "github.copilot",
+        "saoudrizwan.claude-dev"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.extraPaths": [
+          "/app/backend"
+        ],
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    },
+    "jetbrains": {
+      "backend": "api"
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1.3.7": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "latest"
+    }
+  },
+  "remoteUser": "root",
+  "remoteEnv": {
+    "PYTHONPATH": "/app/backend"
+  },
+  "postCreateCommand": "curl -s https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -o /root/.git-completion.bash && echo '[ -f /root/.git-completion.bash ] && . /root/.git-completion.bash' >> /root/.bashrc"
+}

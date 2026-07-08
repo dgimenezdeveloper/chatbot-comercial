@@ -1,7 +1,15 @@
 /backend/   @dgimenezdeveloper @rcrossa @dario923 @arielrz-dev
-/frontend/  @manfredcamacho @rcrossa @Arleni1108
-/data/      @rcrossa
-/qa/        @rcrossa 
-/ux-ui/     @DanaStornello @Viky-dotcom
+/frontend/  @manfredcamacho @rcrossa @Arleni1108 @Aleska19 @dgimenezdeveloper
+/data/      @rcrossa @vmvillamar
+/qa/        @rcrossa @yaninaemail2024-hub @ariasari7066-oss @matlobos
+/ux-ui/     @DanaStornello @Viky-dotcom @Viky-dotcom
 /infra/     @rcrossa @dgimenezdeveloper @dario923 @arielrz-dev
+/.github/   @rcrossa @dgimenezdeveloper
+/docker-compose.yml @dgimenezdeveloper @rcrossa @manfredcamacho
+/.devcontainer/ @dgimenezdeveloper @rcrossa
+/backend/.env.example @dgimenezdeveloper @rcrossa
+/backend/Dockerfile @dgimenezdeveloper @rcrossa
 /no-roles/  
+.gitignore @dgimenezdeveloper @rcrossa
+README.md  @dgimenezdeveloper @rcrossa
+pull_request_template.md @dgimenezdeveloper @rcrossa
