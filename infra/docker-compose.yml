@@ -1,15 +1,15 @@
 version: '3.8'
 
 services:
-  # El Frontend (Next.js) corre en su puerto 3000
+  # El Frontend recibe obligatoriamente el tráfico público en el puerto 80
   frontend:
     image: dgimenezdeveloper/chatbot-frontend:latest
     ports:
-      - "3000:3000"  # <--- CAMBIADO DE "80:3000" A "3000:3000" (Azure redirigirá el tráfico aquí)
+      - "80:3000"
     depends_on:
       - api
 
-  # El Backend corre internamente en el puerto 8000
+  # El Backend corre de forma privada en el puerto 8000
   api:
     image: dgimenezdeveloper/chatbot-backend:latest
     expose:
@@ -20,19 +20,14 @@ services:
       - db
       - redis
 
-  # Base de datos con credenciales explícitas (Sin interpolación para que Azure no falle)
+  # Base de datos con credenciales explícitas
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: chatbot
       POSTGRES_PASSWORD: chatbot123
       POSTGRES_DB: chatbot_db
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
 
   # Broker de Redis
   redis:
     image: redis:7-alpine
-
-volumes:
-  postgres_prod_data:
