@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Habilita la compilación stand-alone optimizada para Docker
+  output: 'standalone', 
   images: {
     remotePatterns: [
       {
@@ -14,8 +16,6 @@ const nextConfig = {
       },
     ],
   },
-  
-  // Agregamos este proxy invisible: todo lo que vaya a /api/* se redirige al contenedor 'api' de FastAPI
   async rewrites() {
     return [
       {
