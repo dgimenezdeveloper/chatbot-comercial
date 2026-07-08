@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  # El Frontend recibe todo el tráfico público en el puerto 80 de Azure
+  # El Frontend (Next.js) corre en su puerto 3000
   frontend:
     image: dgimenezdeveloper/chatbot-frontend:latest
     ports:
-      - "3000:3000"
+      - "3000:3000"  # <--- CAMBIADO DE "80:3000" A "3000:3000" (Azure redirigirá el tráfico aquí)
     depends_on:
       - api
 
