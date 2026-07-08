@@ -1,4 +1,4 @@
-import { LoginForm } from "@/components/auth/LoginForm/LoginForm";
+import { LoginForm } from "@/components/auth/login-form/login-form";
 
 const meta = {
   title: "Components/Auth/LoginForm",

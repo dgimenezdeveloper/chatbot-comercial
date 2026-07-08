@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button/button";
 import { Input } from "@/components/ui/input/input";
 import { Label } from "@/components/ui/label/label";
-import { GoogleButton } from "@/components/auth/GoogleButton/GoogleButton";
+import { GoogleButton } from "@/components/auth/google-button/google-button";
 import {
   Card,
   CardContent,

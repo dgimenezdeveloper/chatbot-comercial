@@ -1,5 +1,5 @@
-import Navbar from "@/components/layout/Navbar/Navbar"
-import Footer from "@/components/layout/Footer/Footer"
+import Navbar from "@/components/layout/navbar/navbar";
+import Footer from "@/components/layout/footer/footer";
 
 export default function LandingLayout({ children }) {
   return (
@@ -8,5 +8,5 @@ export default function LandingLayout({ children }) {
       <main className="flex-1 w-full">{children}</main>
       <Footer />
     </div>
-  )
+  );
 }
