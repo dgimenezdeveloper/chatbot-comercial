@@ -28,7 +28,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
+          
     steps:
       - name: Descargar Código (Checkout)
         uses: actions/checkout@v4
@@ -53,20 +53,20 @@ jobs:
 
       - name: Ejecutar Pruebas Backend (Pytest)
         env:
-          DATABASE_URL: sqlite:///:memory:
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test_secret_key_internal_pipeline_123
-          APP_ENV: development
-          WHATSAPP_TOKEN: mock_token_verification
-          WHATSAPP_VERIFY_TOKEN: mock_verify_token
-          WHATSAPP_PHONE_NUMBER_ID: mock_phone_id
-          WHATSAPP_BUSINESS_ACCOUNT_ID: mock_business_id
-          GOOGLE_CLIENT_ID: mock_google_id
-          GOOGLE_CLIENT_SECRET: mock_google_secret
-          GOOGLE_REDIRECT_URI: http://localhost:8000/api/v1/auth/callback
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
+          DATABASE_URL: "sqlite:///:memory:"
+          REDIS_URL: "redis://localhost:6379/0"
+          SECRET_KEY: "test_secret_key_internal_pipeline_123"
+          APP_ENV: "development"
+          WHATSAPP_TOKEN: "mock_token_verification"
+          WHATSAPP_VERIFY_TOKEN: "mock_verify_token"
+          WHATSAPP_PHONE_NUMBER_ID: "mock_phone_id"
+          WHATSAPP_BUSINESS_ACCOUNT_ID: "mock_business_id"
+          GOOGLE_CLIENT_ID: "mock_google_id"
+          GOOGLE_CLIENT_SECRET: "mock_google_secret"
+          GOOGLE_REDIRECT_URI: "http://localhost:8000/api/v1/auth/callback"
+          POSTGRES_USER: "test"
+          POSTGRES_PASSWORD: "test"
+          POSTGRES_DB: "test"
         run: |
           if [ -d "backend/tests" ]; then
             pytest backend/tests/
@@ -92,8 +92,7 @@ jobs:
 
       - name: Validar Compilación del Frontend (Next.js)
         env:
-          # Inyectamos de forma temporal para validar que Next.js compile sin errores de sintaxis
-          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1"
         run: |
           cd frontend
           pnpm build
@@ -144,7 +143,6 @@ jobs:
             dgimenezdeveloper/chatbot-frontend:latest
             dgimenezdeveloper/chatbot-frontend:${{ github.sha }}
           build-args: |
-            # Apuntamos el frontend a la URL de producción de tu API Gateway
             NEXT_PUBLIC_API_URL=https://pymebot.azurewebsites.net/api/v1
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -158,5 +156,5 @@ jobs:
       - name: Desplegar en Azure Web App para Contenedores
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'pymebot' # <--- COLOCAMOS EL NOMBRE REAL DE TU WEB APP
+          app-name: 'pymebot'
           configuration-file: 'infra/docker-compose.yml'
