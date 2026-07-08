@@ -68,10 +68,11 @@ jobs:
           POSTGRES_PASSWORD: "test"
           POSTGRES_DB: "test"
         run: |
-          if [ -d "backend/tests" ]; then
+          # Verificamos si la carpeta existe Y contiene archivos de prueba reales (test_*.py o *_test.py)
+          if [ -d "backend/tests" ] && find backend/tests -name "test_*.py" -o -name "*_test.py" | grep -q .; then
             pytest backend/tests/
           else
-            echo "No se encontraron pruebas unitarias. Continuando..."
+            echo "No se encontraron archivos de pruebas unitarias (test_*.py o *_test.py). Continuando..."
           fi
 
       # --- CI Frontend ---
