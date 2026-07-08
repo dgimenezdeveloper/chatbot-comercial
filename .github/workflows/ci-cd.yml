@@ -15,7 +15,7 @@ jobs:
   # ETAPA 1: INTEGRACIÓN CONTINUA (CI) - BACKEND & FRONTEND
   # =============================================================================
   ci:
-    name: Integración Continua (CI)
+    name: Integración Continuo (CI)
     runs-on: ubuntu-latest
     
     services:
@@ -68,7 +68,6 @@ jobs:
           POSTGRES_PASSWORD: "test"
           POSTGRES_DB: "test"
         run: |
-          # Verificamos si la carpeta existe Y contiene archivos de prueba reales (test_*.py o *_test.py)
           if [ -d "backend/tests" ] && find backend/tests -name "test_*.py" -o -name "*_test.py" | grep -q .; then
             pytest backend/tests/
           else
@@ -133,7 +132,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Compilar y subir FRONTEND (Inyectando la URL real de pymebot) ---
+      # --- Compilar y subir FRONTEND ---
       - name: Construir y Subir Imagen Frontend
         uses: docker/build-push-action@v5
         with:
@@ -148,14 +147,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Despliegue en Azure ---
+      # --- Despliegue en Azure (Actualizado a v2 y v3 para silenciar advertencias de Node 20) ---
       - name: Iniciar Sesión en Azure
-        uses: azure/login@v1
+        uses: azure/login@v2  # <--- ACTUALIZADO A V2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Desplegar en Azure Web App para Contenedores
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@v3  # <--- ACTUALIZADO A V3
         with:
           app-name: 'pymebot'
           configuration-file: 'infra/docker-compose.yml'
