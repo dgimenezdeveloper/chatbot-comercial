@@ -2,14 +2,14 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { LoginForm } from "@/components/auth/LoginForm/LoginForm";
+import { LoginForm } from "@/components/auth/login-form/login-form";
 
 export default function LoginPage() {
   const handleCredentialsSubmit = (e) => {
     e.preventDefault();
   };
 
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleGoogleSignIn = () => {
     setIsGoogleLoading(true);
@@ -17,10 +17,10 @@ export default function LoginPage() {
   };
 
   return (
-    <LoginForm 
-          onCredentialsSubmit={handleCredentialsSubmit}
-          onGoogleSignIn={handleGoogleSignIn}
-          isGoogleLoading={isGoogleLoading}
-        />
+    <LoginForm
+      onCredentialsSubmit={handleCredentialsSubmit}
+      onGoogleSignIn={handleGoogleSignIn}
+      isGoogleLoading={isGoogleLoading}
+    />
   );
 }
