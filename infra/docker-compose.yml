@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # El Frontend recibe todo el tráfico de Internet en el puerto 80 público de Azure
+  frontend:
+    image: dgimenezdeveloper/chatbot-frontend:latest
+    ports:
+      - "80:3000"  # Redirige el puerto 80 externo al puerto 3000 interno de tu Next.js
+    depends_on:
+      - api
+
+  # El Backend corre seguro en su puerto 8000 de forma interna dentro del compose
+  api:
+    image: dgimenezdeveloper/chatbot-backend:latest
+    expose:
+      - "8000"
+    environment:
+      - PYTHONPATH=/app/backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_prod_data:

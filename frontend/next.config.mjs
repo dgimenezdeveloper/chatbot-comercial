@@ -1,3 +1,4 @@
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -12,6 +13,16 @@ const nextConfig = {
         pathname: "/**",
       },
     ],
+  },
+  
+  // Agregamos este proxy invisible: todo lo que vaya a /api/* se redirige al contenedor 'api' de FastAPI
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://api:8000/api/:path*',
+      },
+    ];
   },
 };
 
