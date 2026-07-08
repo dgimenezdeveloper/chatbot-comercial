@@ -1,21 +1,21 @@
 version: '3.8'
 
 services:
-  # El Frontend (Next.js) responde al puerto público
+  # La única puerta de entrada al mundo exterior
   frontend:
     image: dgimenezdeveloper/chatbot-frontend:latest
     ports:
-      - "3000:3000"
-    
-  # El Backend (FastAPI) expone su puerto interno 8000
+      - "80:3000"
+
+  # API privada, expuesta solo internamente a Next.js
   api:
     image: dgimenezdeveloper/chatbot-backend:latest
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - PYTHONPATH=/app/backend
 
-  # Base de datos limpia sin volumen anclado (Garantiza arranque seguro)
+  # Base de datos limpia y aislada
   db:
     image: postgres:16-alpine
     environment:
@@ -23,6 +23,6 @@ services:
       POSTGRES_PASSWORD: chatbot123
       POSTGRES_DB: chatbot_db
 
-  # Redis para la sesión
+  # Redis aislado
   redis:
     image: redis:7-alpine
