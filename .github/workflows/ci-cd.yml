@@ -79,7 +79,7 @@ jobs:
       - name: Configurar Entorno de Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Instalar pnpm
         uses: pnpm/action-setup@v3
