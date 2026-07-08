@@ -113,39 +113,7 @@ jobs:
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Iniciar Sesión en Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # --- Compilar y subir BACKEND ---
-      - name: Construir y Subir Imagen Backend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            dgimenezdeveloper/chatbot-backend:latest
-            dgimenezdeveloper/chatbot-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # --- Compilar y subir FRONTEND ---
-      - name: Construir y Subir Imagen Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: |
-            dgimenezdeveloper/chatbot-frontend:latest
-            dgimenezdeveloper/chatbot-frontend:${{ github.sha }}
-          build-args: |
-            NEXT_PUBLIC_API_URL=https://pymebot.azurewebsites.net/api/v1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      .github/workflows/ci-cd.yml
 
       # --- Despliegue en Azure (Actualizado a v2 y v3 para silenciar advertencias de Node 20) ---
       - name: Iniciar Sesión en Azure

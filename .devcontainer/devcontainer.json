@@ -40,4 +40,4 @@
     "PYTHONPATH": "/app/backend"
   },
   "postCreateCommand": "curl -s https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -o /root/.git-completion.bash && echo '[ -f /root/.git-completion.bash ] && . /root/.git-completion.bash' >> /root/.bashrc"
-}
+} 

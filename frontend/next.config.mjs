@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Habilita la compilación stand-alone optimizada para Docker
   output: 'standalone', 
   images: {
     remotePatterns: [
@@ -16,11 +15,13 @@ const nextConfig = {
       },
     ],
   },
+  
+  // Apuntamos el proxy invisible a la url de tu backend en Azure
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://api:8000/api/:path*',
+        destination: 'https://pymebot.azurewebsites.net/api/:path*',
       },
     ];
   },

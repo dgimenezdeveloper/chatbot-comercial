@@ -1,13 +1,16 @@
 version: '3.8'
 
 services:
-  # La única puerta de entrada al mundo exterior
+  # Frontend forzado a escuchar en el puerto 80 nativo de Azure
   frontend:
     image: dgimenezdeveloper/chatbot-frontend:latest
     ports:
-      - "80:3000"
+      - "80:80"
+    environment:
+      - PORT=80
+      - HOSTNAME=0.0.0.0
 
-  # API privada, expuesta solo internamente a Next.js
+  # Backend privado
   api:
     image: dgimenezdeveloper/chatbot-backend:latest
     expose:
@@ -15,7 +18,7 @@ services:
     environment:
       - PYTHONPATH=/app/backend
 
-  # Base de datos limpia y aislada
+  # Base de datos
   db:
     image: postgres:16-alpine
     environment:
@@ -23,6 +26,6 @@ services:
       POSTGRES_PASSWORD: chatbot123
       POSTGRES_DB: chatbot_db
 
-  # Redis aislado
+  # Redis
   redis:
     image: redis:7-alpine

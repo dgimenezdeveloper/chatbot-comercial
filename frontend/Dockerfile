@@ -3,13 +3,22 @@ FROM node:22-alpine AS base
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# 2. Capa de dependencias
+# 2. Capa de dependencias (deps)
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile || pnpm install
 
-# 3. Capa de compilación (Builder)
+# =============================================================================
+# 3. Capa para Desarrollo Local (Target: dev) - ¡REQUERIDA POR TU DEV CONTAINER!
+# =============================================================================
+FROM deps AS dev
+EXPOSE 3000
+CMD ["pnpm", "dev"]
+
+# =============================================================================
+# 4. Capa de compilación para Producción (Builder)
+# =============================================================================
 FROM deps AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
@@ -17,7 +26,9 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm build
 
-# 4. Capa de producción limpia (Runner)
+# =============================================================================
+# 5. Capa de producción limpia (Runner) - Next.js Standalone para Azure
+# =============================================================================
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -38,5 +49,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Iniciamos con Node directamente sin depender de pnpm ni node_modules rotos
+# Iniciamos con Node directamente sin depender de pnpm ni node_modules rotos en Azure
 CMD ["node", "server.js"]
