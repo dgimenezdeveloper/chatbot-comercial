@@ -17,11 +17,12 @@ const nextConfig = {
   },
   
   // Apuntamos el proxy invisible a la url de tu backend en Azure
+  // (Actualizado para no interferir con las rutas internas de NextAuth /api/auth/*)
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
-        destination: 'https://pymebot.azurewebsites.net/api/:path*',
+        source: '/api/v1/:path*',
+        destination: 'https://pymebot.azurewebsites.net/api/v1/:path*',
       },
     ];
   },
