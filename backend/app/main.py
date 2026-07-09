@@ -11,11 +11,15 @@ from app.api.v1.faq import router as faq_router
 from app.api.v1.calendar import router as calendar_router
 from app.api.v1.admin import router as admin_router
 
+from app.db.database import engine, Base
+
 app = FastAPI(
     title="Chatbot Comercial API",
     description="API para panel de administración y chatbot de WhatsApp, protegida con Google OAuth2 y JWT.",
     version="0.1.0",
 )
+# Auto-crea todas las tablas de SQLAlchemy en la base de datos si no existen al iniciar
+Base.metadata.create_all(bind=engine)
 
 # Configuración de CORS
 # Permite que la app de Next.js (puerto 3000) pueda consumir la API de FastAPI (puerto 8000)
