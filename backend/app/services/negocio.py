@@ -94,7 +94,7 @@ def get_available_slots(
             Appointment.service_id == service_id,
             Appointment.scheduled_date >= datetime.combine(target_date, datetime.min.time()),
             Appointment.scheduled_date < datetime.combine(target_date, datetime.max.time()),
-            Appointment.status.notin_([\"cancelled\"]),
+            Appointment.status.notin_(["cancelled"]),
         )
         .all()
     )
