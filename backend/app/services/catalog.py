@@ -14,6 +14,22 @@ from app.db.models.service import Service
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Whitelists de campos actualizables — evitan sobrescritura de id, business_id,
+# created_at y atributos inexistentes.
+# ---------------------------------------------------------------------------
+
+SERVICE_ALLOWED_FIELDS = {
+    'name', 'slug', 'description', 'category', 'subcategory',
+    'price', 'duration_minutes', 'slots_available_per_day',
+    'is_active', 'requires_stock', 'stock_quantity', 'image_url', 'updated_at',
+}
+
+PRODUCT_ALLOWED_FIELDS = {
+    'name', 'slug', 'description', 'price', 'cost_price',
+    'stock_quantity', 'low_stock_threshold', 'is_active', 'image_url', 'updated_at',
+}
+
 
 # ---------------------------------------------------------------------------
 # Servicios
@@ -53,7 +69,8 @@ def update_service(db: Session, service_id: int, business_id: int, data: dict) -
     service = get_service(db, service_id, business_id)
     if not service:
         return None
-    for key, value in data.items():
+    filtered = {k: v for k, v in data.items() if k in SERVICE_ALLOWED_FIELDS}
+    for key, value in filtered.items():
         setattr(service, key, value)
     db.commit()
     db.refresh(service)
@@ -110,7 +127,8 @@ def update_product(db: Session, product_id: int, business_id: int, data: dict) -
     product = get_product(db, product_id, business_id)
     if not product:
         return None
-    for key, value in data.items():
+    filtered = {k: v for k, v in data.items() if k in PRODUCT_ALLOWED_FIELDS}
+    for key, value in filtered.items():
         setattr(product, key, value)
     db.commit()
     db.refresh(product)

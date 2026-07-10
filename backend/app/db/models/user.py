@@ -33,7 +33,7 @@ class User(Base):
         comment="Email para notificaciones y login",
     )
     phone = Column(
-        String(20), nullable=True,
+        String(20), index=True, nullable=True,
         comment="Número de WhatsApp personal",
     )
 
