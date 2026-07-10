@@ -1,8 +1,9 @@
 # Detalles Pendientes - Exploración del Proyecto Chatbot Comercial
 
-**Fecha:** 8 de julio 2026
-**Estado:** Actualizado tras merge de 9 PRs a develop (PRs #40-#50)
-**Rama actual:** Feature/Data-initial (sincronizada con origin/develop hasta 4 PRs: #40, #43, #46, #47)
+**Fecha:** 10 de julio 2026
+**Estado:** Actualizado tras PR #58 (data-models-metrics) en features/data-models + fixes C1-C4/W8
+**Rama actual:** features/data-models (PR #58 abierto → develop)
+**Nota:** Prioridades 1 y 2 del plan original RESUELTAS en PR #58. Prioridades 3 y 4 siguen pendientes.
 
 ---
 
@@ -53,35 +54,43 @@
 ## ⚠️ Estructuras sin Implementar
 
 ### **Modelos de Datos (DB)** - `/backend/app/db/models/`
-El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
+✅ **IMPLEMENTADO en PR #58.** 10 modelos SQLAlchemy completos:
 
-- ❌ `business.py` - Modelo Negocio (clientela del chatbot)
-- ❌ `turno.py` - Modelo Turno/Appointment
-- ❌ `servicio.py` - Modelo Servicio
-- ❌ `producto.py` - Modelo Producto
-- ❌ `usuario.py` - Modelo Usuario
-- ❌ `faq.py` - Modelo FAQ
-- ❌ `events.py` - Modelo Event (métricas)
-- ❌ `sessions.py` - Modelo Session
-- ❌ `feedback.py` - Modelo Feedback/CSAT
-- ❌ `turno_apuesta.py` - Modelo Apuesta a Turnos
+| Archivo | Modelo | Features clave |
+|---------|--------|----------------|
+| `business.py` | Business | Raíz multi-tenant, slug único, config WhatsApp |
+| `user.py` | User | Roles admin/operator/guest, UniqueConstraint(phone, business_id) |
+| `service.py` | Service | Catálogo con categorías y precios, composite PK (id, business_id) |
+| `product.py` | Product | Productos con stock y costo, índice parcial is_active |
+| `appointment.py` | Appointment | Turnos con 3 enums (status, no_show, created_via), composite PK |
+| `faq.py` | FAQ | Preguntas frecuentes categorizadas con orden |
+| `events.py` | Event | Eventos con JSONB payload, GIN index, FK a session |
+| `sessions.py` | ChatSession | Sesiones con métricas agregadas (n_messages, n_fallbacks) |
+| `feedback.py` | Feedback | CSAT 1-5 con outcome de interacción |
+| `turno_apuesta.py` | TurnoApuesta | Gamificación de apuestas diarias |
+
+Todos con índices de rendimiento, docstrings en español, y `ondelete` consistente.
 
 ### **Services de Negocio** - `/backend/app/services/`
 - ✅ `whatsapp.py` - Integración con WhatsApp (COMPLETO)
 - ✅ `state_manager.py` - Redis State Manager (COMPLETO)
-- ❌ `catalog.py` - CRUD para productos/servicios
-- ❌ `calendar.py` - Gestión de turnos y disponibilidad
-- ❌ `negocio.py` - Lógica de orquestación del chatbot conectada a DB
-- ❌ `faq.py` - Servicio CRUD para FAQs
+- ✅ `catalog.py` - CRUD servicios/productos con soft-delete + validación whitelist (PR #58)
+- ✅ `calendar.py` - Gestión de turnos: crear, listar, cancelar, actualizar estado (PR #58)
+- ✅ `negocio.py` - Orquestación conectada a DB: get_or_create_user, slots disponibles (PR #58)
+- ✅ `faq.py` - CRUD FAQs con búsqueda ILIKE y categorías (PR #58)
+- ✅ `event_logger.py` - log_event() fire-and-forget para 10 eventos (PR #58)
+- ✅ `metrics_queries.py` - 12 métricas MVP con queries SQL aggregate + all_metrics() (PR #58)
 
 ### **Scheduler de Recordatorios**
 - ❌ No existe scheduler (Celery/APScheduler)
-- ⚠️ La lógica de envío de mensaje WhatsApp ya está implementada en whatsapp.py
-- ⚠️ El webhook tiene placeholder para recordatorios T-24hs
+- ✅ La lógica de envío de mensaje WhatsApp ya está implementada en whatsapp.py
+- ✅ El webhook ahora instrumenta `reminder_sent` y `reminder_response` (fix C1, PR #58)
+- ⚠️ Falta el scheduler que dispare los envíos automáticos T-24hs
 
 ### **Migrations Alembic**
-- ❌ No hay initial migration para las tablas base
+- ❌ No se ejecutó `alembic revision --autogenerate` aún
 - ✅ Alembic configurado (`alembic.ini`, `env.py`, `script.py.mako`)
+- ✅ `database.py` importa todos los modelos a `Base.metadata` (PR #58)
 
 ---
 
@@ -175,63 +184,70 @@ El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
 
 ## 🔑 Eventos a Instrumentar (10 Base)
 
+✅ **IMPLEMENTADO en PR #58.** Los 10 eventos están instrumentados con `log_event()`:
+
 | Evento | Estado | Momento de disparo | Campos necesarios |
 |--------|--------|-------------------|------------------|
-| `conversation_started` | ⚠️ Parcial (Redis) | Primer mensaje usuario | session_id, business_id, timestamp, channel, is_new_user |
-| `menu_option_selected` | ⚠️ Parcial (Redis) | Usuario elige opción | session_id, option_name |
-| `service_selected` | ⚠️ Parcial (Redis) | Confirma servicio | service_id, confidence_score |
-| `fallback_triggered` | ⚠️ Parcial (Redis) | Bot no entiende | message_original, previous_state, fallback_n |
-| `appointment_created` | ❌ Pendiente | Turno confirmado | appointment_id, via_bot=true, duration_flujo_seg, horario_nocturno |
-| `escalation_to_human` | ⚠️ Parcial (Redis) | Escala a humano | reason, n_fallbacks_previos, current_flow_state |
-| `csat_submitted` | ❌ Pendiente | Usuario califica | score 1-5, outcome (turno/escalado/abandonado) |
-| `reminder_sent` | ❌ Pendiente | Envío T-24hs | appointment_id, timestamp, channel |
-| `reminder_response` | ❌ Pendiente | Respuesta al recordatorio | response_type (confirmo/cancelo/cambio), timestamp |
-| `conversation_closed` | ⚠️ Parcial (Redis) | Cierre conversación | duration_seg, n_mensajes, n_fallbacks, resultado_final |
+| `conversation_started` | ✅ Persiste en PostgreSQL | Primer mensaje usuario | session_id, business_id, timestamp, channel, is_new_user |
+| `menu_option_selected` | ✅ Persiste en PostgreSQL | Usuario elige opción | session_id, option_name |
+| `service_selected` | ✅ Persiste en PostgreSQL | Confirma servicio | service_id, confidence_score |
+| `fallback_triggered` | ✅ Persiste en PostgreSQL | Bot no entiende | message_original, previous_state, fallback_n |
+| `appointment_created` | ✅ Persiste en PostgreSQL | Turno confirmado | appointment_id, via_bot=true, duration_flujo_seg, horario_nocturno |
+| `escalation_to_human` | ✅ Persiste en PostgreSQL | Escala a humano | reason, n_fallbacks_previos, current_flow_state |
+| `csat_submitted` | ✅ Persiste en PostgreSQL (fix C1) | Usuario califica | score 1-5, outcome (turno/escalado/abandonado) |
+| `reminder_sent` | ✅ Persiste en PostgreSQL | Envío T-24hs | appointment_id, timestamp, channel |
+| `reminder_response` | ✅ Persiste en PostgreSQL (fix C1) | Respuesta al recordatorio | response_type (confirmo/cancelo/cambio), timestamp |
+| `conversation_closed` | ✅ Persiste en PostgreSQL | Cierre conversación | duration_seg, n_mensajes, n_fallbacks, resultado_final |
 
-**Resumen:** 5/10 eventos parcialmente instrumentados en Redis. 5/10 pendientes. Ninguno persiste en PostgreSQL.
+**Resumen:** 10/10 eventos instrumentados. Todos persisten en PostgreSQL vía `event_logger.log_event()`.
+⚠️ CSAT data flow: `csat_submitted` se guarda en tabla `event`, pero M12 (`get_csat_average()`) consulta `feedback`. Pendiente unificar.
 
 ---
 
 ## 📊 Métricas Críticas (12 MVP)
 
+✅ **12 queries implementadas en PR #58** (`metrics_queries.py` + endpoint `GET /api/v1/admin/metrics`).
+⚠️ Sin datos reales hasta que se ejecute `alembic upgrade head` y se deploie.
+
 | # | Métrica | Estado | Umbral de Alerta |
 |---|---------|--------|-----------------|
-| 1 | Tasa conversión inicio → turno | ❌ Sin datos | < 20% |
-| 2 | % turnos creados por bot | ❌ Sin datos | < 40% |
-| 3 | Tasa abandono por paso | ❌ Sin datos | > 40% |
-| 4 | Tasa fallback | ❌ Sin datos | > 25% |
-| 5 | Top 10 mensajes con fallback | ❌ Sin datos | - |
-| 6 | % turnos nocturnos (20-8hs) | ❌ Sin datos | < 30% |
-| 7 | Tasa resolución autónoma | ❌ Sin datos | < 50% |
-| 8 | Tasa cancelación | ❌ Sin datos | > 20% |
-| 9 | Tasa no-show | ❌ Sin datos | > 15% |
-| 10 | Confirmación recordatorio | ❌ Sin datos | < 50% |
-| 11 | Servicios más reservados | ❌ Sin datos | - |
-| 12 | CSAT promedio | ❌ Sin datos | < 3.5/5 |
+| 1 | Tasa conversión inicio → turno | ✅ Query lista | < 20% |
+| 2 | % turnos creados por bot | ✅ Query lista | < 40% |
+| 3 | Tasa abandono por paso | ✅ Query lista | > 40% |
+| 4 | Tasa fallback | ✅ Query lista | > 25% |
+| 5 | Top 10 mensajes con fallback | ✅ Query lista | - |
+| 6 | % turnos nocturnos (20-8hs) | ✅ Query lista | < 30% |
+| 7 | Tasa resolución autónoma | ✅ Query lista | < 50% |
+| 8 | Tasa cancelación | ✅ Query lista | > 20% |
+| 9 | Tasa no-show | ✅ Query lista | > 15% |
+| 10 | Confirmación recordatorio | ✅ Query lista | < 50% |
+| 11 | Servicios más reservados | ✅ Query lista (JOIN real) | - |
+| 12 | CSAT promedio | ⚠️ Query lista pero lee `feedback`, no `event` | < 3.5/5 |
 
 ---
 
-## 🎯 Próximos Pasos Recomendados (Actualizado 8 julio 2026)
+## 🎯 Próximos Pasos Recomendados (Actualizado 10 julio 2026)
 
-### Prioridad 1 - Modelos SQLAlchemy (Día 1-2)
-1. Crear modelos SQLAlchemy completos:
-   - `business.py`, `usuario.py`, `servicio.py`, `producto.py`, `turno.py`, `faq.py`, `events.py`, `sessions.py`, `feedback.py`, `turno_apuesta.py`
-2. Configurar Base metadata compartida en database.py
-3. Migrar a async engine (actualmente create_engine síncrono)
+### Prioridad 1 - Modelos SQLAlchemy ✅ COMPLETO (PR #58)
+~~1. Crear modelos SQLAlchemy completos~~
+~~2. Configurar Base metadata compartida en database.py~~
+~~3. Migrar a async engine~~ → postergado (el engine síncrono funciona)
 
-### Prioridad 2 - Migrations + Servicios CRUD (Días 3-4)
-1. Crear initial migration Alembic para todas las tablas
-2. Implementar servicios CRUD con SQLAlchemy ORM:
-   - `catalog.py`, `calendar.py`, `negocio.py`, `faq.py`
+### Prioridad 2 - Migrations + Servicios CRUD ✅ COMPLETO (PR #58)
+~~1. Crear initial migration Alembic~~ → modelos listos, falta ejecutar `revision --autogenerate`
+~~2. Implementar servicios CRUD~~ → catalog, calendar, negocio, faq implementados
 
-### Prioridad 3 - Scheduler de Recordatorios (Día 5)
+### Prioridad 3 - Scheduler de Recordatorios (Pendiente)
 1. Implementar Celery/APScheduler para recordatorios T-24hs
 2. Conectar con `send_message` de whatsapp.py (ya implementado)
+3. Los eventos `reminder_sent` y `reminder_response` ya están instrumentados
 
-### Prioridad 4 - Métricas y Eventos (Día 6+)
-1. Persistir eventos de Redis a PostgreSQL
-2. Implementar eventos faltantes (appointment_created, csat_submitted, reminder_sent, reminder_response)
-3. Dashboard con 12 métricas críticas
+### Prioridad 4 - Métricas y Eventos (Parcialmente completo)
+1. ~~Persistir eventos~~ → ✅ 10/10 eventos instrumentados con `log_event()`
+2. ~~Implementar eventos faltantes~~ → ✅ completos (fix C1)
+3. Ejecutar `alembic upgrade head` para crear tablas en PostgreSQL
+4. Dashboard con 12 métricas críticas → endpoint REST listo, falta frontend
+5. Unificar CSAT data flow (`csat_submitted` en `event` vs M12 leyendo `feedback`)
 
 ---
 
@@ -239,15 +255,23 @@ El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
 
 ### Backend (revisados y verificados):
 - ✅ `backend/app/main.py` — Estructura de routers
-- ✅ `backend/app/api/v1/chatbot/webhook.py` — State Router + 8 handlers
+- ✅ `backend/app/api/v1/chatbot/webhook.py` — State Router + 10 eventos instrumentados (PR #58)
 - ✅ `backend/app/services/whatsapp.py` — WhatsApp integration
 - ✅ `backend/app/services/state_manager.py` — Redis state management
 - ✅ `backend/app/core/settings.py` — 19 variables de entorno
 - ✅ `backend/app/core/security.py` — JWT + Google OAuth2
-- ✅ `backend/app/db/database.py` — Engine síncrono (requiere async)
+- ✅ `backend/app/db/database.py` — Engine síncrono con imports de modelos
+- ✅ `backend/app/db/models/` — 10 modelos SQLAlchemy (PR #58)
+- ✅ `backend/app/services/catalog.py` — CRUD servicios/productos (PR #58)
+- ✅ `backend/app/services/calendar.py` — CRUD turnos (PR #58)
+- ✅ `backend/app/services/negocio.py` — Orquestación chatbot (PR #58)
+- ✅ `backend/app/services/faq.py` — CRUD FAQs (PR #58)
+- ✅ `backend/app/services/event_logger.py` — log_event() fire-and-forget (PR #58)
+- ✅ `backend/app/services/metrics_queries.py` — 12 métricas MVP (PR #58)
+- ✅ `backend/app/api/v1/admin/metrics.py` — Endpoint GET /api/v1/admin/metrics (PR #58)
+- ✅ `backend/app/data_seed.py` — Seed data: 1 negocio, 8 servicios, 4 productos, 6 FAQs, 1 admin, 8 sesiones, ~50 eventos, 5 feedbacks (PR #58)
 - ✅ `backend/requirements.txt` — Dependencias completas
-- ⏳ `backend/app/db/models/` — VACÍO, requiere implementación
-- ⏳ `backend/app/db/migrations/` — Configurado pero sin migraciones
+- ⏳ `backend/app/db/migrations/` — Configurado pero sin `revision --autogenerate` ejecutado
 
 ### Frontend (revisados y verificados):
 - ✅ `frontend/src/auth.js` — NextAuth v5 + Google Provider
@@ -271,7 +295,7 @@ El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
 
 ## 📌 Resumen de PRs Mergeados a Develop
 
-| PR | Commit | Descripción | Estado en Feature/Data-initial |
+| PR | Commit | Descripción | Estado en features/data-models |
 |----|--------|-------------|-------------------------------|
 | #40 | `0b80bca` | Endpoints REST principales | ✅ Sincronizado |
 | #43 | `121415e` | Máquina de estados WhatsApp + Redis | ✅ Sincronizado |
@@ -280,8 +304,9 @@ El directorio existe pero está vacío. Faltan modelos SQLAlchemy:
 | #48 | `6924bc2` | Google OAuth2 frontend (NextAuth v5) | ❌ Pendiente sincronizar |
 | #49 | `a623c5f` | Test integración auth | ❌ Pendiente sincronizar |
 | #50 | `431823` | CI/CD + test integración auth | ❌ Pendiente sincronizar |
+| #58 | `d8ff029` | **data-models-metrics**: 10 modelos, 6 servicios, 12 métricas, seed data, endpoint admin/metrics | 🟢 Abierto → develop |
 
 ---
 
-**Última actualización:** 8 de julio 2026, 6:30 PM (America/Buenos_Aires)
-**Próxima acción recomendada:** Sincronizar Feature/Data-initial con origin/develop para incorporar PRs #48, #49, #50
+**Última actualización:** 10 de julio 2026 (America/Buenos_Aires)
+**Próxima acción recomendada:** Mergear PR #58 a develop → ejecutar `alembic revision --autogenerate` → scheduler recordatorios
