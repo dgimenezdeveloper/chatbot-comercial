@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, Response, status
 from app.core.settings import settings
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import get_user_state, set_user_state, clear_user_state
+from app.services.event_logger import log_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -10,6 +11,9 @@ router = APIRouter()
 # =============================================================================
 # CONSTANTES DE CONFIGURACIÓN (ÁRBOL DE NAVEGACIÓN ESTÁTICO)
 # =============================================================================
+# TODO: Resolver business_id desde el phone_number_id del webhook de Meta.
+# Mientras tanto se usa un valor fijo para desarrollo.
+MOCK_BUSINESS_ID = 1
 BOTONES_PRINCIPALES = [
     {"id": "btn_turnos", "title": "📅 Turnos"},
     {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
@@ -66,6 +70,14 @@ async def handle_welcome_flow(phone: str):
     await clear_user_state(phone)
     initial_state = {"estado": "MENU_PRINCIPAL", "step": 1}
     await set_user_state(phone, initial_state)
+
+    # Evento: conversation_started
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="conversation_started",
+        payload={"is_new_user": True, "channel": "whatsapp"},
+    )
     
     await send_interactive_buttons(
         phone=phone,
@@ -79,6 +91,42 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
     Prepara la interfaz para la posterior conexión con LLM y servidores MCP.
     """
     logger.info(f"Enrutamiento de Fallback activado. Entrada: '{user_text}'. Estado: {user_state}")
+
+    fallback_n = user_state.get("fallback_count", 0) + 1
+    user_state["fallback_count"] = fallback_n
+
+    # Evento: fallback_triggered
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="fallback_triggered",
+        payload={
+            "message_original": user_text,
+            "previous_state": user_state.get("estado"),
+            "fallback_n": fallback_n,
+        },
+    )
+
+    # Escalamiento a humano tras 2 fallbacks consecutivos
+    if fallback_n >= 2:
+        user_state["estado"] = "HUMAN_ESCALATION"
+        await set_user_state(phone, user_state)
+        # Evento: escalation_to_human
+        log_event(
+            session_id=phone,
+            business_id=MOCK_BUSINESS_ID,
+            event_type="escalation_to_human",
+            payload={
+                "reason": "fallback_exceeded",
+                "n_fallbacks_previos": fallback_n,
+                "current_flow_state": user_state.get("estado"),
+            },
+        )
+        await send_message(
+            phone=phone,
+            text="Estamos teniendo dificultades para entenderte. Un representante humano se pondrá en contacto contigo pronto.",
+        )
+        return
     
     fallback_message = (
         "Por ahora soy un bot básico, pronto usaré IA para responder esto 🧠.\n\n"
@@ -89,6 +137,14 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
 
 async def handle_main_menu_selection(phone: str, button_id: str, user_state: dict):
     """Procesa las interacciones del Menú Principal."""
+    # Evento: menu_option_selected
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="menu_option_selected",
+        payload={"option_name": button_id},
+    )
+
     if button_id == "btn_turnos":
         user_state["estado"] = "MENU_TURNOS"
         user_state["step"] += 1
@@ -145,6 +201,13 @@ async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: d
             phone=phone,
             text=f"Procesando opción '{action_title}'... Lógica en desarrollo para conectar con tu agenda real."
         )
+        # Evento: conversation_closed
+        log_event(
+            session_id=phone,
+            business_id=MOCK_BUSINESS_ID,
+            event_type="conversation_closed",
+            payload={"resultado_final": "turno_consulta", "n_fallbacks": user_state.get("fallback_count", 0)},
+        )
         await clear_user_state(phone)
 
 async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state: dict):
@@ -153,6 +216,13 @@ async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state:
         await send_message(
             phone=phone,
             text="✅ ¡Pedido registrado con éxito! Tu reserva de stock ha sido asentada. Puedes retirarlo por el local. ¡Gracias por tu compra!"
+        )
+        # Evento: conversation_closed
+        log_event(
+            session_id=phone,
+            business_id=MOCK_BUSINESS_ID,
+            event_type="conversation_closed",
+            payload={"resultado_final": "producto_comprado", "n_fallbacks": user_state.get("fallback_count", 0)},
         )
         await clear_user_state(phone)
     elif button_id == "btn_prod_volver":
@@ -193,6 +263,21 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
     fecha = user_state.get("fecha_seleccionada", "Hoy")
     hora = user_state.get("hora_seleccionada", "10:00 hs")
     servicio = user_state.get("servicio_seleccionado", "Combo Estilo Completo")
+
+    # Evento: appointment_created
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="appointment_created",
+        payload={"via_bot": True, "servicio": servicio, "fecha": fecha, "hora": hora},
+    )
+    # Evento: reminder_sent (placeholder — se registra intención de recordatorio futuro)
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="reminder_sent",
+        payload={"servicio": servicio, "fecha": fecha, "hora": hora},
+    )
     
     confirmacion_text = (
         f"🎉 *¡Turno Agendado con Éxito!*\n\n"
@@ -203,11 +288,26 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
         f"Te enviaremos un recordatorio antes de tu cita. ¡Muchas gracias por elegirnos! 💇‍♀️✨"
     )
     await send_message(phone=phone, text=confirmacion_text)
+    # Evento: conversation_closed
+    log_event(
+        session_id=phone,
+        business_id=MOCK_BUSINESS_ID,
+        event_type="conversation_closed",
+        payload={"resultado_final": "turno_creado", "n_fallbacks": user_state.get("fallback_count", 0)},
+    )
     await clear_user_state(phone)
 
 async def handle_list_selection(phone: str, selected_id: str, row_title: str, user_state: dict):
     """Maneja las selecciones efectuadas en los menús de tipo lista desplegable."""
     if selected_id.startswith("srv_"):
+        # Evento: service_selected
+        log_event(
+            session_id=phone,
+            business_id=MOCK_BUSINESS_ID,
+            event_type="service_selected",
+            payload={"service_id": selected_id, "service_name": row_title},
+        )
+
         user_state["estado"] = "ELIGE_FECHA"
         user_state["step"] += 1
         user_state["servicio_seleccionado"] = row_title

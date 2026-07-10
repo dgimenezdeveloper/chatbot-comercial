@@ -9,8 +9,8 @@ from alembic import context
 # Importar settings y Base para configuración automática
 from app.core.settings import settings
 from app.db.database import Base
-# Importar modelos aquí para que autogenerate los detecte
-# from app.models import ...
+# Importar modelos para que autogenerate los detecte
+import app.db.models  # noqa: E402, F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
