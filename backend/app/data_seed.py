@@ -8,14 +8,19 @@ Uso:
 """
 
 import logging
+import random
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 
 from app.db.database import SessionLocal
 from app.db.models.business import Business
+from app.db.models.events import Event
 from app.db.models.faq import FAQ
+from app.db.models.feedback import Feedback
 from app.db.models.product import Product
 from app.db.models.service import Service
+from app.db.models.sessions import ChatSession
 from app.db.models.user import User
 
 logging.basicConfig(level=logging.INFO)
@@ -166,16 +171,226 @@ def seed_admin_user(db, business_id: int) -> User:
     return user
 
 
+def seed_sessions(db, business_id: int, user: User) -> list[ChatSession]:
+    """Crea sesiones de ejemplo con estados y métricas variadas."""
+    existing = db.query(ChatSession).filter(ChatSession.business_id == business_id).first()
+    if existing:
+        logger.info("Sesiones ya existen para business_id=%s", business_id)
+        return db.query(ChatSession).filter(ChatSession.business_id == business_id).all()
+
+    now = datetime.now(timezone.utc)
+    sessions_data = [
+        {"session_id": f"wa-session-{business_id}-001", "status": "completed",
+         "n_messages_total": 8, "n_fallbacks": 0, "days_ago": 0},
+        {"session_id": f"wa-session-{business_id}-002", "status": "completed",
+         "n_messages_total": 12, "n_fallbacks": 1, "days_ago": 0},
+        {"session_id": f"wa-session-{business_id}-003", "status": "completed",
+         "n_messages_total": 5, "n_fallbacks": 0, "days_ago": 1},
+        {"session_id": f"wa-session-{business_id}-004", "status": "abandoned",
+         "n_messages_total": 3, "n_fallbacks": 2, "days_ago": 1},
+        {"session_id": f"wa-session-{business_id}-005", "status": "completed",
+         "n_messages_total": 15, "n_fallbacks": 3, "days_ago": 1},
+        {"session_id": f"wa-session-{business_id}-006", "status": "active",
+         "n_messages_total": 4, "n_fallbacks": 0, "days_ago": 0},
+        {"session_id": f"wa-session-{business_id}-007", "status": "completed",
+         "n_messages_total": 10, "n_fallbacks": 0, "days_ago": 2},
+        {"session_id": f"wa-session-{business_id}-008", "status": "completed",
+         "n_messages_total": 7, "n_fallbacks": 1, "days_ago": 2},
+    ]
+
+    sessions = []
+    for sd in sessions_data:
+        started_at = now - timedelta(days=sd["days_ago"], hours=random.randint(0, 12))
+        ended_at = started_at + timedelta(minutes=random.randint(3, 25)) if sd["status"] != "active" else None
+        session = ChatSession(
+            business_id=business_id,
+            session_id=sd["session_id"],
+            user_id=user.id,
+            user_phone=user.phone,
+            status=sd["status"],
+            n_messages_total=sd["n_messages_total"],
+            n_fallbacks=sd["n_fallbacks"],
+            started_at=started_at,
+            ended_at=ended_at,
+        )
+        db.add(session)
+        sessions.append(session)
+
+    try:
+        db.commit()
+        logger.info("Creadas %s sesiones para business_id=%s", len(sessions), business_id)
+    except IntegrityError:
+        db.rollback()
+        logger.warning("Sesiones ya existentes (IntegrityError), se retornan las existentes")
+        return db.query(ChatSession).filter(ChatSession.business_id == business_id).all()
+
+    return sessions
+
+
+def seed_events(db, business_id: int, sessions: list[ChatSession]) -> list[Event]:
+    """Crea eventos instrumentados para las sesiones de ejemplo."""
+    existing = db.query(Event).filter(Event.business_id == business_id).first()
+    if existing:
+        logger.info("Eventos ya existen para business_id=%s", business_id)
+        return []
+
+    event_types_ordered = [
+        "conversation_started",
+        "menu_option_selected",
+        "service_selected",
+        "appointment_created",
+        "reminder_sent",
+        "reminder_response",
+        "conversation_closed",
+    ]
+
+    sample_payloads = {
+        "conversation_started": {"is_new_user": True, "channel": "whatsapp"},
+        "menu_option_selected": {"option_name": "btn_turnos"},
+        "service_selected": {"service_id": "srv_corte", "service_name": "Corte de Cabello"},
+        "appointment_created": {"via_bot": True, "servicio": "Corte de Cabello", "fecha": "Hoy", "hora": "10:00 hs"},
+        "reminder_sent": {"servicio": "Corte de Cabello", "fecha": "Hoy", "hora": "10:00 hs"},
+        "reminder_response": {"response_type": "confirmo", "appointment_id": 1},
+        "conversation_closed": {"resultado_final": "turno_creado", "n_fallbacks": 0},
+    }
+
+    events = []
+    for session in sessions:
+        if session.status == "active":
+            # Solo conversation_started + menu_option_selected para sesiones activas
+            for et in ["conversation_started", "menu_option_selected"]:
+                event = Event(
+                    session_id=session.session_id,
+                    business_id=business_id,
+                    event_type=et,
+                    payload_json=sample_payloads.get(et),
+                    timestamp=session.started_at + timedelta(seconds=random.randint(1, 60)),
+                    user_id=session.user_id,
+                    channel="whatsapp",
+                )
+                db.add(event)
+                events.append(event)
+        else:
+            # Secuencia completa para sesiones completadas/abandonadas
+            base_time = session.started_at
+            for i, et in enumerate(event_types_ordered):
+                # Sesiones abandonadas: solo llegan hasta fallback
+                if session.status == "abandoned" and et in ("appointment_created", "reminder_sent", "reminder_response"):
+                    # Agregar fallback_triggered en lugar de eventos transaccionales
+                    if et == "appointment_created":
+                        fb_event = Event(
+                            session_id=session.session_id,
+                            business_id=business_id,
+                            event_type="fallback_triggered",
+                            payload_json={"message_original": "texto de prueba", "fallback_n": 1},
+                            timestamp=base_time + timedelta(seconds=random.randint(30, 90)),
+                            user_id=session.user_id,
+                            channel="whatsapp",
+                        )
+                        db.add(fb_event)
+                        events.append(fb_event)
+                    continue
+
+                event = Event(
+                    session_id=session.session_id,
+                    business_id=business_id,
+                    event_type=et,
+                    payload_json=sample_payloads.get(et),
+                    timestamp=base_time + timedelta(seconds=random.randint(10, 120) + i * 30),
+                    user_id=session.user_id,
+                    channel="whatsapp",
+                )
+                db.add(event)
+                events.append(event)
+
+            # Agregar escalation_to_human a algunas sesiones con fallbacks
+            if session.n_fallbacks >= 2:
+                esc_event = Event(
+                    session_id=session.session_id,
+                    business_id=business_id,
+                    event_type="escalation_to_human",
+                    payload_json={"reason": "fallback_exceeded", "n_fallbacks_previos": session.n_fallbacks},
+                    timestamp=base_time + timedelta(minutes=random.randint(3, 8)),
+                    user_id=session.user_id,
+                    channel="whatsapp",
+                )
+                db.add(esc_event)
+                events.append(esc_event)
+
+    try:
+        db.commit()
+        logger.info("Creados %s eventos para business_id=%s", len(events), business_id)
+    except IntegrityError:
+        db.rollback()
+        logger.warning("Eventos ya existentes (IntegrityError), se retornan los existentes")
+        return db.query(Event).filter(Event.business_id == business_id).all()
+
+    return events
+
+
+def seed_feedback(db, business_id: int, sessions: list[ChatSession]) -> list[Feedback]:
+    """Crea feedbacks CSAT de ejemplo con scores y outcomes variados."""
+    existing = db.query(Feedback).filter(Feedback.business_id == business_id).first()
+    if existing:
+        logger.info("Feedbacks ya existen para business_id=%s", business_id)
+        return []
+
+    completed_sessions = [s for s in sessions if s.status == "completed"]
+    if not completed_sessions:
+        logger.info("Sin sesiones completadas, no se crean feedbacks")
+        return []
+
+    feedbacks_data = [
+        {"score": 5, "outcome": "turno_exitoso", "comment": "¡Excelente atención, muy rápido!"},
+        {"score": 4, "outcome": "turno_exitoso", "comment": "Muy buen servicio, aunque tuve que esperar un poco."},
+        {"score": 5, "outcome": "turno_exitoso", "comment": "Me encantó el chatbot, súper fácil de usar."},
+        {"score": 3, "outcome": "escalado_exitoso", "comment": "Tuve un problema pero me ayudaron rápido."},
+        {"score": 5, "outcome": "turno_exitoso", "comment": None},
+    ]
+
+    feedbacks = []
+    now = datetime.now(timezone.utc)
+    for i, fd in enumerate(feedbacks_data):
+        if i >= len(completed_sessions):
+            break
+        session = completed_sessions[i]
+        feedback = Feedback(
+            business_id=business_id,
+            session_id=session.session_id,
+            score=fd["score"],
+            outcome=fd["outcome"],
+            comment=fd["comment"],
+            submitted_at=session.ended_at or now,
+            user_phone=session.user_phone,
+        )
+        db.add(feedback)
+        feedbacks.append(feedback)
+
+    try:
+        db.commit()
+        logger.info("Creados %s feedbacks para business_id=%s", len(feedbacks), business_id)
+    except IntegrityError:
+        db.rollback()
+        logger.warning("Feedbacks ya existentes (IntegrityError), se retornan los existentes")
+        return db.query(Feedback).filter(Feedback.business_id == business_id).all()
+
+    return feedbacks
+
+
 def main():
-    """Orquesta la creación de seed data: business → services → products → faqs → admin."""
+    """Orquesta la creación de seed data: business → services → products → faqs → admin → sessions → events → feedback."""
     db = SessionLocal()
     try:
         logger.info("=== Iniciando seed data ===")
         business = seed_business(db)
+        user = seed_admin_user(db, business.id)
         seed_services(db, business.id)
         seed_products(db, business.id)
         seed_faqs(db, business.id)
-        seed_admin_user(db, business.id)
+        sessions = seed_sessions(db, business.id, user)
+        seed_events(db, business.id, sessions)
+        seed_feedback(db, business.id, sessions)
+        db.commit()
         logger.info("=== Seed data completado ===")
     except IntegrityError as e:
         db.rollback()
