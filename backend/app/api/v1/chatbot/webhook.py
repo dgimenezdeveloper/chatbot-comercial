@@ -409,7 +409,45 @@ async def receive_webhook(payload: dict):
                 # Captura del nombre del usuario (Fin del árbol transaccional)
                 elif current_step == "ESPERANDO_NOMBRE":
                     await handle_appointment_confirmation(phone_number, user_text, user_state)
-                
+
+                # Respuesta a recordatorio de turno (SI / NO / CANCELAR / CONFIRMO / CANCELO / CAMBIO)
+                elif user_text.upper() in ["SI", "NO", "CANCELAR", "CONFIRMO", "CANCELO", "CAMBIO"]:
+                    response_map = {
+                        "SI": "confirmo", "CONFIRMO": "confirmo",
+                        "NO": "cancelo", "CANCELAR": "cancelo", "CANCELO": "cancelo",
+                        "CAMBIO": "cambio",
+                    }
+                    response_type = response_map.get(user_text.upper(), "desconocido")
+                    log_event(
+                        session_id=phone_number,
+                        business_id=MOCK_BUSINESS_ID,
+                        event_type="reminder_response",
+                        payload={"response_type": response_type, "raw_text": user_text},
+                    )
+                    await send_message(
+                        phone=phone_number,
+                        text="¡Gracias por tu respuesta! La hemos registrado.",
+                    )
+                    await handle_welcome_flow(phone_number)
+
+                # Puntaje de satisfacción (CSAT): número 1-5 como mensaje independiente
+                elif user_text.strip().isdigit() and 1 <= int(user_text.strip()) <= 5:
+                    score = int(user_text.strip())
+                    outcome = "turno_exitoso"
+                    if user_state and user_state.get("estado") == "HUMAN_ESCALATION":
+                        outcome = "escalado_exitoso"
+                    log_event(
+                        session_id=phone_number,
+                        business_id=MOCK_BUSINESS_ID,
+                        event_type="csat_submitted",
+                        payload={"score": score, "outcome": outcome},
+                    )
+                    await send_message(
+                        phone=phone_number,
+                        text=f"¡Gracias por tu calificación de {score} estrellas! ⭐",
+                    )
+                    await handle_welcome_flow(phone_number)
+
                 # Enrutamiento al Fallback Híbrido para textos no estructurados (Criterio 3)
                 else:
                     await handle_text_fallback(phone_number, user_text, user_state)
