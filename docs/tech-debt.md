@@ -23,3 +23,30 @@ Las siguientes queries en `metrics_queries.py` usan operadores específicos de P
 - El resto de las queries usan SQLAlchemy estándar y son portables
 - Los operadores JSONB son correctos para el stack actual (PostgreSQL 16)
 - No se recomienda abstraerlos — se perdería type safety y performance
+
+---
+
+## Decisión CSAT Data Flow — chatbot-mvp-completion
+
+**Contexto:** Cuando un cliente califica al bot (1-5 estrellas) vía WhatsApp, el webhook
+genera un evento `csat_submitted` en la tabla `event`. La métrica M12 (`csat_average`)
+lee de la tabla `feedback`, no de `event`. Esto causaba que el CSAT siempre retornara 0.
+
+**Opciones evaluadas:**
+
+| Opción | Descripción | Resultado |
+|--------|-------------|-----------|
+| **A** | Modificar `get_csat_average()` (M12) para leer de `event` como fallback cuando `feedback` está vacío | ❌ Rechazada. Mezcla fuentes de datos y complica la query |
+| **B** | Escribir en `feedback` dentro del handler `csat_submitted` del webhook | ✅ Elegida |
+
+**Decisión:** Opción B. El handler `csat_submitted` ahora escribe en ambas tablas:
+- `event`: trazabilidad (no se toca, comportamiento existente)
+- `feedback`: fuente canónica de métricas CSAT (nuevo)
+
+**Ventajas:**
+- Una sola fuente de verdad (`feedback`) para métricas
+- Sin cambios en `get_csat_average()` — sigue funcionando igual
+- Trazabilidad intacta en `event`
+
+**Fecha:** 2026-07-11
+**Feature:** chatbot-mvp-completion, FR-E2
