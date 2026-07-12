@@ -377,12 +377,59 @@ def seed_feedback(db, business_id: int, sessions: list[ChatSession]) -> list[Fee
     return feedbacks
 
 
+def seed_metric_thresholds(db) -> list:
+    """Inserta los thresholds defaults del sistema (business_id=NULL)."""
+    from app.db.models.metric_threshold import MetricThreshold
+
+    defaults = [
+        {"metric_name": "conversion_rate", "warning_value": 0.20, "critical_value": 0.10, "operator": "lt"},
+        {"metric_name": "bot_autonomy_rate", "warning_value": 0.40, "critical_value": 0.25, "operator": "lt"},
+        {"metric_name": "abandonment_rate", "warning_value": 0.30, "critical_value": 0.40, "operator": "lt"},
+        {"metric_name": "fallback_rate", "warning_value": 0.15, "critical_value": 0.25, "operator": "lt"},
+        {"metric_name": "nocturnal_appointment_rate", "warning_value": 0.30, "critical_value": 0.10, "operator": "lt"},
+        {"metric_name": "autonomous_resolution_rate", "warning_value": 0.70, "critical_value": 0.50, "operator": "lt"},
+        {"metric_name": "cancellation_rate", "warning_value": 0.15, "critical_value": 0.20, "operator": "lt"},
+        {"metric_name": "no_show_rate", "warning_value": 0.10, "critical_value": 0.15, "operator": "lt"},
+        {"metric_name": "reminder_confirmation_rate", "warning_value": 0.60, "critical_value": 0.50, "operator": "lt"},
+        {"metric_name": "csat_average", "warning_value": 4.0, "critical_value": 3.5, "operator": "lt"},
+        {"metric_name": "reminder_delivery_rate", "warning_value": 0.90, "critical_value": 0.75, "operator": "lt"},
+        {"metric_name": "manual_escalation_rate", "warning_value": 0.30, "critical_value": 0.50, "operator": "lt"},
+        {"metric_name": "nps", "warning_value": 50.0, "critical_value": 0.0, "operator": "lt"},
+    ]
+
+    existing = db.query(MetricThreshold).filter(MetricThreshold.business_id.is_(None)).count()
+    if existing > 0:
+        logger.info("Thresholds defaults ya existen (%s registros)", existing)
+        return db.query(MetricThreshold).filter(MetricThreshold.business_id.is_(None)).all()
+
+    thresholds = []
+    for item in defaults:
+        t = MetricThreshold(
+            business_id=None,
+            metric_name=item["metric_name"],
+            warning_value=item["warning_value"],
+            critical_value=item["critical_value"],
+            operator=item["operator"],
+        )
+        db.add(t)
+        thresholds.append(t)
+
+    db.commit()
+    logger.info("Creados %s thresholds defaults del sistema", len(thresholds))
+    return thresholds
+
+
 def main():
-    """Orquesta la creación de seed data: business → services → products → faqs → admin → sessions → events → feedback."""
+    """Orquesta la creación de seed data: business → services → products → faqs → admin → sessions → events → feedback → thresholds."""
     db = SessionLocal()
     try:
         logger.info("=== Iniciando seed data ===")
         business = seed_business(db)
+        # Configurar default: sin templates pagos + owner_phone
+        if not business.owner_phone:
+            business.owner_phone = "+5491112345678"
+        if business.use_whatsapp_templates is None:
+            business.use_whatsapp_templates = False
         user = seed_admin_user(db, business.id)
         seed_services(db, business.id)
         seed_products(db, business.id)
@@ -390,6 +437,7 @@ def main():
         sessions = seed_sessions(db, business.id, user)
         seed_events(db, business.id, sessions)
         seed_feedback(db, business.id, sessions)
+        seed_metric_thresholds(db)
         db.commit()
         logger.info("=== Seed data completado ===")
     except IntegrityError as e:

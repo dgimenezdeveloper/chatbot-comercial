@@ -123,8 +123,23 @@ class CSATAverage(MetricResult):
     total_feedbacks: int = Field(..., description="Cantidad total de calificaciones")
 
 
+class ExtendedMetricResult(BaseModel):
+    """Resultado genérico para métricas extendidas (38 nuevas).
+
+    Cada métrica retorna sus campos específicos en un dict.
+    """
+
+    value: float = Field(default=0.0, description="Valor calculado")
+    threshold: float | None = Field(None, description="Umbral de alerta")
+    status: Literal["ok", "warning", "critical"] = Field(
+        default="ok", description="Estado respecto al umbral"
+    )
+    period: str = Field(default="30d", description="Período de análisis")
+    data: dict = Field(default_factory=dict, description="Datos adicionales de la métrica")
+
+
 class AllMetrics(BaseModel):
-    """Agregado de las 12 métricas MVP para un negocio."""
+    """Agregado de las 50 métricas (12 MVP + 38 extendidas) para un negocio."""
 
     business_id: int = Field(..., description="ID del negocio")
     period: str = Field(default="30d", description="Período de análisis")
@@ -140,5 +155,8 @@ class AllMetrics(BaseModel):
     reminder_confirmation_rate: ReminderConfirmationRate | None = None
     top_services: TopServices | None = None
     csat_average: CSATAverage | None = None
+    extended: dict[str, ExtendedMetricResult] | None = Field(
+        None, description="38 métricas extendidas (solo cuando include_extended=true)"
+    )
 
     model_config = ConfigDict(from_attributes=True)

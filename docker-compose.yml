@@ -50,6 +50,44 @@ services:
       timeout: 5s
       retries: 5
 
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.scheduler.tasks worker --loglevel=info
+    working_dir: /app/backend
+    volumes:
+      - .:/app
+    env_file:
+      - ./backend/.env
+    environment:
+      - PYTHONPATH=/app/backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.scheduler.tasks beat --loglevel=info
+    working_dir: /app/backend
+    volumes:
+      - .:/app
+    env_file:
+      - ./backend/.env
+    environment:
+      - PYTHONPATH=/app/backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+
   frontend:
     build:
       context: ./frontend
