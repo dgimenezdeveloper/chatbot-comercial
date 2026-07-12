@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Query, Response, status
 from app.core.settings import settings
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
@@ -436,12 +438,39 @@ async def receive_webhook(payload: dict):
                     outcome = "turno_exitoso"
                     if user_state and user_state.get("estado") == "HUMAN_ESCALATION":
                         outcome = "escalado_exitoso"
+
+                    # Escribir en tabla event (trazabilidad existente)
                     log_event(
                         session_id=phone_number,
                         business_id=MOCK_BUSINESS_ID,
                         event_type="csat_submitted",
                         payload={"score": score, "outcome": outcome},
                     )
+
+                    # Escribir en tabla feedback (fuente canónica de métricas — FR-E2)
+                    from app.db.database import SessionLocal
+                    from app.db.models.feedback import Feedback
+                    from datetime import timezone
+
+                    db_fb = SessionLocal()
+                    try:
+                        fb = Feedback(
+                            business_id=MOCK_BUSINESS_ID,
+                            session_id=phone_number,
+                            score=score,
+                            outcome=outcome,
+                            user_phone=phone_number,
+                            submitted_at=datetime.now(timezone.utc),
+                        )
+                        db_fb.add(fb)
+                        db_fb.commit()
+                        logger.info(f"CSAT guardado en feedback: score={score}, outcome={outcome}")
+                    except Exception:
+                        db_fb.rollback()
+                        logger.exception("Error guardando CSAT en tabla feedback")
+                    finally:
+                        db_fb.close()
+
                     await send_message(
                         phone=phone_number,
                         text=f"¡Gracias por tu calificación de {score} estrellas! ⭐",
