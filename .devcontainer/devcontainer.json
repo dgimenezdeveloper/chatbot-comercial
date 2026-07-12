@@ -26,10 +26,13 @@
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/git:1.3.7": {},
     "ghcr.io/devcontainers/features/common-utils:2": {
       "configureZshAsDefaultShell": false,
       "upgradePackages": false
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "latest"
     }
   },
   "remoteUser": "root",
@@ -37,4 +40,4 @@
     "PYTHONPATH": "/app/backend"
   },
   "postCreateCommand": "curl -s https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -o /root/.git-completion.bash && echo '[ -f /root/.git-completion.bash ] && . /root/.git-completion.bash' >> /root/.bashrc"
-}
+} 

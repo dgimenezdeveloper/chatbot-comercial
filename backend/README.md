@@ -1,6 +1,3 @@
-Aquí tienes una versión mejorada, profesional y detallada del `README.md`. He añadido el índice con hipervínculos, organizado las secciones para una mejor legibilidad y profundizado en la configuración de WhatsApp para que cualquier desarrollador (o tú mismo en el futuro) pueda replicar el entorno sin tropiezos.
-
----
 
 # Chatbot Comercial Backend 🚀
 
@@ -11,8 +8,8 @@ Backend dockerizado para el Chatbot Comercial, desarrollado con FastAPI, Postgre
 - [🛠️ Tecnologías](#️-tecnologías)
 - [📁 Estructura del Proyecto](#-estructura-del-proyecto)
 - [⚙️ Configuración del Entorno (Onboarding)](#️-configuración-del-entorno-onboarding)
-- [🔄 Live Reload](#-live-reload)
-- [🗄️ Migraciones de Base de Datos (Alembic)](#️-migraciones-de-base-de-datos-alembic)
+- [🗺️ Árbol de Rutas HTTP (API v1)](#️-árbol-de-rutas-http-api-v1)
+- [🛠️ Swagger UI](#️-swagger-ui)
 - [🌐 Integración con WhatsApp (Desarrollo Local)](#-integración-con-whatsapp-desarrollo-local)
 - [📝 Notas Técnicas y Solución de Problemas](#-notas-técnicas-y-solución-de-problemas)
 - [💻 Consideraciones de Entorno y Multiplataforma](#-consideraciones-de-entorno-y-multiplataforma)
@@ -75,6 +72,66 @@ docker compose up --build
 ### 4. Verificar funcionamiento
 - **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
 - **Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+## 🗺️ Árbol de Rutas HTTP (API v1)
+
+Este documento describe la estructura de rutas REST expuestas por el backend de la aplicación. La API está construida con **FastAPI** y se divide en dos grandes contextos: **Cliente Final (Chatbot)** y **Panel Administrativo (Emprendedor)**.
+
+### 🤖 Chatbot (Cliente Final)
+Rutas públicas utilizadas para la interacción con el usuario final a través de WhatsApp.
+
+* `GET  /api/v1/chatbot/webhook` - Verificación técnica de Meta (Handshake).
+* `POST /api/v1/chatbot/webhook` - Recepción de eventos y mensajes en tiempo real desde Meta WABA.
+* `POST /api/v1/chatbot/chat` - Endpoint para procesar mensajes del cliente final (Mock inicial).
+
+---
+
+### 🔒 Panel Administrativo (Emprendedor)
+*Todas las rutas a continuación requieren autenticación mediante el header `Authorization: Bearer <token>`.*
+
+#### 📦 Catálogo (Catalog)
+Gestión de los servicios y productos ofrecidos por el negocio.
+
+**Servicios:**
+* `GET    /api/v1/catalog/servicios/` - Lista todos los servicios.
+* `POST   /api/v1/catalog/servicios/` - Crea un nuevo servicio.
+* `PUT    /api/v1/catalog/servicios/{id}` - Actualiza un servicio existente.
+* `DELETE /api/v1/catalog/servicios/{id}` - Elimina un servicio.
+
+**Productos:**
+* `GET    /api/v1/catalog/productos/` - Lista todos los productos.
+* `POST   /api/v1/catalog/productos/` - Crea un nuevo producto.
+* `PUT    /api/v1/catalog/productos/{id}` - Actualiza un producto existente.
+* `DELETE /api/v1/catalog/productos/{id}` - Elimina un producto.
+
+#### 📅 Agenda (Calendar)
+Gestión de reservas y turnos.
+
+* `GET    /api/v1/calendar/turnos/` - Lista todos los turnos agendados.
+* `POST   /api/v1/calendar/turnos/` - Crea un nuevo turno.
+* `DELETE /api/v1/calendar/turnos/{id}` - Cancela/Elimina un turno.
+
+#### ❓ Preguntas Frecuentes (FAQ)
+Gestión de la base de conocimiento del chatbot.
+
+* `GET    /api/v1/faq/` - Lista todas las preguntas frecuentes.
+* `POST   /api/v1/faq/` - Crea una nueva pregunta frecuente.
+* `PUT    /api/v1/faq/{id}` - Actualiza una pregunta frecuente.
+* `DELETE /api/v1/faq/{id}` - Elimina una pregunta frecuente.
+
+#### ⚙️ Configuración del Negocio (Admin)
+Gestión de los datos generales del local.
+
+* `GET    /api/v1/admin/negocio/` - Obtiene la configuración actual del negocio.
+* `PUT    /api/v1/admin/negocio/` - Actualiza la configuración del negocio.
+
+---
+
+## 🛠️ Swagger UI
+Puedes probar e interactuar con todos estos endpoints directamente desde la documentación autogenerada por FastAPI ingresando a:
+👉 **[http://localhost:8000/docs](http://localhost:8000/docs)**
 
 ---
 
