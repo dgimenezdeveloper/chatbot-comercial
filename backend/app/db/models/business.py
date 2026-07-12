@@ -67,6 +67,16 @@ class Business(Base):
         comment="Acepta efectivo",
     )
 
+    # Configuración de recordatorios
+    use_whatsapp_templates = Column(
+        Boolean, default=False,
+        comment="Usar templates pagos de Meta para recordatorios (sin restricción 24h)",
+    )
+    owner_phone = Column(
+        String(50), nullable=True,
+        comment="WhatsApp del dueño para notificaciones de fallo de recordatorio",
+    )
+
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(),
         comment="Fecha de creación del registro",

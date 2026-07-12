@@ -14,6 +14,8 @@ from app.db.models.events import Event
 from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
 from app.db.models.turno_apuesta import TurnoApuesta
+from app.db.models.metric_threshold import MetricThreshold
+from app.db.models.reminder_log import ReminderLog
 
 __all__ = [
     "Business",
@@ -26,4 +28,6 @@ __all__ = [
     "ChatSession",
     "Feedback",
     "TurnoApuesta",
+    "MetricThreshold",
+    "ReminderLog",
 ]
