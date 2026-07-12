@@ -1,9 +1,9 @@
 # Detalles Pendientes - Exploración del Proyecto Chatbot Comercial
 
-**Fecha:** 10 de julio 2026
-**Estado:** Actualizado tras PR #58 (data-models-metrics) en features/data-models + fixes C1-C4/W8
+**Fecha:** 12 de julio 2026
+**Estado:** chatbot-mvp-completion implementado — 50 métricas, scheduler Celery, umbrales configurables, CSAT fix, 73 tests. Code review Grade A.
 **Rama actual:** features/data-models (PR #58 abierto → develop)
-**Nota:** Prioridades 1 y 2 del plan original RESUELTAS en PR #58. Prioridades 3 y 4 siguen pendientes.
+**Nota:** Prioridades 1, 2, 3 y 4 del plan original RESUELTAS. Pendiente: ejecutar migraciones + verificación Docker end-to-end.
 
 ---
 
@@ -51,46 +51,54 @@
 
 ---
 
-## ⚠️ Estructuras sin Implementar
+## 🗄️ Capa de Datos y Servicios
 
 ### **Modelos de Datos (DB)** - `/backend/app/db/models/`
-✅ **IMPLEMENTADO en PR #58.** 10 modelos SQLAlchemy completos:
+✅ **COMPLETO — 12 modelos SQLAlchemy.** 10 modelos base + 2 nuevos en chatbot-mvp-completion:
 
 | Archivo | Modelo | Features clave |
 |---------|--------|----------------|
-| `business.py` | Business | Raíz multi-tenant, slug único, config WhatsApp |
+| `business.py` | Business | Raíz multi-tenant, slug único, config WhatsApp, **+use_whatsapp_templates, +owner_phone** (nuevo) |
 | `user.py` | User | Roles admin/operator/guest, UniqueConstraint(phone, business_id) |
 | `service.py` | Service | Catálogo con categorías y precios, composite PK (id, business_id) |
 | `product.py` | Product | Productos con stock y costo, índice parcial is_active |
-| `appointment.py` | Appointment | Turnos con 3 enums (status, no_show, created_via), composite PK |
+| `appointment.py` | Appointment | Turnos con 3 enums, composite PK, **+notification_sent_at** |
 | `faq.py` | FAQ | Preguntas frecuentes categorizadas con orden |
 | `events.py` | Event | Eventos con JSONB payload, GIN index, FK a session |
 | `sessions.py` | ChatSession | Sesiones con métricas agregadas (n_messages, n_fallbacks) |
 | `feedback.py` | Feedback | CSAT 1-5 con outcome de interacción |
 | `turno_apuesta.py` | TurnoApuesta | Gamificación de apuestas diarias |
+| `metric_threshold.py` | MetricThreshold | **NUEVO** — Umbrales warning/critical configurables por negocio |
+| `reminder_log.py` | ReminderLog | **NUEVO** — Trazabilidad de intentos de envío de recordatorios |
 
 Todos con índices de rendimiento, docstrings en español, y `ondelete` consistente.
 
 ### **Services de Negocio** - `/backend/app/services/`
-- ✅ `whatsapp.py` - Integración con WhatsApp (COMPLETO)
-- ✅ `state_manager.py` - Redis State Manager (COMPLETO)
-- ✅ `catalog.py` - CRUD servicios/productos con soft-delete + validación whitelist (PR #58)
-- ✅ `calendar.py` - Gestión de turnos: crear, listar, cancelar, actualizar estado (PR #58)
-- ✅ `negocio.py` - Orquestación conectada a DB: get_or_create_user, slots disponibles (PR #58)
-- ✅ `faq.py` - CRUD FAQs con búsqueda ILIKE y categorías (PR #58)
-- ✅ `event_logger.py` - log_event() fire-and-forget para 10 eventos (PR #58)
-- ✅ `metrics_queries.py` - 12 métricas MVP con queries SQL aggregate + all_metrics() (PR #58)
+- ✅ `whatsapp.py` — Integración con WhatsApp Cloud API v25.0
+- ✅ `state_manager.py` — Redis State Manager
+- ✅ `catalog.py` — CRUD servicios/productos con soft-delete + validación whitelist
+- ✅ `calendar.py` — Gestión de turnos: crear, listar, cancelar, actualizar estado
+- ✅ `negocio.py` — Orquestación: get_or_create_user, slots disponibles
+- ✅ `faq.py` — CRUD FAQs con búsqueda ILIKE
+- ✅ `event_logger.py` — log_event() fire-and-forget para 10+ eventos
+- ✅ `metrics_queries.py` — **50 métricas** (12 MVP + 38 extendidas) con get_all_metrics()
 
-### **Scheduler de Recordatorios**
-- ❌ No existe scheduler (Celery/APScheduler)
-- ✅ La lógica de envío de mensaje WhatsApp ya está implementada en whatsapp.py
-- ✅ El webhook ahora instrumenta `reminder_sent` y `reminder_response` (fix C1, PR #58)
-- ⚠️ Falta el scheduler que dispare los envíos automáticos T-24hs
+### **Scheduler de Recordatorios** ✅ COMPLETO
+- ✅ Celery configurado (`app/scheduler/config.py` + `app/scheduler/tasks.py`)
+- ✅ `send_reminders()` — 4 niveles de fallback: templates pagos → ventana 24h → canal alternativo → notificar dueño
+- ✅ Filtro `notification_sent_at IS NULL` para evitar duplicados
+- ✅ Celery Beat programado a las 9 AM (hora de Buenos Aires), una vez por día
+- ✅ Un solo `asyncio.run()` para todos los envíos (no un event loop por turno)
+- ✅ `ReminderLog` registra cada intento con status/channel/error_reason
+- ✅ `GET /api/v1/admin/reminder-log` + `GET /api/v1/admin/health`
+- ✅ Servicios `celery-worker` + `celery-beat` en `docker-compose.yml` (6 servicios totales, usan el Dockerfile del backend)
+- ⚠️ Sin WhatsApp real no se puede validar la entrega del mensaje, pero todo el pipeline de errores/rollback/log está probado con tests
 
 ### **Migrations Alembic**
-- ❌ No se ejecutó `alembic revision --autogenerate` aún
+- ⏳ **No ejecutado aún** — requiere PostgreSQL corriendo (`docker compose up -d db redis`)
 - ✅ Alembic configurado (`alembic.ini`, `env.py`, `script.py.mako`)
-- ✅ `database.py` importa todos los modelos a `Base.metadata` (PR #58)
+- ✅ `Base.metadata` incluye los 12 modelos
+- 📋 Pasos pendientes: `alembic revision --autogenerate` → `alembic upgrade head` → `python -m app.data_seed`
 
 ---
 
@@ -130,33 +138,39 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 
 ## 🔑 Estado de Funcionalidades del Chatbot
 
-### Caso de uso 1: Agendar turno nuevo ✅ Implementado en webhook
-- ✅ State Router con 8 handlers
+### Caso de uso 1: Agendar turno nuevo ⚠️ Parcial (gap de integración)
+- ✅ State Router con 8 handlers (Redis)
 - ✅ Soporte para mensajes interactivos (botones/listas)
 - ✅ Flujo híbrido árbol de decisión + placeholder IA
-- ⚠️ Conectado a DB real (usa Redis para estado, pero no persiste turnos en PostgreSQL)
-- ⚠️ Recordatorios T-24hs (solo placeholder)
+- ✅ `calendar.py` tiene `create_appointment()` listo para persistir en PostgreSQL
+- ❌ **El webhook NO llama a `create_appointment()`** — solo loguea eventos JSON, no crea filas `Appointment`
+- ❌ Sin filas reales, el scheduler Celery no tiene turnos que recordar
 
 ### Caso de uso 2: Modificar turno existente ❌ No implementado
-- ❌ Buscar turno por usuario
+- ❌ Buscar turno por usuario (calendar tiene `get_appointments_by_phone`, no usado en webhook)
 - ❌ Disponibilidad para re-agendar
 - ❌ Confirmación del cambio
 
-### Caso de uso 3: Cancelar turno ❌ No implementado
-- ❌ Validar cancelación antes de fecha/hora
-- ❌ Notificación al negocio
+### Caso de uso 3: Cancelar turno ⚠️ Backend listo, no integrado en webhook
+- ✅ `calendar.py` tiene `cancel_appointment(appointment_id, motivo)` con soft-delete
+- ❌ El webhook no tiene handler de cancelación que llame a `cancel_appointment`
+- ❌ `btn_turno_cancelar` definido en UI pero su handler solo muestra texto informativo
 
-### Caso de uso 4: Recordatorio automático T-24hs ⚠️ Placeholder
-- ✅ Lógica de envío de mensaje WhatsApp implementada
-- ❌ Scheduler automático (Celery/APScheduler)
-- ⚠️ Solo funciona dentro de ventana 24h de WhatsApp
+### Caso de uso 4: Recordatorio automático T-24hs ✅ Scheduler implementado
+- ✅ Celery Worker + Beat programado a las 9 AM diario
+- ✅ 4 niveles de fallback: templates → ventana 24h → canal alternativo → notificar dueño
+- ✅ Filtro `notification_sent_at IS NULL` para evitar duplicados
+- ✅ `ReminderLog` registra cada intento
+- ⚠️ **Bloqueado por Caso de uso 1**: sin filas `Appointment` reales, el scheduler no encuentra nada
+- ⚠️ Sin token de WhatsApp real, `send_message()` falla, pero el pipeline de errores está probado
 
 ### Caso de uso 5: Consultar disponibilidad sin agendar ❌ No implementado
 - ❌ Mostrar slots disponibles por día/hora
 - ❌ Filtrado por servicio
+- 📋 **Complejidad PRD: baja/media** (ver análisis abajo)
 
 ### Caso de uso 6: Consultar precios ❌ No implementado
-- ❌ Debe venir de DB real
+- ❌ El `catalog.py` tiene CRUD de servicios con precios pero no expuesto al webhook
 
 ### Caso de uso 7: Consultar profesionales/empleados ❌ No implementado
 - ❌ No existe modelo de profesionales aún
@@ -170,11 +184,14 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 
 ## 📊 Infraestructura y DevOps
 
-### Docker Compose ✅ Parcial
-- ✅ Backend container (Python 3.11-slim, port 8000)
-- ✅ PostgreSQL container (postgres:16-alpine, port 5432)
-- ✅ Redis container (redis:7-alpine, port 6379)
-- ✅ Frontend container (Node 22-alpine, port 3000) — NUEVO PR #48
+### Docker Compose ✅ Completo (6 servicios)
+- ✅ `api` — Backend FastAPI (:8000)
+- ✅ `db` — PostgreSQL 16-alpine (:5432)
+- ✅ `redis` — Redis 7-alpine (:6379)
+- ✅ `celery-worker` — Celery worker (mismo Dockerfile del backend)
+- ✅ `celery-beat` — Celery scheduler periódico (9 AM)
+- ✅ `frontend` — Next.js (:3000)
+- ⚠️ Requiere `sudo mkdir -p /var/tmp/chatbot_postgres_data /var/tmp/chatbot_redis_data` antes de levantar (volúmenes bind mount)
 
 ### CI/CD ✅ Implementado
 - ✅ GitHub Actions workflow (`.github/workflows/ci-cd.yml`)
@@ -200,14 +217,16 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 | `conversation_closed` | ✅ Persiste en PostgreSQL | Cierre conversación | duration_seg, n_mensajes, n_fallbacks, resultado_final |
 
 **Resumen:** 10/10 eventos instrumentados. Todos persisten en PostgreSQL vía `event_logger.log_event()`.
-⚠️ CSAT data flow: `csat_submitted` se guarda en tabla `event`, pero M12 (`get_csat_average()`) consulta `feedback`. Pendiente unificar.
+✅ **CSAT data flow unificado** — `csat_submitted` ahora escribe en `feedback` (fuente canónica) + `event` (trazabilidad).
 
 ---
 
-## 📊 Métricas Críticas (12 MVP)
+## 📊 Métricas (50 total — chatbot-mvp-completion)
 
-✅ **12 queries implementadas en PR #58** (`metrics_queries.py` + endpoint `GET /api/v1/admin/metrics`).
+✅ **50 queries implementadas** en `metrics_queries.py`: 12 MVP + 38 extendidas (9 casos de uso C1-C9).
 ⚠️ Sin datos reales hasta que se ejecute `alembic upgrade head` y se deploie.
+
+### Métricas MVP (12) — `GET /api/v1/admin/metrics`
 
 | # | Métrica | Estado | Umbral de Alerta |
 |---|---------|--------|-----------------|
@@ -222,32 +241,60 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 | 9 | Tasa no-show | ✅ Query lista | > 15% |
 | 10 | Confirmación recordatorio | ✅ Query lista | < 50% |
 | 11 | Servicios más reservados | ✅ Query lista (JOIN real) | - |
-| 12 | CSAT promedio | ⚠️ Query lista pero lee `feedback`, no `event` | < 3.5/5 |
+| 12 | CSAT promedio | ✅ Fix aplicado — `csat_submitted` escribe en `feedback` + `event` | < 3.5/5 |
+
+### Métricas Extendidas (38) — 9 Casos de Uso
+
+| Caso | Métricas | Descripción | Optimizaciones |
+|------|----------|-------------|----------------|
+| C1 | E01–E04 | Conversión por servicio | Pre-fetch map (anti N+1) |
+| C2 | E05–E08 | Efectividad de recordatorios | JOIN con reminder_log |
+| C3 | E09–E12 | Sesiones largas (>30 min) | CTE + ROW_NUMBER |
+| C4 | ES01–ES04 | Métricas agregadas por servicio | GROUP BY en BD |
+| C5 | ES05–ES10 | Análisis temporal (días/horas pico) | Bulk fetch + avg modificación |
+| C6 | ES11–ES14 | Cancelaciones / no-show | Razones top, % cancel diario |
+| C7 | EN01–EN03 | Engagement (recurrentes, avg request) | GROUP BY + subquery |
+| C8 | EN04–EN05 | Read receipt buckets | Pre-fetch + elif + malformed |
+| C9 | EN06–EN09 | Retención avanzada | CTE + ROW_NUMBER, percentiles nativos |
+
+### Umbrales Configurables ✅
+- ✅ `GET/PUT /api/v1/admin/metric-thresholds` con Pydantic `ThresholdItem(BaseModel)`
+- ✅ `metric_name`, `warning_value`, `critical_value`, `operator: Literal["lt","gt"]`
+- ✅ Modelo `MetricThreshold` con `business_id` FK → multi-tenant
 
 ---
 
-## 🎯 Próximos Pasos Recomendados (Actualizado 10 julio 2026)
+## 🎯 Próximos Pasos Recomendados (Actualizado 12 julio 2026)
 
 ### Prioridad 1 - Modelos SQLAlchemy ✅ COMPLETO (PR #58)
-~~1. Crear modelos SQLAlchemy completos~~
-~~2. Configurar Base metadata compartida en database.py~~
-~~3. Migrar a async engine~~ → postergado (el engine síncrono funciona)
+1. ~~Crear modelos SQLAlchemy completos~~
+2. ~~Configurar Base metadata compartida en database.py~~
+3. ~~Migrar a async engine~~ → postergado (el engine síncrono funciona)
 
 ### Prioridad 2 - Migrations + Servicios CRUD ✅ COMPLETO (PR #58)
-~~1. Crear initial migration Alembic~~ → modelos listos, falta ejecutar `revision --autogenerate`
-~~2. Implementar servicios CRUD~~ → catalog, calendar, negocio, faq implementados
+1. ~~Crear initial migration Alembic~~ → modelos listos, falta ejecutar `revision --autogenerate`
+2. ~~Implementar servicios CRUD~~ → catalog, calendar, negocio, faq implementados
 
-### Prioridad 3 - Scheduler de Recordatorios (Pendiente)
-1. Implementar Celery/APScheduler para recordatorios T-24hs
-2. Conectar con `send_message` de whatsapp.py (ya implementado)
-3. Los eventos `reminder_sent` y `reminder_response` ya están instrumentados
+### Prioridad 3 - Scheduler de Recordatorios ✅ COMPLETO (chatbot-mvp-completion)
+1. ~~Implementar Celery/APScheduler para recordatorios T-24hs~~ → Celery Beat 9 AM
+2. ~~Conectar con `send_message` de whatsapp.py~~ → 4 niveles de fallback
+3. ~~Los eventos `reminder_sent` y `reminder_response` ya están instrumentados~~
 
-### Prioridad 4 - Métricas y Eventos (Parcialmente completo)
-1. ~~Persistir eventos~~ → ✅ 10/10 eventos instrumentados con `log_event()`
-2. ~~Implementar eventos faltantes~~ → ✅ completos (fix C1)
-3. Ejecutar `alembic upgrade head` para crear tablas en PostgreSQL
-4. Dashboard con 12 métricas críticas → endpoint REST listo, falta frontend
-5. Unificar CSAT data flow (`csat_submitted` en `event` vs M12 leyendo `feedback`)
+### Prioridad 4 - Métricas y Eventos ✅ COMPLETO (chatbot-mvp-completion)
+1. ~~Persistir eventos~~ → 10/10 eventos instrumentados con `log_event()`
+2. ~~Implementar eventos faltantes~~ → CSAT unificado
+3. ~~Unificar CSAT data flow~~ → `csat_submitted` escribe `feedback` + `event`
+4. ~~Dashboard con métricas críticas~~ → 50 métricas, endpoint REST listo
+5. ~~Umbrales configurables~~ → Pydantic ThresholdItem en `/api/v1/admin/metric-thresholds`
+
+### Pendiente REAL (lo que falta para prod)
+1. ⏳ **Ejecutar Alembic**: `docker compose up -d db redis` → `alembic revision --autogenerate` → `alembic upgrade head`
+2. ⏳ **Crear volúmenes Docker**: `sudo mkdir -p /var/tmp/chatbot_postgres_data /var/tmp/chatbot_redis_data`
+3. ⏳ **Verificación end-to-end**: levantar `docker compose up -d` completo y correr tests
+4. ⏳ **Code Review Grade A**: 0 BLOCKER, 0 CRITICAL, 0 WARNING — listo para merge
+5. ⏳ **PR #58 merge a develop** → review requerido (ver `.specify/features/chatbot-mvp-completion/review.md`)
+6. ⏳ **Frontend dashboard**: endpoint REST de métricas listo, falta UI
+7. ⏳ **Token WhatsApp real**: mock actual via `settings.WHATSAPP_TOKEN`
 
 ---
 
@@ -261,16 +308,26 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 - ✅ `backend/app/core/settings.py` — 19 variables de entorno
 - ✅ `backend/app/core/security.py` — JWT + Google OAuth2
 - ✅ `backend/app/db/database.py` — Engine síncrono con imports de modelos
-- ✅ `backend/app/db/models/` — 10 modelos SQLAlchemy (PR #58)
+- ✅ `backend/app/db/models/` — 12 modelos SQLAlchemy (PR #58 + chatbot-mvp-completion)
 - ✅ `backend/app/services/catalog.py` — CRUD servicios/productos (PR #58)
 - ✅ `backend/app/services/calendar.py` — CRUD turnos (PR #58)
 - ✅ `backend/app/services/negocio.py` — Orquestación chatbot (PR #58)
 - ✅ `backend/app/services/faq.py` — CRUD FAQs (PR #58)
 - ✅ `backend/app/services/event_logger.py` — log_event() fire-and-forget (PR #58)
-- ✅ `backend/app/services/metrics_queries.py` — 12 métricas MVP (PR #58)
-- ✅ `backend/app/api/v1/admin/metrics.py` — Endpoint GET /api/v1/admin/metrics (PR #58)
-- ✅ `backend/app/data_seed.py` — Seed data: 1 negocio, 8 servicios, 4 productos, 6 FAQs, 1 admin, 8 sesiones, ~50 eventos, 5 feedbacks (PR #58)
-- ✅ `backend/requirements.txt` — Dependencias completas
+- ✅ `backend/app/services/metrics_queries.py` — **50 métricas** (12 MVP + 38 extendidas C1-C9, optimizadas anti-N+1)
+- ✅ `backend/app/scheduler/config.py` — Celery app config (Redis broker)
+- ✅ `backend/app/scheduler/tasks.py` — `send_reminders()` con 4 niveles de fallback
+- ✅ `backend/app/api/v1/admin/metrics.py` — Endpoint `GET /api/v1/admin/metrics`
+- ✅ `backend/app/api/v1/admin/metric_thresholds.py` — **NUEVO** GET/PUT umbrales con Pydantic ThresholdItem
+- ✅ `backend/app/api/v1/admin/reminder_log.py` — **NUEVO** GET reminder log
+- ✅ `backend/app/api/v1/admin/health.py` — **NUEVO** Health check endpoint
+- ✅ `backend/app/db/models/metric_threshold.py` — **NUEVO** Umbrales warning/critical configurables
+- ✅ `backend/app/db/models/reminder_log.py` — **NUEVO** Trazabilidad de recordatorios
+- ✅ `backend/app/data_seed.py` — Seed data: 1 negocio, 8 servicios, 4 productos, 6 FAQs, 1 admin, 8 sesiones, ~50 eventos, 5 feedbacks
+- ✅ `backend/requirements.txt` — Dependencias completas (celery, redis, flower incluidas)
+- ✅ `backend/tests/test_metrics_queries_extended.py` — **NUEVO** 36 tests métricas extendidas
+- ✅ `backend/tests/test_scheduler_tasks.py` — **NUEVO** 22 tests scheduler + fallback
+- ✅ `backend/tests/test_metric_thresholds.py` — **NUEVO** 15 tests umbrales configurables
 - ⏳ `backend/app/db/migrations/` — Configurado pero sin `revision --autogenerate` ejecutado
 
 ### Frontend (revisados y verificados):
@@ -286,10 +343,16 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 
 ### Documentación (Data_Analyst):
 - ✅ `Data_Analyst/Documentacion_de_proyecto.md` — 60+ métricas, 12 críticas, 3 escenarios
-- ✅ `Data_Analyst/schema_db.md` — 10 modelos SQLAlchemy documentados
+- ✅ `Data_Analyst/schema_db.md` — 12 modelos SQLAlchemy documentados
 - ✅ `Data_Analyst/Detalles_pendientes.md` — Este archivo
 - ✅ `Data_Analyst/diagrama_fullstack.mmd` — Diagrama Mermaid unificado v2.0
 - ✅ `Data_Analyst/README.md` — Índice del directorio
+- ✅ `docs/verificacion-dev.md` — **NUEVO** Guía de verificación para otro developer (9 pasos)
+- ✅ `docs/deploy.md` — **NUEVO** Guía de deploy Docker Compose
+- ✅ `docs/user-guide-metrics.md` — **NUEVO** Guía de uso de métricas y umbrales
+- ✅ `.specify/features/chatbot-mvp-completion/review.md` — **Grade A**, 0 BLOCKER, 0 CRITICAL, 0 WARNING
+- ✅ `.specify/features/chatbot-mvp-completion/docs/walkthrough.md` — Arquitectura, data flow, componentes
+- ✅ `.specify/features/chatbot-mvp-completion/testing/validation.md` — 63 acceptance criteria
 
 ---
 
@@ -305,8 +368,9 @@ Todos con índices de rendimiento, docstrings en español, y `ondelete` consiste
 | #49 | `a623c5f` | Test integración auth | ❌ Pendiente sincronizar |
 | #50 | `431823` | CI/CD + test integración auth | ❌ Pendiente sincronizar |
 | #58 | `d8ff029` | **data-models-metrics**: 10 modelos, 6 servicios, 12 métricas, seed data, endpoint admin/metrics | 🟢 Abierto → develop |
+| #58 | `(varios)` | **chatbot-mvp-completion**: +38 métricas extendidas (50 total), scheduler Celery, umbrales configurables, CSAT fix, 73 tests, Grade A review | 🟢 Abierto → develop |
 
 ---
 
-**Última actualización:** 10 de julio 2026 (America/Buenos_Aires)
-**Próxima acción recomendada:** Mergear PR #58 a develop → ejecutar `alembic revision --autogenerate` → scheduler recordatorios
+**Última actualización:** 12 de julio 2026 (America/Buenos_Aires)
+**Próxima acción recomendada:** Mergear PR #58 a develop → `docker compose up -d db redis` → `alembic revision --autogenerate && alembic upgrade head` → levantar stack completo
