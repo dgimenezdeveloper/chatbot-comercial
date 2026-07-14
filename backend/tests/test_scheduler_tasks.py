@@ -38,8 +38,9 @@ class TestSendRemindersFilter:
         """The query must include Appointment.notification_sent_at.is_(None)."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # Updated chain: query().filter().with_for_update().order_by().limit().all()
-        mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        # send_reminders now uses while-loop batching: offset().limit().all()
+        chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
+        chain.offset.return_value.limit.return_value.all.return_value = []
         mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
@@ -47,7 +48,6 @@ class TestSendRemindersFilter:
         # Verify filter was called
         filter_call = mock_db.query.return_value.filter
         assert filter_call.called, "send_reminders must call .filter() on the query"
-        mock_db.query.assert_called_once()
 
     @patch("app.scheduler.tasks.SessionLocal")
     @patch("app.scheduler.tasks.asyncio.run")
@@ -55,7 +55,8 @@ class TestSendRemindersFilter:
         """When no appointments for tomorrow, returns 0 totals."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
+        chain.offset.return_value.limit.return_value.all.return_value = []
         mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "notified_owner": 0}
 
         result = send_reminders()
@@ -70,7 +71,8 @@ class TestSendRemindersFilter:
         """db.close() is called in finally block."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
+        chain.offset.return_value.limit.return_value.all.return_value = []
         mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "notified_owner": 0}
 
         send_reminders()
@@ -81,15 +83,18 @@ class TestSendRemindersFilter:
     def test_closes_db_even_on_error(self, mock_async_run, mock_session_local):
         """db.close() is called even if an exception occurs.
         
-        send_reminders now catches exceptions and returns an error dict
-        instead of propagating. db.close() is still called in finally.
+        send_reminders now catches exceptions in the while loop and returns
+        an error dict. db.close() is always called in finally.
         """
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
+        # Simular error en el batch: offset().limit().all() lanza excepción
+        chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
+        chain.offset.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
 
         result = send_reminders()
-        assert result["error"] is True
+        # El error es capturado por el try/except externo
+        assert result.get("error") is True
         mock_db.close.assert_called_once()
 
 
@@ -106,10 +111,15 @@ class TestSingleAsyncioRun:
         """One asyncio.run call processes all appointments."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # 5 appointments for tomorrow
+        # 5 appointments for tomorrow — mock the offset().limit().all() chain
         mock_appointments = [MagicMock(id=i, business_id=1) for i in range(5)]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_appointments
-        mock_async_run.return_value = {"total": 5, "sent": 5, "failed": 0, "notified_owner": 0}
+        chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
+        # First call returns the 5 appointments, second returns empty (breaks loop)
+        chain.offset.return_value.limit.return_value.all.side_effect = [
+            mock_appointments,
+            [],  # second batch empty → break
+        ]
+        mock_async_run.return_value = {"total": 5, "sent": 5, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -20,25 +21,57 @@ from app.services.event_logger import log_event
 
 logger = logging.getLogger(__name__)
 
+# Validación E.164: + seguido de 1-3 dígitos de país y 6-14 dígitos totales
+_PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")
+# Formato argentino: +549 seguido de 8-10 dígitos (código de área + número)
+_PHONE_AR_RE = re.compile(r"^\+549\d{8,10}$")
+
+# Máximo de appointments por batch de recordatorio
+_BATCH_SIZE = 500
+
+
+def _validate_phone(phone: str | None) -> str | None:
+    """Valida formato de teléfono. Retorna None si es válido, o motivo de error.
+
+    Acepta formato E.164 internacional (+54..., +1..., etc.).
+    Prefiere formato argentino (+549...) que es el caso de uso principal.
+    """
+    if not phone or not phone.strip():
+        return "missing_phone"
+    stripped = phone.strip()
+    if _PHONE_AR_RE.match(stripped):
+        return None  # formato argentino válido
+    if _PHONE_RE.match(stripped):
+        return None  # formato internacional válido
+    logger.warning(
+        "send_reminders: formato de teléfono no válido: %s (debe ser E.164: +[país][número])",
+        stripped[:20] + "..." if len(stripped) > 20 else stripped,
+    )
+    return "invalid_phone_format"
+
 
 @celery_app.task(name="app.scheduler.tasks.send_reminders")
 def send_reminders() -> dict:
-    """Envía recordatorios a turnos de mañana.
+    """Envía recordatorios a turnos de mañana, procesando en batches de 500.
 
     Flujo (4 niveles):
     1. Templates pagos → enviar sin restricción
     2. Ventana 24h → texto normal
     3. Canal alternativo → SMS/email
     4. Fallback → notificar al dueño
+
+    Si hay más de 500 appointments pendientes, se procesan en múltiples
+    batches para asegurar que ningún turno quede sin intento de notificación.
     """
     db = SessionLocal()
+    results = {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0, "batches": 0}
+
     try:
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
-        # Use < next_day_start instead of <= end_of_day to avoid microsecond boundary issues
         next_day_start = tomorrow_start + timedelta(days=1)
 
-        appointments = (
+        base_query = (
             db.query(Appointment)
             .filter(
                 Appointment.scheduled_date >= tomorrow_start,
@@ -48,40 +81,53 @@ def send_reminders() -> dict:
             )
             .with_for_update(skip_locked=True)
             .order_by(Appointment.id)
-            .limit(500)  # paginación: máximo 500 por batch para evitar OOM
-            .all()
         )
 
-        if len(appointments) == 500:
-            logger.warning(
-                "send_reminders: se alcanzó el límite de 500 appointments. "
-                "Puede haber más turnos sin procesar. Considerar aumentar el límite o usar batching."
+        offset = 0
+        while True:
+            batch = base_query.offset(offset).limit(_BATCH_SIZE).all()
+            if not batch:
+                break
+
+            results["batches"] += 1
+            results["total"] += len(batch)
+
+            # Marcar notification_sent_at a nivel DB antes del envío
+            batch_ids = [a.id for a in batch]
+            db.query(Appointment).filter(
+                Appointment.id.in_(batch_ids),
+            ).update(
+                {"notification_sent_at": datetime.now(timezone.utc)},
+                synchronize_session="fetch",
             )
+            db.flush()
 
-        if not appointments:
-            logger.info("send_reminders: 0 turnos para mañana")
-            return {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
+            # Procesar batch
+            batch_results = asyncio.run(_process_reminders(db, batch))
+            results["sent"] += batch_results["sent"]
+            results["failed"] += batch_results["failed"]
+            results["skipped"] += batch_results["skipped"]
+            results["notified_owner"] += batch_results["notified_owner"]
 
-        # Marcar notification_sent_at a nivel DB antes del envío para prevenir
-        # race condition entre múltiples workers. Si el envío falla, se limpia.
-        appt_ids = [a.id for a in appointments]
-        db.query(Appointment).filter(
-            Appointment.id.in_(appt_ids),
-        ).update(
-            {"notification_sent_at": datetime.now(timezone.utc)},
-            synchronize_session="fetch",
-        )
-        db.flush()
+            if len(batch) < _BATCH_SIZE:
+                break  # último batch (incompleto)
+            offset += _BATCH_SIZE
 
-        # Un solo event loop para todos los envíos asíncronos
-        results = asyncio.run(_process_reminders(db, appointments))
         db.commit()
-        logger.info("send_reminders: completo — %s", results)
+
+        if results["total"] == 0:
+            logger.info("send_reminders: 0 turnos para mañana")
+        else:
+            logger.info(
+                "send_reminders: completo — %d turnos en %d batch(es): %s",
+                results["total"], results["batches"],
+                {k: v for k, v in results.items() if k in ("sent", "failed", "skipped", "notified_owner")},
+            )
         return results
     except Exception:
         db.rollback()
         logger.exception("send_reminders: error crítico no recuperable")
-        return {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0, "error": True}
+        return {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0, "batches": 0, "error": True}
     finally:
         db.close()
 
@@ -118,21 +164,22 @@ async def _process_reminders(db, appointments) -> dict:
             results["skipped"] += 1
             continue
 
-        # Validar que el teléfono del usuario sea válido antes de intentar cualquier envío
-        phone_valid = bool(appt.user_phone and appt.user_phone.strip())
-        if not phone_valid:
+        # Validar que el teléfono tenga formato E.164 antes de intentar cualquier envío
+        phone_error = _validate_phone(appt.user_phone)
+        if phone_error:
             log_entry = ReminderLog(
                 appointment_id=appt.id,
                 business_id=appt.business_id,
                 status="failed",
                 channel="whatsapp_text",
-                error_reason="missing_phone",
+                error_reason=phone_error,
             )
             db.add(log_entry)
-            # Limpiar notification_sent_at — este appointment no fue notificado
             appt.notification_sent_at = None
             results["skipped"] += 1
-            logger.warning("send_reminders: teléfono inválido para appt %s", appt.id)
+            logger.warning(
+                "send_reminders: teléfono inválido (%s) para appt %s", phone_error, appt.id
+            )
             continue
 
         # status="pending" indica que aún no se procesó — se actualiza en cada nivel

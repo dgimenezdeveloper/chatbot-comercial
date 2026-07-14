@@ -128,9 +128,12 @@ class ExtendedMetricResult(BaseModel):
 
     Cada métrica retorna sus campos específicos (services, reasons, distribution,
     buckets, channels, outcomes, etc.) que se preservan mediante extra="allow".
+
+    value puede ser None cuando insufficient_data=True (ej: response_speed_percentiles
+    sin datos suficientes para calcular percentiles).
     """
 
-    value: float = Field(default=0.0, description="Valor calculado")
+    value: Optional[float] = Field(None, description="Valor calculado (None si insufficient_data)")
     threshold: Optional[float] = Field(None, description="Umbral de alerta")
     status: Literal["ok", "warning", "critical"] = Field(
         default="ok", description="Estado respecto al umbral"

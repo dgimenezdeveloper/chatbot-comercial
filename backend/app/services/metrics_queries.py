@@ -2188,7 +2188,12 @@ def get_message_dow_distribution(db: Session, business_id: int, days: int = 30,
 def get_response_speed_percentiles(db: Session, business_id: int, days: int = 30,
             since: datetime | None = None, period_label: str | None = None,
             biz_thresholds: dict | None = None) -> dict:
-    """C8.3 — Velocidad de respuesta: P50 y P95 en segundos usando PostgreSQL percentiles."""
+    """C8.3 — Velocidad de respuesta: P50 y P95 en segundos usando PostgreSQL percentiles.
+
+    Retorna insufficient_data=True cuando no hay suficientes eventos para calcular
+    percentiles significativos (menos de 2 eventos en todas las sesiones).
+    Esto distingue "sin datos" de "respuesta instantánea" (0.0).
+    """
     if since is None:
         since = _since(days)
     if period_label is None:
@@ -2211,6 +2216,24 @@ def get_response_speed_percentiles(db: Session, business_id: int, days: int = 30
         )
         .subquery()
     )
+    # Contar gaps válidos para determinar si hay datos suficientes
+    gap_count = (
+        db.query(func.count(gap_subq.c.gap_seconds))
+        .filter(gap_subq.c.gap_seconds.isnot(None))
+        .scalar()
+    ) or 0
+
+    if gap_count < 2:
+        return {
+            "p50_seconds": None,
+            "p95_seconds": None,
+            "value": None,
+            "threshold": None,
+            "status": "ok",
+            "insufficient_data": True,
+            "period": period_label,
+        }
+
     p50 = (
         db.query(func.percentile_cont(0.50).within_group(gap_subq.c.gap_seconds))
         .filter(gap_subq.c.gap_seconds.isnot(None))
@@ -2227,6 +2250,7 @@ def get_response_speed_percentiles(db: Session, business_id: int, days: int = 30
         "value": round(float(p50), 1),
         "threshold": None,
         "status": "ok",
+        "insufficient_data": False,
         "period": period_label,
     }
 

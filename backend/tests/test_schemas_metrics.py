@@ -11,6 +11,7 @@ from app.schemas.metrics import (
     CancellationRate,
     ConversionRate,
     CSATAverage,
+    ExtendedMetricResult,
     FallbackRate,
     MetricResult,
     NocturnalAppointmentRate,
@@ -345,3 +346,125 @@ class TestAllMetrics:
         assert d["period"] == "30d"
         assert d["conversion_rate"] is None
         assert d["csat_average"] is None
+
+
+# ============================================================================
+# ExtendedMetricResult — Integration tests (E5)
+# ============================================================================
+
+class TestExtendedMetricResult:
+    """E5: Verifica que extra='allow' preserva sub-data en serialización Pydantic."""
+
+    def test_extra_fields_preserved_in_constructor(self):
+        """Campos extra pasados en el constructor se preservan como atributos."""
+        m = ExtendedMetricResult(
+            value=45.0,
+            status="ok",
+            period="30d",
+            services=[
+                {"service_id": 1, "service_name": "Corte", "rate": 25.0},
+                {"service_id": 2, "service_name": "Tinte", "rate": 15.0},
+            ],
+            total_appointments=100,
+            conversion_count=45,
+        )
+        assert m.value == 45.0
+        assert m.status == "ok"
+        assert m.services == [
+            {"service_id": 1, "service_name": "Corte", "rate": 25.0},
+            {"service_id": 2, "service_name": "Tinte", "rate": 15.0},
+        ]
+        assert m.total_appointments == 100
+        assert m.conversion_count == 45
+
+    def test_extra_fields_survive_model_dump(self):
+        """Campos extra se preservan en model_dump() (serialización JSON)."""
+        m = ExtendedMetricResult(
+            value=85.0,
+            status="ok",
+            reasons=[
+                {"reason": "motivo A", "count": 10},
+                {"reason": "motivo B", "count": 5},
+            ],
+            total=100,
+        )
+        dumped = m.model_dump()
+        assert dumped["value"] == 85.0
+        assert dumped["reasons"] == [
+            {"reason": "motivo A", "count": 10},
+            {"reason": "motivo B", "count": 5},
+        ]
+        assert dumped["total"] == 100
+
+    def test_extra_fields_survive_model_dump_json(self):
+        """Campos extra sobreviven model_dump_json() (round-trip JSON)."""
+        import json
+        m = ExtendedMetricResult(
+            value=10.0,
+            status="ok",
+            channels={"chatbot": {"acquired": 100, "churned": 20}},
+        )
+        json_str = m.model_dump_json()
+        parsed = json.loads(json_str)
+        assert parsed["value"] == 10.0
+        assert parsed["channels"] == {"chatbot": {"acquired": 100, "churned": 20}}
+
+    def test_buckets_sub_data_preserved(self):
+        """Sub-data tipo buckets (read_receipt_buckets) se preserva."""
+        m = ExtendedMetricResult(
+            value=25.0,
+            status="ok",
+            buckets={
+                "1h": {"count": 10, "pct": 25.0},
+                "4h": {"count": 15, "pct": 37.5},
+                "24h": {"count": 15, "pct": 37.5},
+            },
+            total_reminders=40,
+        )
+        dumped = m.model_dump()
+        assert dumped["buckets"] == {
+            "1h": {"count": 10, "pct": 25.0},
+            "4h": {"count": 15, "pct": 37.5},
+            "24h": {"count": 15, "pct": 37.5},
+        }
+        assert dumped["total_reminders"] == 40
+
+    def test_distribution_sub_data_preserved(self):
+        """Sub-data tipo distribution (preferred_hours, message_hourly) se preserva."""
+        m = ExtendedMetricResult(
+            value=150,
+            status="ok",
+            distribution={"9": 30, "10": 45, "11": 50, "12": 25},
+        )
+        dumped = m.model_dump()
+        assert dumped["distribution"] == {"9": 30, "10": 45, "11": 50, "12": 25}
+
+    def test_insufficient_data_flag_preserved(self):
+        """El flag insufficient_data (E9) se preserva en serialización."""
+        m = ExtendedMetricResult(
+            value=None,
+            status="ok",
+            insufficient_data=True,
+            p50_seconds=None,
+            p95_seconds=None,
+        )
+        dumped = m.model_dump()
+        assert dumped["insufficient_data"] is True
+        assert dumped["p50_seconds"] is None
+        assert dumped["p95_seconds"] is None
+        assert dumped["value"] is None
+
+    def test_user_types_sub_data_preserved(self):
+        """Sub-data tipo user_types (no_show_by_user_type) se preserva."""
+        m = ExtendedMetricResult(
+            value=12.5,
+            status="ok",
+            user_types={
+                "chatbot": {"total": 80, "no_shows": 10, "rate": 12.5},
+                "web": {"total": 40, "no_shows": 5, "rate": 12.5},
+            },
+        )
+        dumped = m.model_dump()
+        assert dumped["user_types"]["chatbot"]["total"] == 80
+        assert dumped["user_types"]["chatbot"]["no_shows"] == 10
+        assert dumped["user_types"]["web"]["rate"] == 12.5

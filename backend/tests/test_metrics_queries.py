@@ -465,3 +465,82 @@ class TestGetAllMetrics:
 
         result = get_all_metrics(mock_db, business_id=3, days=90)
         assert result["period"] == "90d"
+
+
+# ============================================================================
+# E13 — Structural contract verification
+# ============================================================================
+
+class TestGetAllMetricsStructure:
+    """E13: Verifica el contrato estructural de get_all_metrics()."""
+
+    @patch("app.services.metrics_queries.get_conversion_rate")
+    @patch("app.services.metrics_queries.get_bot_autonomy_rate")
+    @patch("app.services.metrics_queries.get_abandonment_rate")
+    @patch("app.services.metrics_queries.get_fallback_rate")
+    @patch("app.services.metrics_queries.get_top_fallback_messages")
+    @patch("app.services.metrics_queries.get_nocturnal_appointment_rate")
+    @patch("app.services.metrics_queries.get_autonomous_resolution_rate")
+    @patch("app.services.metrics_queries.get_cancellation_rate")
+    @patch("app.services.metrics_queries.get_no_show_rate")
+    @patch("app.services.metrics_queries.get_reminder_confirmation_rate")
+    @patch("app.services.metrics_queries.get_top_services")
+    @patch("app.services.metrics_queries.get_csat_average")
+    def test_12_base_keys_present(
+        self, mock_csat, mock_top_svc, mock_reminder, mock_noshow,
+        mock_cancel, mock_auto, mock_nocturnal, mock_top_fb,
+        mock_fallback, mock_abandon, mock_bot, mock_conv,
+        mock_db,
+    ):
+        """get_all_metrics sin extended retorna exactamente 12 métricas base."""
+        for m in [mock_conv, mock_bot, mock_abandon, mock_fallback, mock_top_fb,
+                  mock_nocturnal, mock_auto, mock_cancel, mock_noshow,
+                  mock_reminder, mock_top_svc, mock_csat]:
+            m.return_value = {"value": 0, "status": "ok", "period": "30d"}
+
+        result = get_all_metrics(mock_db, business_id=1, days=30)
+
+        base_keys = [
+            "business_id", "period",
+            "conversion_rate", "bot_autonomy_rate", "abandonment_rate",
+            "fallback_rate", "top_fallback_messages", "nocturnal_appointment_rate",
+            "autonomous_resolution_rate", "cancellation_rate", "no_show_rate",
+            "reminder_confirmation_rate", "top_services", "csat_average",
+        ]
+        for key in base_keys:
+            assert key in result, f"Missing key: {key}"
+
+        # extended no debe estar presente cuando include_extended=False
+        assert result.get("extended") is None or result.get("extended") == {}
+
+    @patch("app.services.metrics_queries.SessionLocal")
+    def test_schema_roundtrip_with_extended_data(self, mock_session):
+        """E5/E13: AllMetrics + ExtendedMetricResult round-trip model_dump."""
+        from app.schemas.metrics import (
+            AllMetrics as AM, ConversionRate, ExtendedMetricResult as EMR,
+        )
+
+        # Simular una métrica extendida con sub-data
+        ext_metric = EMR(
+            value=45.0, status="ok", period="30d",
+            services=[
+                {"service_id": 1, "service_name": "Corte", "rate": 25.0},
+                {"service_id": 2, "service_name": "Tinte", "rate": 15.0},
+            ],
+            total_appointments=100,
+        )
+
+        m = AM(
+            business_id=1,
+            period="30d",
+            conversion_rate=ConversionRate(value=45.0, status="ok", starts=100, appointments=45),
+            extended={"conversion_by_service": ext_metric},
+        )
+
+        dumped = m.model_dump()
+        assert dumped["business_id"] == 1
+        assert dumped["extended"]["conversion_by_service"]["services"] == [
+            {"service_id": 1, "service_name": "Corte", "rate": 25.0},
+            {"service_id": 2, "service_name": "Tinte", "rate": 15.0},
+        ]
+        assert dumped["extended"]["conversion_by_service"]["total_appointments"] == 100
