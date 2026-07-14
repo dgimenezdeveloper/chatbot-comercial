@@ -795,7 +795,7 @@ def get_conversion_by_service(db: Session, business_id: int, days: int = 30) -> 
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "service_selected",
+            Event.event_type == EventType.SERVICE_SELECTED,
             Event.timestamp >= since,
         )
         .group_by(Event.payload_json["service_id"].astext)
@@ -830,7 +830,7 @@ def get_fallback_retry_rate(db: Session, business_id: int, days: int = 30) -> di
         db.query(Event.user_id)
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "fallback_triggered",
+            Event.event_type == EventType.FALLBACK_TRIGGERED,
             Event.timestamp >= since,
             Event.user_id.isnot(None),
         )
@@ -841,7 +841,7 @@ def get_fallback_retry_rate(db: Session, business_id: int, days: int = 30) -> di
         db.query(func.count(func.distinct(Event.user_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_created",
+            Event.event_type == EventType.APPOINTMENT_CREATED,
             Event.timestamp >= since,
             Event.user_id.in_(db.query(fallback_users.c.user_id)),
         )
@@ -851,7 +851,7 @@ def get_fallback_retry_rate(db: Session, business_id: int, days: int = 30) -> di
         db.query(func.count(func.distinct(Event.user_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "fallback_triggered",
+            Event.event_type == EventType.FALLBACK_TRIGGERED,
             Event.timestamp >= since,
             Event.user_id.isnot(None),
         )
@@ -978,7 +978,7 @@ def get_avg_time_to_appointment(db: Session, business_id: int, days: int = 30) -
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "conversation_started",
+            Event.event_type == EventType.CONVERSATION_STARTED,
             Event.timestamp >= since,
         )
         .group_by(Event.session_id)
@@ -993,7 +993,7 @@ def get_avg_time_to_appointment(db: Session, business_id: int, days: int = 30) -
         .join(rows, Event.session_id == rows.c.session_id)
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_created",
+            Event.event_type == EventType.APPOINTMENT_CREATED,
             Event.timestamp >= since,
         )
         .first()
@@ -1019,7 +1019,7 @@ def get_self_service_modification_rate(db: Session, business_id: int, days: int 
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_modified",
+            Event.event_type == EventType.APPOINTMENT_MODIFIED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1028,7 +1028,7 @@ def get_self_service_modification_rate(db: Session, business_id: int, days: int 
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_modified",
+            Event.event_type == EventType.APPOINTMENT_MODIFIED,
             Event.channel == "whatsapp",
             Event.timestamp >= since,
         )
@@ -1054,7 +1054,7 @@ def get_modification_reasons(db: Session, business_id: int, days: int = 30) -> d
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_modified",
+            Event.event_type == EventType.APPOINTMENT_MODIFIED,
             Event.timestamp >= _since(days),
             Event.payload_json["modification_reason"].astext.isnot(None),
         )
@@ -1080,7 +1080,7 @@ def get_post_reminder_modifications(db: Session, business_id: int, days: int = 3
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1089,7 +1089,7 @@ def get_post_reminder_modifications(db: Session, business_id: int, days: int = 3
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_modified",
+            Event.event_type == EventType.APPOINTMENT_MODIFIED,
             Event.timestamp >= since,
             Event.payload_json["triggered_by_reminder"].astext == "true",
         )
@@ -1117,7 +1117,7 @@ def get_avg_modification_time(db: Session, business_id: int, days: int = 30) -> 
             )
             .filter(
                 Event.business_id == business_id,
-                Event.event_type == "appointment_modified",
+                Event.event_type == EventType.APPOINTMENT_MODIFIED,
                 Event.timestamp >= since,
                 Event.payload_json["original_appointment_id"].astext.isnot(None),
             )
@@ -1228,7 +1228,7 @@ def get_post_reminder_cancellations(db: Session, business_id: int, days: int = 3
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1237,7 +1237,7 @@ def get_post_reminder_cancellations(db: Session, business_id: int, days: int = 3
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_cancelled",
+            Event.event_type == EventType.APPOINTMENT_CANCELLED,
             Event.timestamp >= since,
             Event.payload_json["trigger"].astext == "reminder_response",
         )
@@ -1274,7 +1274,7 @@ def get_reminder_delivery_rate(db: Session, business_id: int, days: int = 30) ->
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1297,7 +1297,7 @@ def get_reminder_read_rate(db: Session, business_id: int, days: int = 30) -> dic
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1306,7 +1306,7 @@ def get_reminder_read_rate(db: Session, business_id: int, days: int = 30) -> dic
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_read",
+            Event.event_type == EventType.REMINDER_READ,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1329,7 +1329,7 @@ def get_reminder_response_rate(db: Session, business_id: int, days: int = 30) ->
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_read",
+            Event.event_type == EventType.REMINDER_READ,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1338,7 +1338,7 @@ def get_reminder_response_rate(db: Session, business_id: int, days: int = 30) ->
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_response",
+            Event.event_type == EventType.REMINDER_RESPONSE,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1362,7 +1362,7 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
         db.query(Event.session_id, Event.timestamp)
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .all()
@@ -1382,7 +1382,7 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
             )
             .filter(
                 Event.business_id == business_id,
-                Event.event_type == "reminder_response",
+                Event.event_type == EventType.REMINDER_RESPONSE,
                 Event.session_id.in_(session_ids),
                 Event.timestamp >= since,
             )
@@ -1518,7 +1518,7 @@ def get_manual_escalation_rate(db: Session, business_id: int, days: int = 30) ->
         db.query(func.count(func.distinct(Event.session_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "conversation_started",
+            Event.event_type == EventType.CONVERSATION_STARTED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1527,7 +1527,7 @@ def get_manual_escalation_rate(db: Session, business_id: int, days: int = 30) ->
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1552,7 +1552,7 @@ def get_escalation_reasons(db: Session, business_id: int, days: int = 30) -> dic
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.timestamp >= _since(days),
             Event.payload_json["escalation_reason"].astext.isnot(None),
         )
@@ -1578,7 +1578,7 @@ def get_post_escalation_conversion(db: Session, business_id: int, days: int = 30
         db.query(func.count(func.distinct(Event.session_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1587,7 +1587,7 @@ def get_post_escalation_conversion(db: Session, business_id: int, days: int = 30
         db.query(Event.session_id)
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.timestamp >= since,
         )
         .distinct()
@@ -1597,7 +1597,7 @@ def get_post_escalation_conversion(db: Session, business_id: int, days: int = 30
         db.query(func.count(func.distinct(Event.session_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_created",
+            Event.event_type == EventType.APPOINTMENT_CREATED,
             Event.timestamp >= since,
             Event.session_id.in_(db.query(esc_sessions.c.session_id)),
         )
@@ -1621,7 +1621,7 @@ def get_auto_escalation_rate(db: Session, business_id: int, days: int = 30) -> d
         db.query(func.count(func.distinct(Event.session_id)))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "conversation_started",
+            Event.event_type == EventType.CONVERSATION_STARTED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -1630,7 +1630,7 @@ def get_auto_escalation_rate(db: Session, business_id: int, days: int = 30) -> d
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.payload_json["trigger"].astext == "auto_fallback",
             Event.timestamp >= since,
         )
@@ -1912,7 +1912,7 @@ def get_message_hourly_distribution(db: Session, business_id: int, days: int = 3
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "conversation_started",
+            Event.event_type == EventType.CONVERSATION_STARTED,
             Event.timestamp >= _since(days),
         )
         .group_by("hour")
@@ -1938,7 +1938,7 @@ def get_message_dow_distribution(db: Session, business_id: int, days: int = 30) 
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type.in_(["conversation_started", "menu_option_selected", "service_selected"]),
+            Event.event_type.in_([EventType.CONVERSATION_STARTED, EventType.MENU_OPTION_SELECTED, EventType.SERVICE_SELECTED]),
             Event.timestamp >= _since(days),
         )
         .group_by("dow")
@@ -2003,7 +2003,7 @@ def get_input_type_ratio(db: Session, business_id: int, days: int = 30) -> dict:
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "menu_option_selected",
+            Event.event_type == EventType.MENU_OPTION_SELECTED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -2012,7 +2012,7 @@ def get_input_type_ratio(db: Session, business_id: int, days: int = 30) -> dict:
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type.in_(["menu_option_selected", "service_selected", "fallback_triggered"]),
+            Event.event_type.in_([EventType.MENU_OPTION_SELECTED, EventType.SERVICE_SELECTED, EventType.FALLBACK_TRIGGERED]),
             Event.timestamp >= since,
         )
         .scalar()
@@ -2039,7 +2039,7 @@ def get_avg_message_length(db: Session, business_id: int, days: int = 30) -> dic
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "fallback_triggered",
+            Event.event_type == EventType.FALLBACK_TRIGGERED,
             Event.timestamp >= since,
             Event.payload_json["message_original"].astext.isnot(None),
         )
@@ -2063,7 +2063,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30) -> d
         db.query(Event.session_id, Event.timestamp)
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_sent",
+            Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
         .all()
@@ -2090,7 +2090,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30) -> d
             )
             .filter(
                 Event.business_id == business_id,
-                Event.event_type == "reminder_read",
+                Event.event_type == EventType.REMINDER_READ,
                 Event.session_id.in_(session_ids),
                 Event.timestamp >= since,
             )

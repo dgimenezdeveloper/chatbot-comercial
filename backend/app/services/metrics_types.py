@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TypedDict
 
 
 class EventType(str, Enum):
@@ -22,12 +21,5 @@ class EventType(str, Enum):
     CONVERSATION_ENDED = "conversation_ended"
     APPOINTMENT_MODIFIED = "appointment_modified"
     APPOINTMENT_CANCELLED = "appointment_cancelled"
+    REMINDER_READ = "reminder_read"
     NO_SHOW = "no_show"
-
-
-class MetricResult(TypedDict, total=False):
-    """Forma base de retorno para todas las métricas."""
-    value: float
-    threshold: float | None
-    status: str
-    period: str
