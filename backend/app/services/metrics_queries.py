@@ -68,6 +68,15 @@ THRESHOLDS: dict[str, dict[str, float]] = {
 _thresholds_cache: dict[int, dict[str, dict[str, float]]] = {}
 
 
+def clear_thresholds_cache(business_id: int) -> None:
+    """Invalida la caché de thresholds para un negocio.
+
+    Debe llamarse después de cualquier PUT a metric-thresholds
+    para que las métricas usen los nuevos valores inmediatamente.
+    """
+    _thresholds_cache.pop(business_id, None)
+
+
 def _load_business_thresholds(db: Session, business_id: int) -> dict[str, dict[str, float]]:
     """Carga thresholds del negocio desde DB, con caché en memoria."""
     if business_id in _thresholds_cache:
@@ -696,60 +705,60 @@ def get_all_metrics(
         ext = result["extended"]
 
         # C1 — Agendar turno (6)
-        ext["conversion_by_service"] = _get_conversion_by_service(db, business_id, since, period_label, biz_thresholds)
-        ext["fallback_retry_rate"] = _get_fallback_retry_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["appointment_lead_time"] = _get_appointment_lead_time_distribution(db, business_id, since, period_label)
-        ext["preferred_hours"] = _get_preferred_hours_distribution(db, business_id, since, period_label)
-        ext["new_vs_returning"] = _get_new_vs_returning_clients(db, business_id, since, period_label)
-        ext["avg_time_to_appointment"] = _get_avg_time_to_appointment(db, business_id, since, period_label, biz_thresholds)
+        ext["conversion_by_service"] = get_conversion_by_service(db, business_id, days)
+        ext["fallback_retry_rate"] = get_fallback_retry_rate(db, business_id, days)
+        ext["appointment_lead_time"] = get_appointment_lead_time_distribution(db, business_id, days)
+        ext["preferred_hours"] = get_preferred_hours_distribution(db, business_id, days)
+        ext["new_vs_returning"] = get_new_vs_returning_clients(db, business_id, days)
+        ext["avg_time_to_appointment"] = get_avg_time_to_appointment(db, business_id, days)
 
         # C2 — Modificar (4)
-        ext["self_service_modification_rate"] = _get_self_service_modification_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["modification_reasons"] = _get_modification_reasons(db, business_id, since, period_label)
-        ext["post_reminder_modifications"] = _get_post_reminder_modifications(db, business_id, since, period_label)
-        ext["avg_modification_time"] = _get_avg_modification_time(db, business_id, since, period_label)
+        ext["self_service_modification_rate"] = get_self_service_modification_rate(db, business_id, days)
+        ext["modification_reasons"] = get_modification_reasons(db, business_id, days)
+        ext["post_reminder_modifications"] = get_post_reminder_modifications(db, business_id, days)
+        ext["avg_modification_time"] = get_avg_modification_time(db, business_id, days)
 
         # C3 — Cancelar (3)
-        ext["late_cancellation_rate"] = _get_late_cancellation_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["cancellation_reasons"] = _get_cancellation_reasons(db, business_id, since, period_label)
-        ext["post_reminder_cancellations"] = _get_post_reminder_cancellations(db, business_id, since, period_label)
+        ext["late_cancellation_rate"] = get_late_cancellation_rate(db, business_id, days)
+        ext["cancellation_reasons"] = get_cancellation_reasons(db, business_id, days)
+        ext["post_reminder_cancellations"] = get_post_reminder_cancellations(db, business_id, days)
 
         # C4 — Recordatorios (6)
-        ext["reminder_delivery_rate"] = _get_reminder_delivery_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["reminder_read_rate"] = _get_reminder_read_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["reminder_response_rate"] = _get_reminder_response_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["avg_reminder_response_time"] = _get_avg_reminder_response_time(db, business_id, since, period_label, biz_thresholds)
-        ext["no_show_reminder_impact"] = _get_no_show_reminder_impact(db, business_id, since, period_label)
-        ext["cancellation_no_confirmation"] = _get_cancellation_no_confirmation_impact(db, business_id, since, period_label)
+        ext["reminder_delivery_rate"] = get_reminder_delivery_rate(db, business_id, days)
+        ext["reminder_read_rate"] = get_reminder_read_rate(db, business_id, days)
+        ext["reminder_response_rate"] = get_reminder_response_rate(db, business_id, days)
+        ext["avg_reminder_response_time"] = get_avg_reminder_response_time(db, business_id, days)
+        ext["no_show_reminder_impact"] = get_no_show_reminder_impact(db, business_id, days)
+        ext["cancellation_no_confirmation"] = get_cancellation_no_confirmation_impact(db, business_id, days)
 
         # C5 — Escalamiento (4)
-        ext["manual_escalation_rate"] = _get_manual_escalation_rate(db, business_id, since, period_label, biz_thresholds)
-        ext["escalation_reasons"] = _get_escalation_reasons(db, business_id, since, period_label)
-        ext["post_escalation_conversion"] = _get_post_escalation_conversion(db, business_id, since, period_label, biz_thresholds)
-        ext["auto_escalation_rate"] = _get_auto_escalation_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["manual_escalation_rate"] = get_manual_escalation_rate(db, business_id, days)
+        ext["escalation_reasons"] = get_escalation_reasons(db, business_id, days)
+        ext["post_escalation_conversion"] = get_post_escalation_conversion(db, business_id, days)
+        ext["auto_escalation_rate"] = get_auto_escalation_rate(db, business_id, days)
 
         # C6 — Retención (4)
-        ext["returning_users_30d"] = _get_returning_users_30d(db, business_id, since, period_label, biz_thresholds)
-        ext["usage_frequency"] = _get_usage_frequency(db, business_id, since, period_label, biz_thresholds)
-        ext["churn_by_channel"] = _get_churn_by_channel(db, business_id, since, period_label, biz_thresholds)
-        ext["avg_time_first_second"] = _get_avg_time_between_first_second(db, business_id, since, period_label)
+        ext["returning_users_30d"] = get_returning_users_30d(db, business_id, days)
+        ext["usage_frequency"] = get_usage_frequency(db, business_id, days)
+        ext["churn_by_channel"] = get_churn_by_channel(db, business_id, days)
+        ext["avg_time_first_second"] = get_avg_time_between_first_second(db, business_id, days)
 
         # C7 — No-Show (2)
-        ext["no_show_by_user_type"] = _get_no_show_by_user_type(db, business_id, since, period_label, biz_thresholds)
-        ext["no_show_by_service"] = _get_no_show_by_service(db, business_id, since, period_label, biz_thresholds)
+        ext["no_show_by_user_type"] = get_no_show_by_user_type(db, business_id, days)
+        ext["no_show_by_service"] = get_no_show_by_service(db, business_id, days)
 
         # C8 — WhatsApp (6)
-        ext["message_hourly_distribution"] = _get_message_hourly_distribution(db, business_id, since, period_label)
-        ext["message_dow_distribution"] = _get_message_dow_distribution(db, business_id, since, period_label)
-        ext["response_speed_percentiles"] = _get_response_speed_percentiles(db, business_id, since, period_label)
-        ext["input_type_ratio"] = _get_input_type_ratio(db, business_id, since, period_label)
-        ext["avg_message_length"] = _get_avg_message_length(db, business_id, since, period_label)
-        ext["read_receipt_buckets"] = _get_read_receipt_buckets(db, business_id, since, period_label)
+        ext["message_hourly_distribution"] = get_message_hourly_distribution(db, business_id, days)
+        ext["message_dow_distribution"] = get_message_dow_distribution(db, business_id, days)
+        ext["response_speed_percentiles"] = get_response_speed_percentiles(db, business_id, days)
+        ext["input_type_ratio"] = get_input_type_ratio(db, business_id, days)
+        ext["avg_message_length"] = get_avg_message_length(db, business_id, days)
+        ext["read_receipt_buckets"] = get_read_receipt_buckets(db, business_id, days)
 
         # C9 — Satisfacción (3)
-        ext["csat_by_outcome"] = _get_csat_by_outcome(db, business_id, since, period_label, biz_thresholds)
-        ext["nps"] = _get_nps(db, business_id, since, period_label, biz_thresholds)
-        ext["feedback_clustering"] = _get_feedback_clustering(db, business_id, since, period_label)
+        ext["csat_by_outcome"] = get_csat_by_outcome(db, business_id, days)
+        ext["nps"] = get_nps(db, business_id, days)
+        ext["feedback_clustering"] = get_feedback_clustering(db, business_id, days)
 
     return result
 
@@ -2121,7 +2130,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30) -> d
 # ---------------------------------------------------------------------------
 
 def get_csat_by_outcome(db: Session, business_id: int, days: int = 30) -> dict:
-    """C9.1 — CSAT segmentado por resultado de la interacción."""
+    """C9.1 — CSAT segmentado por resultado de la interacción (excluye NULL scores)."""
     rows = (
         db.query(
             Feedback.outcome,
@@ -2130,6 +2139,7 @@ def get_csat_by_outcome(db: Session, business_id: int, days: int = 30) -> dict:
         )
         .filter(
             Feedback.business_id == business_id,
+            Feedback.score.isnot(None),
             Feedback.submitted_at >= _since(days),
             Feedback.outcome.isnot(None),
         )

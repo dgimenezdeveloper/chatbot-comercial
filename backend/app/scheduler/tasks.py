@@ -14,6 +14,7 @@ from app.db.models.business import Business
 from app.db.models.events import Event
 from app.db.models.reminder_log import ReminderLog
 from app.scheduler.config import celery_app
+from app.services.metrics_types import EventType
 from app.services.whatsapp import send_message
 from app.services.event_logger import log_event
 
@@ -61,7 +62,7 @@ def send_reminders() -> dict:
             Appointment.id.in_(appt_ids),
         ).update(
             {"notification_sent_at": datetime.now(timezone.utc)},
-            synchronize_session=False,
+            synchronize_session="fetch",
         )
         db.flush()
 
@@ -86,10 +87,28 @@ async def _process_reminders(db, appointments) -> dict:
     """
     results = {"total": len(appointments), "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
 
+    # Pre-fetch all businesses in one query para evitar N+1
+    unique_biz_ids = list({a.business_id for a in appointments})
+    businesses = {
+        b.id: b
+        for b in db.query(Business).filter(Business.id.in_(unique_biz_ids)).all()
+    }
+
     for appt in appointments:
-        business = db.query(Business).filter(Business.id == appt.business_id).first()
+        business = businesses.get(appt.business_id)
         if not business:
+            # Appointment huérfano: loguear, limpiar notification_sent_at, continuar
             logger.warning("send_reminders: negocio no encontrado para appointment %s", appt.id)
+            log_entry = ReminderLog(
+                appointment_id=appt.id,
+                business_id=appt.business_id,
+                status="failed",
+                channel="whatsapp_text",
+                error_reason="business_not_found",
+            )
+            db.add(log_entry)
+            appt.notification_sent_at = None  # con synchronize_session='fetch' esto funciona
+            results["skipped"] += 1
             continue
 
         # Validar que el teléfono del usuario sea válido antes de intentar cualquier envío
@@ -167,7 +186,7 @@ async def _process_reminders(db, appointments) -> dict:
                     log_event(
                         session_id=appt.session_id or str(appt.user_phone),
                         business_id=appt.business_id,
-                        event_type="reminder_sent",
+                        event_type=EventType.REMINDER_SENT.value,
                         payload={
                             "appointment_id": appt.id,
                             "channel": log_entry.channel,

@@ -213,6 +213,9 @@ class TestRollbackOnException:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_send.side_effect = Exception("Connection error")
 
         appointment = MagicMock()
@@ -242,6 +245,9 @@ class TestRollbackOnException:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_send.side_effect = Exception("Timeout")
 
         appointment = MagicMock()
@@ -275,6 +281,9 @@ class TestFourLevelFallback:
             id=1,
             use_whatsapp_templates=True,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=True)
+        ]
 
         appointment = MagicMock()
         appointment.id = 1
@@ -302,6 +311,9 @@ class TestFourLevelFallback:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_within.return_value = True
 
         appointment = MagicMock()
@@ -359,6 +371,9 @@ class TestFourLevelFallback:
             use_whatsapp_templates=False,
             owner_phone="+5491122223333",
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone="+5491122223333")
+        ]
         mock_within.return_value = False
 
         appointment = MagicMock()
@@ -389,6 +404,9 @@ class TestFourLevelFallback:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_within.return_value = False
 
         appointment = MagicMock()
@@ -477,6 +495,9 @@ class TestProcessRemindersLogEvent:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_within.return_value = True
 
         appointment = MagicMock()
@@ -531,6 +552,9 @@ class TestProcessRemindersLogEvent:
             use_whatsapp_templates=False,
             owner_phone=None,
         )
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        ]
         mock_within.return_value = True
 
         appointment = MagicMock()

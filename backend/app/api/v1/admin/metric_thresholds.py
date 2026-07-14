@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models.metric_threshold import MetricThreshold
+from app.services.metrics_queries import clear_thresholds_cache
 
 router = APIRouter()
 
@@ -125,6 +126,7 @@ async def update_metric_thresholds(
         updated.append(item.metric_name)
 
     db.commit()
+    clear_thresholds_cache(business_id)
     return {
         "business_id": business_id,
         "updated_count": len(updated),
