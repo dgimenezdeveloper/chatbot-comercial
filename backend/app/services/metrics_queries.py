@@ -10,6 +10,7 @@ Per-business thresholds se resuelven desde metric_thresholds si existen.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, Integer, case, exc as sqlalchemy_exc, func
@@ -24,6 +25,9 @@ from app.db.models.feedback import Feedback
 from app.services.metrics_types import EventType
 
 logger = logging.getLogger(__name__)
+
+# Límite de puntos para queries que usan .all() — evita OOM con datasets grandes
+_MAX_REMINDER_POINTS = 10_000
 
 THRESHOLDS: dict[str, dict[str, float]] = {
     "conversion_rate": {"warning": 0.20, "critical": 0.10},
@@ -66,6 +70,7 @@ THRESHOLDS: dict[str, dict[str, float]] = {
 
 # Cache de thresholds por negocio para evitar consultar la DB en cada métrica
 _thresholds_cache: dict[int, dict[str, dict[str, float]]] = {}
+_cache_lock = threading.Lock()
 
 
 def clear_thresholds_cache(business_id: int) -> None:
@@ -74,13 +79,15 @@ def clear_thresholds_cache(business_id: int) -> None:
     Debe llamarse después de cualquier PUT a metric-thresholds
     para que las métricas usen los nuevos valores inmediatamente.
     """
-    _thresholds_cache.pop(business_id, None)
+    with _cache_lock:
+        _thresholds_cache.pop(business_id, None)
 
 
 def _load_business_thresholds(db: Session, business_id: int) -> dict[str, dict[str, float]]:
-    """Carga thresholds del negocio desde DB, con caché en memoria."""
-    if business_id in _thresholds_cache:
-        return _thresholds_cache[business_id]
+    """Carga thresholds del negocio desde DB, con caché en memoria (thread-safe)."""
+    with _cache_lock:
+        if business_id in _thresholds_cache:
+            return _thresholds_cache[business_id]
 
     from app.db.models.metric_threshold import MetricThreshold
     rows = (
@@ -94,7 +101,8 @@ def _load_business_thresholds(db: Session, business_id: int) -> dict[str, dict[s
             "warning": row.warning_value,
             "critical": row.critical_value,
         }
-    _thresholds_cache[business_id] = biz_thresholds
+    with _cache_lock:
+        _thresholds_cache[business_id] = biz_thresholds
     return biz_thresholds
 
 
@@ -446,7 +454,10 @@ def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == EventType.ESCALATION_TO_HUMAN,
+            Event.event_type.in_([
+                EventType.ESCALATION_TO_HUMAN,
+                EventType.ESCALATION_AUTO,
+            ]),
             Event.timestamp >= since,
         )
         .scalar()
@@ -603,7 +614,7 @@ def get_top_services(db: Session, business_id: int, days: int = 30, limit: int =
             Service.name.label("service_name"),
             func.count(Appointment.id).label("count"),
         )
-        .join(Service, Appointment.service_id == Service.id)
+        .outerjoin(Service, Appointment.service_id == Service.id)
         .filter(
             Appointment.business_id == business_id,
             Appointment.created_at >= since,
@@ -1174,6 +1185,10 @@ def get_avg_modification_time(db: Session, business_id: int, days: int = 30,
             .all()
         )
     except sqlalchemy_exc.DataError:
+        logger.warning(
+            "get_avg_modification_time: DataError al castear original_appointment_id. "
+            "Posible datos corruptos en payload_json — devolviendo 0.0."
+        )
         rows = []
     if not rows:
         return {"avg_hours": 0.0, "value": 0.0, "threshold": None, "status": "ok", "period": f"{days}d"}
@@ -1351,7 +1366,7 @@ def get_reminder_delivery_rate(db: Session, business_id: int, days: int = 30,
         "total_scheduled": total_scheduled,
         "value": round(rate * 100, 2),
         "threshold": 90.0,
-        "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True, business_thresholds=biz_thresholds),
+        "status": _status(rate, "reminder_delivery_rate", higher_is_better=True, business_thresholds=biz_thresholds),
         "period": period_label,
     }
 
@@ -1388,7 +1403,7 @@ def get_reminder_read_rate(db: Session, business_id: int, days: int = 30,
         "sent_count": sent,
         "value": round(rate * 100, 2),
         "threshold": 50.0,
-        "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True, business_thresholds=biz_thresholds),
+        "status": _status(rate, "reminder_read_rate", higher_is_better=True, business_thresholds=biz_thresholds),
         "period": period_label,
     }
 
@@ -1425,7 +1440,7 @@ def get_reminder_response_rate(db: Session, business_id: int, days: int = 30,
         "read_count": read,
         "value": round(rate * 100, 2),
         "threshold": 30.0,
-        "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True, business_thresholds=biz_thresholds),
+        "status": _status(rate, "reminder_response_rate", higher_is_better=True, business_thresholds=biz_thresholds),
         "period": period_label,
     }
 
@@ -1438,7 +1453,7 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
         since = _since(days)
     if period_label is None:
         period_label = f"{days}d"
-    # Single query: all reminders sent
+    # Single query: all reminders sent (con límite para evitar OOM)
     reminders = (
         db.query(Event.session_id, Event.timestamp)
         .filter(
@@ -1446,9 +1461,17 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
             Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
+        .order_by(Event.timestamp.desc())
+        .limit(_MAX_REMINDER_POINTS)
         .all()
     )
     total = len(reminders)
+    if total == _MAX_REMINDER_POINTS:
+        logger.warning(
+            "get_avg_reminder_response_time: se alcanzó el límite de %d puntos. "
+            "El resultado es parcial — considerar reducir el rango de fechas.",
+            _MAX_REMINDER_POINTS,
+        )
     if not total:
         return {"avg_minutes": 0.0, "total_reminders": 0, "value": 0.0, "threshold": 60.0, "status": "ok", "period": f"{days}d"}
 
@@ -1562,7 +1585,11 @@ def get_no_show_reminder_impact(db: Session, business_id: int, days: int = 30,
 def get_cancellation_no_confirmation_impact(db: Session, business_id: int, days: int = 30,
             since: datetime | None = None, period_label: str | None = None,
             biz_thresholds: dict | None = None) -> dict:
-    """C4.6 — Impacto en cancelación por no confirmación al recordatorio."""
+    """C4.6 — Impacto en cancelación por no confirmación al recordatorio.
+
+    Cuenta cancelaciones con recordatorio enviado pero sin respuesta
+    del cliente (sin evento REMINDER_RESPONSE en la misma sesión).
+    """
     if since is None:
         since = _since(days)
     if period_label is None:
@@ -1576,14 +1603,26 @@ def get_cancellation_no_confirmation_impact(db: Session, business_id: int, days:
         )
         .scalar()
     )
+    # IDs de sesiones que tuvieron respuesta al recordatorio
+    responded_sessions = (
+        db.query(Event.session_id)
+        .filter(
+            Event.business_id == business_id,
+            Event.event_type == EventType.REMINDER_RESPONSE,
+            Event.timestamp >= since,
+            Event.session_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
+    )
     no_response_cancelled = (
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
             Appointment.status == "cancelled",
-            Appointment.no_show_status == "pending",
             Appointment.notification_sent_at.isnot(None),
             Appointment.created_at >= since,
+            ~Appointment.session_id.in_(db.query(responded_sessions.c.session_id)),
         )
         .scalar()
     )
@@ -1712,7 +1751,7 @@ def get_post_escalation_conversion(db: Session, business_id: int, days: int = 30
         "total_escalations": total_escalations,
         "value": round(rate * 100, 2),
         "threshold": 50.0,
-        "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True, business_thresholds=biz_thresholds),
+        "status": _status(rate, "post_escalation_conversion", higher_is_better=True, business_thresholds=biz_thresholds),
         "period": period_label,
     }
 
@@ -1842,52 +1881,75 @@ def get_usage_frequency(db: Session, business_id: int, days: int = 30,
 def get_churn_by_channel(db: Session, business_id: int, days: int = 30,
             since: datetime | None = None, period_label: str | None = None,
             biz_thresholds: dict | None = None) -> dict:
-    """C6.3 — Churn por canal de adquisición."""
+    """C6.3 — Churn por canal de adquisición (2 queries GROUP BY, sin N+1)."""
     if since is None:
         since = _since(days)
     if period_label is None:
         period_label = f"{days}d"
     period_start = _since(60)
     channels = ["chatbot", "web", "api"]
+
+    # Query 1: usuarios adquiridos por canal en la ventana [period_start, since)
+    acquired_rows = (
+        db.query(
+            Appointment.created_via,
+            func.count(func.distinct(Appointment.user_id)).label("cnt"),
+        )
+        .filter(
+            Appointment.business_id == business_id,
+            Appointment.created_via.in_(channels),
+            Appointment.created_at >= period_start,
+            Appointment.created_at < since,
+            Appointment.user_id.isnot(None),
+        )
+        .group_by(Appointment.created_via)
+        .all()
+    )
+    acquired_map = {r.created_via: r.cnt for r in acquired_rows}
+
+    # Query 2: usuarios con actividad reciente [since, ahora) para detectar no-churn
+    recent_users = (
+        db.query(Appointment.user_id)
+        .filter(
+            Appointment.business_id == business_id,
+            Appointment.created_at >= since,
+            Appointment.user_id.isnot(None),
+        )
+        .distinct()
+        .subquery()
+    )
+
+    churn_rows = (
+        db.query(
+            Appointment.created_via,
+            func.count(func.distinct(Appointment.user_id)).label("cnt"),
+        )
+        .filter(
+            Appointment.business_id == business_id,
+            Appointment.created_via.in_(channels),
+            Appointment.created_at >= period_start,
+            Appointment.created_at < since,
+            Appointment.user_id.isnot(None),
+            ~Appointment.user_id.in_(db.query(recent_users.c.user_id)),
+        )
+        .group_by(Appointment.created_via)
+        .all()
+    )
+    churn_map = {r.created_via: r.cnt for r in churn_rows}
+
     result = {}
     for ch in channels:
-        acquired = (
-            db.query(func.count(func.distinct(Appointment.user_id)))
-            .filter(
-                Appointment.business_id == business_id,
-                Appointment.created_via == ch,
-                Appointment.created_at < since,
-                Appointment.created_at >= period_start,
-                Appointment.user_id.isnot(None),
-            )
-            .scalar()
-        )
-        churned = (
-            db.query(func.count(func.distinct(Appointment.user_id)))
-            .filter(
-                Appointment.business_id == business_id,
-                Appointment.created_via == ch,
-                Appointment.created_at < since,
-                Appointment.created_at >= period_start,
-                Appointment.user_id.isnot(None),
-                ~Appointment.user_id.in_(
-                    db.query(Appointment.user_id).filter(
-                        Appointment.business_id == business_id,
-                        Appointment.created_at >= since,
-                        Appointment.user_id.isnot(None),
-                    )
-                ),
-            )
-            .scalar()
-        )
+        acquired = acquired_map.get(ch, 0)
+        churned = churn_map.get(ch, 0)
         result[ch] = {
             "acquired": acquired,
             "churned": churned,
             "rate": round(churned / acquired * 100, 2) if acquired else 0.0,
         }
+    rates = [r["rate"] for r in result.values() if r["acquired"] > 0]
     return {
         "channels": result,
-        "value": sum(r["rate"] for r in result.values()) / len(channels) if channels else 0.0,
+        "value": round(sum(rates) / len(rates), 2) if rates else 0.0,
         "threshold": None,
         "status": "ok",
         "period": period_label,
@@ -1951,41 +2013,59 @@ def get_avg_time_between_first_second(db: Session, business_id: int, days: int =
 def get_no_show_by_user_type(db: Session, business_id: int, days: int = 30,
             since: datetime | None = None, period_label: str | None = None,
             biz_thresholds: dict | None = None) -> dict:
-    """C7.1 — No-show por tipo de usuario: bot vs manual."""
+    """C7.1 — No-show por tipo de usuario: bot vs manual (2 queries GROUP BY, sin N+1)."""
     if since is None:
         since = _since(days)
     if period_label is None:
         period_label = f"{days}d"
+
+    # Query 1: total appointments por created_via
+    total_rows = (
+        db.query(
+            Appointment.created_via,
+            func.count(Appointment.id).label("cnt"),
+        )
+        .filter(
+            Appointment.business_id == business_id,
+            Appointment.created_via.in_(["chatbot", "web"]),
+            Appointment.created_at >= since,
+            Appointment.no_show_status.isnot(None),
+        )
+        .group_by(Appointment.created_via)
+        .all()
+    )
+    total_map = {r.created_via: r.cnt for r in total_rows}
+
+    # Query 2: no-shows por created_via
+    noshow_rows = (
+        db.query(
+            Appointment.created_via,
+            func.count(Appointment.id).label("cnt"),
+        )
+        .filter(
+            Appointment.business_id == business_id,
+            Appointment.created_via.in_(["chatbot", "web"]),
+            Appointment.no_show_status == "confirmed_no",
+            Appointment.created_at >= since,
+        )
+        .group_by(Appointment.created_via)
+        .all()
+    )
+    noshow_map = {r.created_via: r.cnt for r in noshow_rows}
+
     result = {}
     for via in ["chatbot", "web"]:
-        total = (
-            db.query(func.count(Appointment.id))
-            .filter(
-                Appointment.business_id == business_id,
-                Appointment.created_via == via,
-                Appointment.created_at >= since,
-                Appointment.no_show_status.isnot(None),
-            )
-            .scalar()
-        )
-        no_shows = (
-            db.query(func.count(Appointment.id))
-            .filter(
-                Appointment.business_id == business_id,
-                Appointment.created_via == via,
-                Appointment.no_show_status == "confirmed_no",
-                Appointment.created_at >= since,
-            )
-            .scalar()
-        )
+        total = total_map.get(via, 0)
+        no_shows = noshow_map.get(via, 0)
         result[via] = {
             "total": total,
             "no_shows": no_shows,
             "rate": round(no_shows / total * 100, 2) if total else 0.0,
         }
+    rates = [r["rate"] for r in result.values() if r["total"] > 0]
     return {
         "user_types": result,
-        "value": max(r["rate"] for r in result.values()) if result else 0.0,
+        "value": max(rates) if rates else 0.0,
         "threshold": None,
         "status": "ok",
         "period": period_label,
@@ -2005,7 +2085,7 @@ def get_no_show_by_service(db: Session, business_id: int, days: int = 30,
                 func.case((Appointment.no_show_status == "confirmed_no", 1), else_=0)
             ).label("no_shows"),
         )
-        .join(Service, Appointment.service_id == Service.id)
+        .outerjoin(Service, Appointment.service_id == Service.id)
         .filter(
             Appointment.business_id == business_id,
             Appointment.created_at >= _since(days),
@@ -2217,7 +2297,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30,
         since = _since(days)
     if period_label is None:
         period_label = f"{days}d"
-    # Single query: all reminders sent
+    # Single query: all reminders sent (con límite para evitar OOM)
     reminders = (
         db.query(Event.session_id, Event.timestamp)
         .filter(
@@ -2225,9 +2305,17 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30,
             Event.event_type == EventType.REMINDER_SENT,
             Event.timestamp >= since,
         )
+        .order_by(Event.timestamp.desc())
+        .limit(_MAX_REMINDER_POINTS)
         .all()
     )
     total = len(reminders)
+    if total == _MAX_REMINDER_POINTS:
+        logger.warning(
+            "get_read_receipt_buckets: se alcanzó el límite de %d puntos. "
+            "El resultado es parcial — considerar reducir el rango de fechas.",
+            _MAX_REMINDER_POINTS,
+        )
     if not total:
         return {
             "buckets": {"1h": {"count": 0, "pct": 0}, "4h": {"count": 0, "pct": 0}, "24h": {"count": 0, "pct": 0}},

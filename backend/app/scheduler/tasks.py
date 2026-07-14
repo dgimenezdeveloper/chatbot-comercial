@@ -135,12 +135,15 @@ async def _process_reminders(db, appointments) -> dict:
             logger.warning("send_reminders: teléfono inválido para appt %s", appt.id)
             continue
 
+        # status="failed" es el default de seguridad — cada nivel lo sobreescribe
+        # (nota: agregar "pending" al enum reminder_status requiere migración DB)
         log_entry = ReminderLog(
             appointment_id=appt.id,
             business_id=appt.business_id,
             status="failed",
             channel="whatsapp_text",
         )
+        current_channel = "whatsapp_text"  # se actualiza en cada nivel
 
         # Savepoint: aísla cada iteración. Si falla, solo se revierte este appointment.
         try:
@@ -150,6 +153,7 @@ async def _process_reminders(db, appointments) -> dict:
                     await _send_template_reminder(appt, business)
                     log_entry.status = "sent"
                     log_entry.channel = "whatsapp_template"
+                    current_channel = "whatsapp_template"
                     results["sent"] += 1
 
                 # Nivel 2: Ventana 24h
@@ -160,12 +164,14 @@ async def _process_reminders(db, appointments) -> dict:
                     )
                     log_entry.status = "sent"
                     log_entry.channel = "whatsapp_text"
+                    current_channel = "whatsapp_text"
                     results["sent"] += 1
 
                 # Nivel 3: Canal alternativo
                 elif _has_alternative_channel(business):
                     log_entry.status = "outside_window"
                     log_entry.channel = "sms"
+                    current_channel = "sms"
                     log_entry.error_reason = "outside_24h_window"
                     results["skipped"] += 1
                     logger.warning(
@@ -216,7 +222,7 @@ async def _process_reminders(db, appointments) -> dict:
                 appointment_id=appt.id,
                 business_id=appt.business_id,
                 status="failed",
-                channel="whatsapp_text",
+                channel=current_channel,
                 error_reason=str(e)[:500],
             )
             appt.notification_sent_at = None  # limpiar para reintento
@@ -229,6 +235,9 @@ async def _process_reminders(db, appointments) -> dict:
 def _within_24h_window(db, appointment) -> bool:
     """Verifica si el cliente está dentro de la ventana de 24h de WhatsApp.
 
+    Solo aplica a sesiones de WhatsApp — las sesiones de web chat u otros
+    canales no tienen restricción de ventana de 24h y retornan True.
+
     Solo eventos ENTRANTES del cliente (CONVERSATION_STARTED, MENU_OPTION_SELECTED,
     SERVICE_SELECTED, FALLBACK_TRIGGERED, REMINDER_RESPONSE) califican para
     resetear la ventana. Los eventos del bot (REMINDER_SENT, etc.) se excluyen
@@ -238,6 +247,21 @@ def _within_24h_window(db, appointment) -> bool:
     """
     if appointment.session_id is None:
         return False
+
+    # Si la sesión no tiene eventos de WhatsApp, es web chat u otro canal
+    # sin restricción de ventana de 24h → permitir envío
+    has_whatsapp = (
+        db.query(Event.id)
+        .filter(
+            Event.business_id == appointment.business_id,
+            Event.session_id == appointment.session_id,
+            Event.channel == "whatsapp",
+        )
+        .limit(1)
+        .first()
+    ) is not None
+    if not has_whatsapp:
+        return True
     # Solo eventos iniciados por el cliente — los del bot NO resetean la ventana
     _USER_EVENT_TYPES = [
         EventType.CONVERSATION_STARTED.value,

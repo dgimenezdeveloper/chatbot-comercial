@@ -75,9 +75,9 @@ class TestStatusLowerIsBetter:
 
     def test_warning_when_above_warning_below_critical(self):
         """warning < valor ≤ critical → 'warning'."""
-        # conversion_rate: warning=0.20, critical=0.10
-        assert _status(0.15, "conversion_rate") == "warning"
-        assert _status(0.199999, "conversion_rate") == "warning"
+        # abandonment_rate: warning=0.30, critical=0.40 (warning < critical for lower_is_better)
+        assert _status(0.35, "abandonment_rate") == "warning"
+        assert _status(0.40, "abandonment_rate") == "warning"
 
     def test_critical_when_above_critical(self):
         """Valor > critical → 'critical'."""

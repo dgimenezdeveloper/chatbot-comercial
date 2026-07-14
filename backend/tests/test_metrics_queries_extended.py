@@ -189,18 +189,20 @@ class TestAvgReminderResponseTime:
         resp_t1.__sub__ = lambda s, o: type("td", (), {"total_seconds": lambda: 300.0})()
         resp_t2.__sub__ = lambda s, o: type("td", (), {"total_seconds": lambda: 900.0})()
 
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
-            # Reminders
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [MagicMock(session_id="s1", timestamp=rem_t), MagicMock(session_id="s2", timestamp=rem_t)],
-            # Responses
-            [MagicMock(session_id="s1", first_resp=resp_t1), MagicMock(session_id="s2", first_resp=resp_t2)],
+        ]
+        # Responses query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            MagicMock(session_id="s1", first_resp=resp_t1), MagicMock(session_id="s2", first_resp=resp_t2),
         ]
         result = get_avg_reminder_response_time(mock_db, business_id=1)
         assert result["avg_minutes"] == 10.0  # (300+900)/2/60 = 10.0
         assert result["total_reminders"] == 2
 
     def test_zero_when_no_reminders(self, mock_db):
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_avg_reminder_response_time(mock_db, business_id=1)
         assert result["avg_minutes"] == 0.0
         assert result["total_reminders"] == 0
@@ -208,10 +210,12 @@ class TestAvgReminderResponseTime:
 
     def test_reminders_with_no_responses(self, mock_db):
         """When there are no responses, avg remains 0."""
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [MagicMock(session_id="s1", timestamp=MagicMock())],
-            [],  # No responses
         ]
+        # Responses query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = []
         result = get_avg_reminder_response_time(mock_db, business_id=1)
         assert result["avg_minutes"] == 0.0
 
@@ -221,15 +225,19 @@ class TestAvgReminderResponseTime:
         resp_t = MagicMock()
         resp_t.__gt__ = lambda s, o: False  # not greater
 
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [MagicMock(session_id="s1", timestamp=rem_t)],
-            [MagicMock(session_id="s1", first_resp=resp_t)],
+        ]
+        # Responses query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            MagicMock(session_id="s1", first_resp=resp_t),
         ]
         result = get_avg_reminder_response_time(mock_db, business_id=1)
         assert result["avg_minutes"] == 0.0  # Skipped → count=0
 
     def test_custom_days(self, mock_db):
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_avg_reminder_response_time(mock_db, business_id=1, days=7)
         assert result["period"] == "7d"
 
@@ -303,19 +311,19 @@ class TestReadReceiptBuckets:
         read_3h.__sub__ = lambda s, o: type("td", (), {"total_seconds": lambda: 3.0 * 3600})()
         read_12h.__sub__ = lambda s, o: type("td", (), {"total_seconds": lambda: 12.0 * 3600})()
 
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
-            # reminders
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [
                 MagicMock(session_id="s1", timestamp=rem_t),
                 MagicMock(session_id="s2", timestamp=rem_t),
                 MagicMock(session_id="s3", timestamp=rem_t),
             ],
-            # reads
-            [
-                MagicMock(session_id="s1", first_read=read_30m),
-                MagicMock(session_id="s2", first_read=read_3h),
-                MagicMock(session_id="s3", first_read=read_12h),
-            ],
+        ]
+        # Reads query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            MagicMock(session_id="s1", first_read=read_30m),
+            MagicMock(session_id="s2", first_read=read_3h),
+            MagicMock(session_id="s3", first_read=read_12h),
         ]
         result = get_read_receipt_buckets(mock_db, business_id=1)
         buckets = result["buckets"]
@@ -331,9 +339,13 @@ class TestReadReceiptBuckets:
         read_t.__gt__ = lambda s, o: True
         read_t.__sub__ = lambda s, o: type("td", (), {"total_seconds": lambda: 0.2 * 3600})()
 
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [MagicMock(session_id="s1", timestamp=rem_t)],
-            [MagicMock(session_id="s1", first_read=read_t)],
+        ]
+        # Reads query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            MagicMock(session_id="s1", first_read=read_t),
         ]
         result = get_read_receipt_buckets(mock_db, business_id=1)
         assert result["buckets"]["1h"]["pct"] == 100.0
@@ -341,7 +353,7 @@ class TestReadReceiptBuckets:
         assert result["buckets"]["24h"]["pct"] == 0.0
 
     def test_empty_reminders(self, mock_db):
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_read_receipt_buckets(mock_db, business_id=1)
         assert result["total_reminders"] == 0
         assert result["buckets"]["1h"]["count"] == 0
@@ -350,16 +362,18 @@ class TestReadReceiptBuckets:
 
     def test_value_is_1h_percentage(self, mock_db):
         """value is the 1h bucket pct."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_read_receipt_buckets(mock_db, business_id=1)
         assert result["value"] == 0.0
 
     def test_no_reads_but_reminders_exist(self, mock_db):
         """Reminders sent but no reads → all buckets 0."""
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        # Reminders query: .order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.side_effect = [
             [MagicMock(session_id="s1", timestamp=MagicMock())],
-            [],  # No reads
         ]
+        # Reads query: .group_by().all()
+        mock_db.query.return_value.filter.return_value.group_by.return_value.all.return_value = []
         result = get_read_receipt_buckets(mock_db, business_id=1)
         assert result["total_reminders"] == 1
         assert result["buckets"]["1h"]["count"] == 0

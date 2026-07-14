@@ -285,7 +285,7 @@ class TestReminderConfirmationRate:
 
 class TestTopServices:
     def test_with_results(self, mock_db):
-        mock_db.query.return_value.join.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = [
+        mock_db.query.return_value.outerjoin.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = [
             MagicMock(service_id=1, service_name="Corte", count=50),
             MagicMock(service_id=2, service_name="Tinte", count=30),
         ]
@@ -298,12 +298,12 @@ class TestTopServices:
         assert result["status"] == "ok"
 
     def test_empty_results(self, mock_db):
-        mock_db.query.return_value.join.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        mock_db.query.return_value.outerjoin.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_top_services(mock_db, business_id=1)
         assert result["services"] == []
 
     def test_custom_days(self, mock_db):
-        mock_db.query.return_value.join.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
+        mock_db.query.return_value.outerjoin.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
         result = get_top_services(mock_db, business_id=1, days=7)
         assert result["period"] == "7d"
 
