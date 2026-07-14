@@ -819,7 +819,7 @@ def get_conversion_by_service(db: Session, business_id: int, days: int = 30) -> 
         "value": round(overall_rate * 100, 2),
         "threshold": 30.0,
         "status": _status(overall_rate, "conversion_by_service"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -864,7 +864,7 @@ def get_fallback_retry_rate(db: Session, business_id: int, days: int = 30) -> di
         "value": round(rate * 100, 2),
         "threshold": 40.0,
         "status": _status(rate, "fallback_retry_rate"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -900,7 +900,7 @@ def get_appointment_lead_time_distribution(db: Session, business_id: int, days: 
         "value": total,
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -925,7 +925,7 @@ def get_preferred_hours_distribution(db: Session, business_id: int, days: int = 
         "value": sum(distribution.values()),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -964,7 +964,7 @@ def get_new_vs_returning_clients(db: Session, business_id: int, days: int = 30) 
         "value": round(rate * 100, 2),
         "threshold": 30.0,
         "status": _status(rate, "conversion_rate", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1004,7 +1004,7 @@ def get_avg_time_to_appointment(db: Session, business_id: int, days: int = 30) -
         "value": round(avg_seconds, 1),
         "threshold": 180.0,
         "status": _status(avg_seconds, "avg_time_to_appointment"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1041,7 +1041,7 @@ def get_self_service_modification_rate(db: Session, business_id: int, days: int 
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1069,7 +1069,7 @@ def get_modification_reasons(db: Session, business_id: int, days: int = 30) -> d
         "value": len(reasons),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1102,7 +1102,7 @@ def get_post_reminder_modifications(db: Session, business_id: int, days: int = 3
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1152,7 +1152,7 @@ def get_avg_modification_time(db: Session, business_id: int, days: int = 30) -> 
         "value": round(avg_hours, 1),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1189,7 +1189,7 @@ def get_late_cancellation_rate(db: Session, business_id: int, days: int = 30) ->
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1217,7 +1217,7 @@ def get_cancellation_reasons(db: Session, business_id: int, days: int = 30) -> d
         "value": len(reasons),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1250,7 +1250,7 @@ def get_post_reminder_cancellations(db: Session, business_id: int, days: int = 3
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1286,7 +1286,7 @@ def get_reminder_delivery_rate(db: Session, business_id: int, days: int = 30) ->
         "value": round(rate * 100, 2),
         "threshold": 90.0,
         "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1318,7 +1318,7 @@ def get_reminder_read_rate(db: Session, business_id: int, days: int = 30) -> dic
         "value": round(rate * 100, 2),
         "threshold": 50.0,
         "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1350,7 +1350,7 @@ def get_reminder_response_rate(db: Session, business_id: int, days: int = 30) ->
         "value": round(rate * 100, 2),
         "threshold": 30.0,
         "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1406,7 +1406,7 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
         "value": round(avg_min, 1),
         "threshold": 60.0,
         "status": _status(avg_min, "avg_reminder_response_time"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1469,7 +1469,7 @@ def get_no_show_reminder_impact(db: Session, business_id: int, days: int = 30) -
         "value": round((without_rate - with_rate) * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1503,7 +1503,7 @@ def get_cancellation_no_confirmation_impact(db: Session, business_id: int, days:
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1539,7 +1539,7 @@ def get_manual_escalation_rate(db: Session, business_id: int, days: int = 30) ->
         "value": round(rate * 100, 2),
         "threshold": 30.0,
         "status": _status(rate, "manual_escalation_rate"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1567,7 +1567,7 @@ def get_escalation_reasons(db: Session, business_id: int, days: int = 30) -> dic
         "value": len(reasons),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1610,7 +1610,7 @@ def get_post_escalation_conversion(db: Session, business_id: int, days: int = 30
         "value": round(rate * 100, 2),
         "threshold": 50.0,
         "status": _status(rate, "reminder_confirmation_rate", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1643,7 +1643,7 @@ def get_auto_escalation_rate(db: Session, business_id: int, days: int = 30) -> d
         "value": round(rate * 100, 2),
         "threshold": 20.0,
         "status": _status(rate, "auto_escalation_rate"),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1688,7 +1688,7 @@ def get_returning_users_30d(db: Session, business_id: int, days: int = 30) -> di
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1717,7 +1717,7 @@ def get_usage_frequency(db: Session, business_id: int, days: int = 30) -> dict:
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1767,7 +1767,7 @@ def get_churn_by_channel(db: Session, business_id: int, days: int = 30) -> dict:
         "value": sum(r["rate"] for r in result.values()) / len(channels) if channels else 0.0,
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1812,7 +1812,7 @@ def get_avg_time_between_first_second(db: Session, business_id: int, days: int =
         "value": round(avg_days, 1),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1855,7 +1855,7 @@ def get_no_show_by_user_type(db: Session, business_id: int, days: int = 30) -> d
         "value": max(r["rate"] for r in result.values()) if result else 0.0,
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1895,7 +1895,7 @@ def get_no_show_by_service(db: Session, business_id: int, days: int = 30) -> dic
         "value": round(overall * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1925,7 +1925,7 @@ def get_message_hourly_distribution(db: Session, business_id: int, days: int = 3
         "value": sum(distribution.values()),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1951,7 +1951,7 @@ def get_message_dow_distribution(db: Session, business_id: int, days: int = 30) 
         "value": sum(distribution.values()),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -1992,7 +1992,7 @@ def get_response_speed_percentiles(db: Session, business_id: int, days: int = 30
         "value": round(float(p50), 1),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2024,7 +2024,7 @@ def get_input_type_ratio(db: Session, business_id: int, days: int = 30) -> dict:
         "value": round(rate * 100, 2),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2051,7 +2051,7 @@ def get_avg_message_length(db: Session, business_id: int, days: int = 30) -> dic
         "value": round(avg, 1),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2076,7 +2076,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30) -> d
             "value": 0.0,
             "threshold": None,
             "status": "ok",
-            "period": f"{days}d",
+            "period": period_label,
         }
 
     # Pre-fetch earliest read per session in one query (0 N+1)
@@ -2121,7 +2121,7 @@ def get_read_receipt_buckets(db: Session, business_id: int, days: int = 30) -> d
         "value": round(b1h / total * 100, 2) if total else 0.0,
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2156,7 +2156,7 @@ def get_csat_by_outcome(db: Session, business_id: int, days: int = 30) -> dict:
         "value": round(overall, 2),
         "threshold": 3.5,
         "status": _status(overall, "csat_average", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2208,7 +2208,7 @@ def get_nps(db: Session, business_id: int, days: int = 30) -> dict:
         "value": round(nps, 1),
         "threshold": 50.0,
         "status": _status(nps, "nps", higher_is_better=True),
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -2238,5 +2238,5 @@ def get_feedback_clustering(db: Session, business_id: int, days: int = 30) -> di
         "value": len(categories),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }

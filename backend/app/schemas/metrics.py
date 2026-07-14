@@ -126,7 +126,8 @@ class CSATAverage(MetricResult):
 class ExtendedMetricResult(BaseModel):
     """Resultado genérico para métricas extendidas (38 nuevas).
 
-    Cada métrica retorna sus campos específicos en un dict.
+    Cada métrica retorna sus campos específicos (services, reasons, distribution,
+    buckets, channels, outcomes, etc.) que se preservan mediante extra="allow".
     """
 
     value: float = Field(default=0.0, description="Valor calculado")
@@ -136,6 +137,8 @@ class ExtendedMetricResult(BaseModel):
     )
     period: str = Field(default="30d", description="Período de análisis")
     data: dict = Field(default_factory=dict, description="Datos adicionales de la métrica")
+
+    model_config = ConfigDict(extra="allow")  # preserva services, reasons, distribution, etc.
 
 
 class AllMetrics(BaseModel):

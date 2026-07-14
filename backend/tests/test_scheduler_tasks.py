@@ -38,8 +38,8 @@ class TestSendRemindersFilter:
         """The query must include Appointment.notification_sent_at.is_(None)."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # Updated chain: query().filter().with_for_update().limit().all()
-        mock_db.query.return_value.filter.return_value.with_for_update.return_value.limit.return_value.all.return_value = []
+        # Updated chain: query().filter().with_for_update().order_by().limit().all()
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value.limit.return_value.all.return_value = []
         mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
@@ -86,7 +86,7 @@ class TestSendRemindersFilter:
         """
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.with_for_update.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
 
         result = send_reminders()
         assert result["error"] is True

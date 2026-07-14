@@ -47,9 +47,16 @@ def send_reminders() -> dict:
                 Appointment.notification_sent_at.is_(None),
             )
             .with_for_update(skip_locked=True)
+            .order_by(Appointment.id)
             .limit(500)  # paginación: máximo 500 por batch para evitar OOM
             .all()
         )
+
+        if len(appointments) == 500:
+            logger.warning(
+                "send_reminders: se alcanzó el límite de 500 appointments. "
+                "Puede haber más turnos sin procesar. Considerar aumentar el límite o usar batching."
+            )
 
         if not appointments:
             logger.info("send_reminders: 0 turnos para mañana")
