@@ -209,30 +209,50 @@ async def _process_reminders(db, appointments) -> dict:
 
         except Exception as e:
             logger.exception("send_reminders: error para appointment %s", appt.id)
-            # El savepoint ya hizo rollback automático; marcamos como failed
-            log_entry.status = "failed"
-            log_entry.error_reason = str(e)[:500]
+            # El savepoint hizo rollback y el objeto log_entry quedó detached.
+            # Creamos uno nuevo en vez de reusarlo para no depender del
+            # comportamiento implícito de re-attachment de SQLAlchemy.
+            failed_log = ReminderLog(
+                appointment_id=appt.id,
+                business_id=appt.business_id,
+                status="failed",
+                channel="whatsapp_text",
+                error_reason=str(e)[:500],
+            )
             appt.notification_sent_at = None  # limpiar para reintento
-            db.add(log_entry)
+            db.add(failed_log)
             results["failed"] += 1
 
     return results
 
 
 def _within_24h_window(db, appointment) -> bool:
-    """Verifica si el usuario está dentro de la ventana de 24h de WhatsApp
-    usando el timestamp del último mensaje entrante del cliente.
+    """Verifica si el cliente está dentro de la ventana de 24h de WhatsApp.
+
+    Solo eventos ENTRANTES del cliente (CONVERSATION_STARTED, MENU_OPTION_SELECTED,
+    SERVICE_SELECTED, FALLBACK_TRIGGERED, REMINDER_RESPONSE) califican para
+    resetear la ventana. Los eventos del bot (REMINDER_SENT, etc.) se excluyen
+    para evitar falsos positivos que violarían la política de WhatsApp.
 
     Si session_id es None, no hay forma de verificar la ventana → False.
     """
     if appointment.session_id is None:
         return False
+    # Solo eventos iniciados por el cliente — los del bot NO resetean la ventana
+    _USER_EVENT_TYPES = [
+        EventType.CONVERSATION_STARTED.value,
+        EventType.MENU_OPTION_SELECTED.value,
+        EventType.SERVICE_SELECTED.value,
+        EventType.FALLBACK_TRIGGERED.value,
+        EventType.REMINDER_RESPONSE.value,
+    ]
     last_message = (
         db.query(func.max(Event.timestamp))
         .filter(
             Event.business_id == appointment.business_id,
             Event.session_id == appointment.session_id,
             Event.channel == "whatsapp",
+            Event.event_type.in_(_USER_EVENT_TYPES),
         )
         .scalar()
     )
@@ -243,8 +263,14 @@ def _within_24h_window(db, appointment) -> bool:
 
 
 def _has_alternative_channel(business) -> bool:
-    """Verifica si hay canal alternativo configurado (placeholder)."""
-    # TODO: SMS/email integration
+    """Verifica si el negocio tiene un canal alternativo para notificar
+    al cliente cuando no se puede usar WhatsApp (fuera de ventana 24h).
+
+    TODO: Implementar cuando se agregue soporte SMS/email al modelo Business.
+    Campos esperados: business.sms_enabled, business.email_enabled.
+    Por ahora siempre retorna False → Level 3 delega a Level 4 (notify owner).
+    """
+    # TODO: reemplazar con business.sms_enabled or business.email_enabled
     return False
 
 
