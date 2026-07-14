@@ -4,10 +4,14 @@ GET /api/v1/admin/metrics?days=30 → retorna 12 métricas base.
 GET /api/v1/admin/metrics?days=30&include_extended=true → retorna 50 métricas.
 """
 
+from __future__ import annotations
+
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
+from app.db.database import get_db
 from app.schemas.metrics import AllMetrics
 from app.services.metrics_queries import get_all_metrics
 
@@ -22,21 +26,19 @@ async def get_metrics(
     segment_by: Optional[str] = Query(None, description="Segmentar por: service, channel"),
     start_date: Optional[str] = Query(None, description="Fecha inicio (YYYY-MM-DD). Precede a days"),
     end_date: Optional[str] = Query(None, description="Fecha fin (YYYY-MM-DD). Precede a days"),
+    db: Session = Depends(get_db),
 ):
-    """Retorna las métricas de rendimiento del chatbot (12 base + 38 extendidas opcionales)."""
-    from app.db.database import SessionLocal
+    """Retorna las métricas de rendimiento del chatbot (12 base + 38 extendidas opcionales).
 
-    db = SessionLocal()
-    try:
-        metrics = get_all_metrics(
-            db,
-            business_id=business_id,
-            days=days,
-            include_extended=include_extended,
-            segment_by=segment_by,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        return metrics
-    finally:
-        db.close()
+    start_date y end_date tienen precedencia sobre days cuando ambos se proveen.
+    """
+    metrics = get_all_metrics(
+        db,
+        business_id=business_id,
+        days=days,
+        include_extended=include_extended,
+        segment_by=segment_by,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return metrics

@@ -4,7 +4,7 @@ Cada métrica incluye valor calculado, umbral de alerta, estado (ok/warning/crit
 y período de análisis.
 """
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,7 +13,7 @@ class MetricResult(BaseModel):
     """Resultado base para una métrica individual."""
 
     value: float = Field(..., description="Valor calculado de la métrica")
-    threshold: float | None = Field(None, description="Umbral de alerta configurado")
+    threshold: Optional[float] = Field(None, description="Umbral de alerta configurado")
     status: Literal["ok", "warning", "critical"] = Field(
         ..., description="Estado respecto al umbral"
     )
@@ -130,7 +130,7 @@ class ExtendedMetricResult(BaseModel):
     """
 
     value: float = Field(default=0.0, description="Valor calculado")
-    threshold: float | None = Field(None, description="Umbral de alerta")
+    threshold: Optional[float] = Field(None, description="Umbral de alerta")
     status: Literal["ok", "warning", "critical"] = Field(
         default="ok", description="Estado respecto al umbral"
     )
@@ -143,19 +143,19 @@ class AllMetrics(BaseModel):
 
     business_id: int = Field(..., description="ID del negocio")
     period: str = Field(default="30d", description="Período de análisis")
-    conversion_rate: ConversionRate | None = None
-    bot_autonomy_rate: BotAutonomyRate | None = None
-    abandonment_rate: AbandonmentRate | None = None
-    fallback_rate: FallbackRate | None = None
-    top_fallback_messages: TopFallbackMessages | None = None
-    nocturnal_appointment_rate: NocturnalAppointmentRate | None = None
-    autonomous_resolution_rate: AutonomousResolutionRate | None = None
-    cancellation_rate: CancellationRate | None = None
-    no_show_rate: NoShowRate | None = None
-    reminder_confirmation_rate: ReminderConfirmationRate | None = None
-    top_services: TopServices | None = None
-    csat_average: CSATAverage | None = None
-    extended: dict[str, ExtendedMetricResult] | None = Field(
+    conversion_rate: Optional[ConversionRate] = None
+    bot_autonomy_rate: Optional[BotAutonomyRate] = None
+    abandonment_rate: Optional[AbandonmentRate] = None
+    fallback_rate: Optional[FallbackRate] = None
+    top_fallback_messages: Optional[TopFallbackMessages] = None
+    nocturnal_appointment_rate: Optional[NocturnalAppointmentRate] = None
+    autonomous_resolution_rate: Optional[AutonomousResolutionRate] = None
+    cancellation_rate: Optional[CancellationRate] = None
+    no_show_rate: Optional[NoShowRate] = None
+    reminder_confirmation_rate: Optional[ReminderConfirmationRate] = None
+    top_services: Optional[TopServices] = None
+    csat_average: Optional[CSATAverage] = None
+    extended: Optional[dict[str, ExtendedMetricResult]] = Field(
         None, description="38 métricas extendidas (solo cuando include_extended=true)"
     )
 

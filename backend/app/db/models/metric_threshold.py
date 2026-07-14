@@ -4,9 +4,8 @@ Cada negocio puede sobrescribir los defaults del sistema (business_id=NULL)
 para adaptar las alertas a sus necesidades.
 """
 
-from sqlalchemy import Column, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
-from sqlalchemy import DateTime
 
 from app.db.database import Base
 
@@ -15,6 +14,12 @@ class MetricThreshold(Base):
     """Umbral por métrica — business_id=NULL = default del sistema."""
 
     __tablename__ = "metric_thresholds"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_id", "metric_name",
+            name="uq_business_metric_threshold",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True, comment="ID interno")
     business_id = Column(

@@ -22,9 +22,9 @@ class ReminderLog(Base):
         comment="Turno asociado",
     )
     business_id = Column(
-        Integer, ForeignKey("business.id", ondelete="CASCADE"),
-        nullable=False, index=True,
-        comment="Negocio",
+        Integer, ForeignKey("business.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+        comment="Negocio (NULL si el negocio fue eliminado — preserva audit trail)",
     )
 
     status = Column(

@@ -36,8 +36,8 @@ class TestThresholdItemValidation:
         """Valid ThresholdItem with operator='gt'."""
         item = ThresholdItem(
             metric_name="csat_average",
-            warning_value=4.0,
-            critical_value=3.5,
+            warning_value=3.5,
+            critical_value=4.0,
             operator="gt",
         )
         assert item.operator == "gt"
@@ -139,7 +139,7 @@ class TestThresholdItemValidation:
         """list[ThresholdItem] works in PUT body."""
         items = [
             ThresholdItem(metric_name="m1", warning_value=10.0, critical_value=5.0, operator="lt"),
-            ThresholdItem(metric_name="m2", warning_value=80.0, critical_value=50.0, operator="gt"),
+            ThresholdItem(metric_name="m2", warning_value=50.0, critical_value=80.0, operator="gt"),
         ]
         assert len(items) == 2
         assert items[0].metric_name == "m1"
@@ -198,8 +198,8 @@ class TestUpsertLogic:
 
         item = ThresholdItem(
             metric_name="conversion_rate",
-            warning_value=30.0,
-            critical_value=20.0,
+            warning_value=20.0,
+            critical_value=30.0,
             operator="gt",
         )
 
@@ -209,8 +209,8 @@ class TestUpsertLogic:
         found.critical_value = item.critical_value
         found.operator = item.operator
 
-        assert found.warning_value == 30.0
-        assert found.critical_value == 20.0
+        assert found.warning_value == 20.0
+        assert found.critical_value == 30.0
         assert found.operator == "gt"
         # db.add is NOT called for updates
         mock_db.add.assert_not_called()
@@ -221,7 +221,7 @@ class TestUpsertLogic:
 
         items = [
             ThresholdItem(metric_name="m1", warning_value=10.0, critical_value=5.0, operator="lt"),
-            ThresholdItem(metric_name="m2", warning_value=20.0, critical_value=10.0, operator="gt"),
+            ThresholdItem(metric_name="m2", warning_value=10.0, critical_value=20.0, operator="gt"),
         ]
 
         # First query: existing for m1, None for m2

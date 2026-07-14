@@ -1,8 +1,13 @@
-"""Queries de métricas MVP — 12 funciones de consulta SQL aggregates.
+"""Queries de métricas — 50 funciones de consulta SQL aggregates.
 
 Opera sobre las tablas ``event``, ``appointment``, ``session`` y ``feedback``
 para calcular indicadores de rendimiento del chatbot con umbrales de alerta.
+
+start_date/end_date tienen precedencia sobre days cuando se proveen.
+Per-business thresholds se resuelven desde metric_thresholds si existen.
 """
+
+from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
@@ -16,6 +21,7 @@ from app.db.models.appointment import Appointment
 from app.db.models.events import Event
 from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
+from app.services.metrics_types import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +37,81 @@ THRESHOLDS: dict[str, dict[str, float]] = {
     "reminder_confirmation_rate": {"warning": 0.60, "critical": 0.50},
     "csat_average": {"warning": 4.0, "critical": 3.5},
     "nps": {"warning": 50.0, "critical": 0.0},
+    # Extended metrics thresholds
+    "conversion_by_service": {"warning": 0.20, "critical": 0.10},
+    "fallback_retry_rate": {"warning": 0.30, "critical": 0.15},
+    "self_service_modification_rate": {"warning": 0.50, "critical": 0.30},
+    "late_cancellation_rate": {"warning": 0.20, "critical": 0.35},
+    "reminder_delivery_rate": {"warning": 0.80, "critical": 0.60},
+    "reminder_read_rate": {"warning": 0.70, "critical": 0.50},
+    "reminder_response_rate": {"warning": 0.50, "critical": 0.30},
+    "avg_reminder_response_time": {"warning": 30.0, "critical": 60.0},
+    "manual_escalation_rate": {"warning": 0.10, "critical": 0.20},
+    "auto_escalation_rate": {"warning": 0.05, "critical": 0.10},
+    "post_escalation_conversion": {"warning": 0.30, "critical": 0.15},
+    "returning_users_30d": {"warning": 0.40, "critical": 0.25},
+    "usage_frequency": {"warning": 3.0, "critical": 1.0},
+    "avg_time_to_appointment": {"warning": 300.0, "critical": 600.0},
+    "churn_by_channel": {"warning": 0.20, "critical": 0.35},
+    "no_show_by_user_type": {"warning": 0.10, "critical": 0.15},
+    "no_show_by_service": {"warning": 0.10, "critical": 0.15},
+    "message_hourly_distribution": {"warning": None, "critical": None},
+    "input_type_ratio": {"warning": None, "critical": None},
+    "avg_message_length": {"warning": None, "critical": None},
+    "response_speed_percentiles": {"warning": None, "critical": None},
+    "read_receipt_buckets": {"warning": None, "critical": None},
+    "csat_by_outcome": {"warning": 4.0, "critical": 3.5},
+    "feedback_clustering": {"warning": None, "critical": None},
 }
 
+# Cache de thresholds por negocio para evitar consultar la DB en cada métrica
+_thresholds_cache: dict[int, dict[str, dict[str, float]]] = {}
 
-def _status(value: float, metric_name: str, higher_is_better: bool = False) -> str:
-    """Determina el estado (ok/warning/critical) respecto a umbrales."""
-    thresholds = THRESHOLDS.get(metric_name)
-    if not thresholds:
+
+def _load_business_thresholds(db: Session, business_id: int) -> dict[str, dict[str, float]]:
+    """Carga thresholds del negocio desde DB, con caché en memoria."""
+    if business_id in _thresholds_cache:
+        return _thresholds_cache[business_id]
+
+    from app.db.models.metric_threshold import MetricThreshold
+    rows = (
+        db.query(MetricThreshold)
+        .filter(MetricThreshold.business_id == business_id)
+        .all()
+    )
+    biz_thresholds: dict[str, dict[str, float]] = {}
+    for row in rows:
+        biz_thresholds[row.metric_name] = {
+            "warning": row.warning_value,
+            "critical": row.critical_value,
+        }
+    _thresholds_cache[business_id] = biz_thresholds
+    return biz_thresholds
+
+
+def _status(
+    value: float,
+    metric_name: str,
+    higher_is_better: bool = False,
+    business_thresholds: dict[str, dict[str, float]] | None = None,
+) -> str:
+    """Determina el estado (ok/warning/critical) respecto a umbrales.
+
+    Args:
+        value: Valor de la métrica.
+        metric_name: Nombre de la métrica para lookup en THRESHOLDS.
+        higher_is_better: Si True, valores altos son buenos.
+        business_thresholds: Umbrales por negocio (tienen precedencia sobre defaults).
+    """
+    # Per-business thresholds tienen precedencia
+    if business_thresholds and metric_name in business_thresholds:
+        thresholds = business_thresholds[metric_name]
+    else:
+        thresholds = THRESHOLDS.get(metric_name)
+
+    if not thresholds or thresholds.get("warning") is None:
         return "ok"
+
     warning = thresholds["warning"]
     critical = thresholds["critical"]
     if higher_is_better:
@@ -55,21 +128,56 @@ def _status(value: float, metric_name: str, higher_is_better: bool = False) -> s
         return "critical"
 
 
+def _resolve_window(days: int, start_date: str | None, end_date: str | None) -> tuple[datetime, str]:
+    """Resuelve la ventana temporal.
+
+    Si start_date/end_date están presentes, tienen precedencia sobre days.
+    Retorna (since, period_label).
+    """
+    if start_date and end_date:
+        try:
+            since = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+            until = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+            days_diff = (until - since).days
+            return since, f"{start_date}_{end_date}"
+        except (ValueError, TypeError):
+            pass  # fall through to days-based
+    return _since(days), f"{days}d"
+
+
 def _since(days: int) -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _validate_days(days: int) -> int:
+    """Valida y normaliza el parámetro days."""
+    if days < 1:
+        logger.warning("metrics: days=%d inválido, usando default 30", days)
+        return 30
+    if days > 365:
+        logger.warning("metrics: days=%d excede máximo, usando 365", days)
+        return 365
+    return days
 
 
 # ---------------------------------------------------------------------------
 # M1 — Tasa de conversión inicio → turno
 # ---------------------------------------------------------------------------
 
-def get_conversion_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_conversion_rate(db: Session, business_id: int, days: int = 30,
+                        since: datetime | None = None, period_label: str | None = None,
+                        biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since, period_label = _resolve_window(days, None, None)
+    if period_label is None:
+        period_label = f"{days}d"
     starts = (
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "conversation_started",
-            Event.timestamp >= _since(days),
+            Event.event_type == EventType.CONVERSATION_STARTED,
+            Event.timestamp >= since,
         )
         .scalar()
     )
@@ -77,8 +185,8 @@ def get_conversion_rate(db: Session, business_id: int, days: int = 30) -> dict:
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_created",
-            Event.timestamp >= _since(days),
+            Event.event_type == EventType.APPOINTMENT_CREATED,
+            Event.timestamp >= since,
         )
         .scalar()
     )
@@ -88,8 +196,8 @@ def get_conversion_rate(db: Session, business_id: int, days: int = 30) -> dict:
         "appointments": appointments,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["conversion_rate"]["warning"] * 100,
-        "status": _status(rate, "conversion_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "conversion_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -97,12 +205,19 @@ def get_conversion_rate(db: Session, business_id: int, days: int = 30) -> dict:
 # M2 — % turnos creados por bot
 # ---------------------------------------------------------------------------
 
-def get_bot_autonomy_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_bot_autonomy_rate(db: Session, business_id: int, days: int = 30,
+                          since: datetime | None = None, period_label: str | None = None,
+                          biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total = (
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -111,7 +226,7 @@ def get_bot_autonomy_rate(db: Session, business_id: int, days: int = 30) -> dict
         .filter(
             Appointment.business_id == business_id,
             Appointment.created_via == "chatbot",
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -121,8 +236,8 @@ def get_bot_autonomy_rate(db: Session, business_id: int, days: int = 30) -> dict
         "total_appointments": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["bot_autonomy_rate"]["warning"] * 100,
-        "status": _status(rate, "bot_autonomy_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "bot_autonomy_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -130,12 +245,19 @@ def get_bot_autonomy_rate(db: Session, business_id: int, days: int = 30) -> dict
 # M3 — Tasa de abandono por paso
 # ---------------------------------------------------------------------------
 
-def get_abandonment_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_abandonment_rate(db: Session, business_id: int, days: int = 30,
+                         since: datetime | None = None, period_label: str | None = None,
+                         biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total = (
         db.query(func.count(ChatSession.id))
         .filter(
             ChatSession.business_id == business_id,
-            ChatSession.started_at >= _since(days),
+            ChatSession.started_at >= since,
         )
         .scalar()
     )
@@ -144,7 +266,7 @@ def get_abandonment_rate(db: Session, business_id: int, days: int = 30) -> dict:
         .filter(
             ChatSession.business_id == business_id,
             ChatSession.status == "abandoned",
-            ChatSession.started_at >= _since(days),
+            ChatSession.started_at >= since,
         )
         .scalar()
     )
@@ -154,8 +276,8 @@ def get_abandonment_rate(db: Session, business_id: int, days: int = 30) -> dict:
         "total_sessions": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["abandonment_rate"]["warning"] * 100,
-        "status": _status(rate, "abandonment_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "abandonment_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -163,13 +285,19 @@ def get_abandonment_rate(db: Session, business_id: int, days: int = 30) -> dict:
 # M4 — Tasa de fallback
 # ---------------------------------------------------------------------------
 
-def get_fallback_rate(db: Session, business_id: int, days: int = 30) -> dict:
-    since = _since(days)
+def get_fallback_rate(db: Session, business_id: int, days: int = 30,
+                      since: datetime | None = None, period_label: str | None = None,
+                      biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     fallbacks = (
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "fallback_triggered",
+            Event.event_type == EventType.FALLBACK_TRIGGERED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -178,9 +306,11 @@ def get_fallback_rate(db: Session, business_id: int, days: int = 30) -> dict:
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type.in_(
-                ["menu_option_selected", "service_selected", "fallback_triggered"]
-            ),
+            Event.event_type.in_([
+                EventType.MENU_OPTION_SELECTED,
+                EventType.SERVICE_SELECTED,
+                EventType.FALLBACK_TRIGGERED,
+            ]),
             Event.timestamp >= since,
         )
         .scalar()
@@ -191,8 +321,8 @@ def get_fallback_rate(db: Session, business_id: int, days: int = 30) -> dict:
         "total_interactions": interactions,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["fallback_rate"]["warning"] * 100,
-        "status": _status(rate, "fallback_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "fallback_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -200,7 +330,13 @@ def get_fallback_rate(db: Session, business_id: int, days: int = 30) -> dict:
 # M5 — Top 10 mensajes con fallback
 # ---------------------------------------------------------------------------
 
-def get_top_fallback_messages(db: Session, business_id: int, days: int = 30) -> dict:
+def get_top_fallback_messages(db: Session, business_id: int, days: int = 30,
+                              since: datetime | None = None, period_label: str | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     rows = (
         db.query(
             Event.payload_json["message_original"].astext.label("message"),
@@ -208,8 +344,8 @@ def get_top_fallback_messages(db: Session, business_id: int, days: int = 30) -> 
         )
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "fallback_triggered",
-            Event.timestamp >= _since(days),
+            Event.event_type == EventType.FALLBACK_TRIGGERED,
+            Event.timestamp >= since,
         )
         .group_by(Event.payload_json["message_original"].astext)
         .order_by(func.count(Event.id).desc())
@@ -222,7 +358,7 @@ def get_top_fallback_messages(db: Session, business_id: int, days: int = 30) -> 
         "value": len(messages),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
@@ -230,12 +366,19 @@ def get_top_fallback_messages(db: Session, business_id: int, days: int = 30) -> 
 # M6 — % turnos nocturnos (20-8hs)
 # ---------------------------------------------------------------------------
 
-def get_nocturnal_appointment_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_nocturnal_appointment_rate(db: Session, business_id: int, days: int = 30,
+                                   since: datetime | None = None, period_label: str | None = None,
+                                   biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total = (
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -243,7 +386,7 @@ def get_nocturnal_appointment_rate(db: Session, business_id: int, days: int = 30
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
             func.extract("hour", Appointment.scheduled_date).in_(
                 list(range(20, 24)) + list(range(0, 8))
             ),
@@ -256,8 +399,8 @@ def get_nocturnal_appointment_rate(db: Session, business_id: int, days: int = 30
         "total_appointments": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["nocturnal_appointment_rate"]["warning"] * 100,
-        "status": _status(rate, "nocturnal_appointment_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "nocturnal_appointment_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -265,13 +408,19 @@ def get_nocturnal_appointment_rate(db: Session, business_id: int, days: int = 30
 # M7 — Tasa de resolución autónoma
 # ---------------------------------------------------------------------------
 
-def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30) -> dict:
-    since = _since(days)
+def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30,
+                                   since: datetime | None = None, period_label: str | None = None,
+                                   biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     appointments = (
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "appointment_created",
+            Event.event_type == EventType.APPOINTMENT_CREATED,
             Event.timestamp >= since,
         )
         .scalar()
@@ -280,7 +429,7 @@ def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "escalation_to_human",
+            Event.event_type == EventType.ESCALATION_TO_HUMAN,
             Event.timestamp >= since,
         )
         .scalar()
@@ -292,8 +441,8 @@ def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30
         "total_resolutions": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["autonomous_resolution_rate"]["warning"] * 100,
-        "status": _status(rate, "autonomous_resolution_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "autonomous_resolution_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -301,12 +450,19 @@ def get_autonomous_resolution_rate(db: Session, business_id: int, days: int = 30
 # M8 — Tasa de cancelación
 # ---------------------------------------------------------------------------
 
-def get_cancellation_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_cancellation_rate(db: Session, business_id: int, days: int = 30,
+                          since: datetime | None = None, period_label: str | None = None,
+                          biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total = (
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -315,7 +471,7 @@ def get_cancellation_rate(db: Session, business_id: int, days: int = 30) -> dict
         .filter(
             Appointment.business_id == business_id,
             Appointment.status == "cancelled",
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -325,8 +481,8 @@ def get_cancellation_rate(db: Session, business_id: int, days: int = 30) -> dict
         "total_appointments": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["cancellation_rate"]["warning"] * 100,
-        "status": _status(rate, "cancellation_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "cancellation_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -334,13 +490,20 @@ def get_cancellation_rate(db: Session, business_id: int, days: int = 30) -> dict
 # M9 — Tasa de no-show
 # ---------------------------------------------------------------------------
 
-def get_no_show_rate(db: Session, business_id: int, days: int = 30) -> dict:
+def get_no_show_rate(db: Session, business_id: int, days: int = 30,
+                     since: datetime | None = None, period_label: str | None = None,
+                     biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total_with_reminder = (
         db.query(func.count(Appointment.id))
         .filter(
             Appointment.business_id == business_id,
             Appointment.no_show_status.isnot(None),
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -349,7 +512,7 @@ def get_no_show_rate(db: Session, business_id: int, days: int = 30) -> dict:
         .filter(
             Appointment.business_id == business_id,
             Appointment.no_show_status == "confirmed_no",
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .scalar()
     )
@@ -359,8 +522,8 @@ def get_no_show_rate(db: Session, business_id: int, days: int = 30) -> dict:
         "total_with_reminder": total_with_reminder,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["no_show_rate"]["warning"] * 100,
-        "status": _status(rate, "no_show_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "no_show_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -368,13 +531,19 @@ def get_no_show_rate(db: Session, business_id: int, days: int = 30) -> dict:
 # M10 — Confirmación de recordatorio
 # ---------------------------------------------------------------------------
 
-def get_reminder_confirmation_rate(db: Session, business_id: int, days: int = 30) -> dict:
-    since = _since(days)
+def get_reminder_confirmation_rate(db: Session, business_id: int, days: int = 30,
+                                   since: datetime | None = None, period_label: str | None = None,
+                                   biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     total = (
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_response",
+            Event.event_type == EventType.REMINDER_RESPONSE,
             Event.timestamp >= since,
         )
         .scalar()
@@ -383,7 +552,7 @@ def get_reminder_confirmation_rate(db: Session, business_id: int, days: int = 30
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
-            Event.event_type == "reminder_response",
+            Event.event_type == EventType.REMINDER_RESPONSE,
             Event.payload_json["response_type"].astext == "confirmo",
             Event.timestamp >= since,
         )
@@ -395,8 +564,8 @@ def get_reminder_confirmation_rate(db: Session, business_id: int, days: int = 30
         "total_reminders": total,
         "value": round(rate * 100, 2),
         "threshold": THRESHOLDS["reminder_confirmation_rate"]["warning"] * 100,
-        "status": _status(rate, "reminder_confirmation_rate"),
-        "period": f"{days}d",
+        "status": _status(rate, "reminder_confirmation_rate", business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -404,7 +573,13 @@ def get_reminder_confirmation_rate(db: Session, business_id: int, days: int = 30
 # M11 — Servicios más reservados
 # ---------------------------------------------------------------------------
 
-def get_top_services(db: Session, business_id: int, days: int = 30, limit: int = 10) -> dict:
+def get_top_services(db: Session, business_id: int, days: int = 30, limit: int = 10,
+                     since: datetime | None = None, period_label: str | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
     rows = (
         db.query(
             Appointment.service_id,
@@ -414,7 +589,7 @@ def get_top_services(db: Session, business_id: int, days: int = 30, limit: int =
         .join(Service, Appointment.service_id == Service.id)
         .filter(
             Appointment.business_id == business_id,
-            Appointment.created_at >= _since(days),
+            Appointment.created_at >= since,
         )
         .group_by(Appointment.service_id, Service.name)
         .order_by(func.count(Appointment.id).desc())
@@ -430,15 +605,23 @@ def get_top_services(db: Session, business_id: int, days: int = 30, limit: int =
         "value": len(services),
         "threshold": None,
         "status": "ok",
-        "period": f"{days}d",
+        "period": period_label,
     }
 
 
 # ---------------------------------------------------------------------------
-# M12 — CSAT promedio
+# M12 — CSAT promedio (escala 1-5, excluye NULL scores)
 # ---------------------------------------------------------------------------
 
-def get_csat_average(db: Session, business_id: int, days: int = 30) -> dict:
+def get_csat_average(db: Session, business_id: int, days: int = 30,
+                     since: datetime | None = None, period_label: str | None = None,
+                     biz_thresholds: dict | None = None) -> dict:
+    if since is None:
+        days = _validate_days(days)
+        since = _since(days)
+    if period_label is None:
+        period_label = f"{days}d"
+    # Filter NULL scores to avoid total_feedbacks > scored_feedbacks mismatch
     result = (
         db.query(
             func.avg(Feedback.score).label("avg"),
@@ -448,7 +631,8 @@ def get_csat_average(db: Session, business_id: int, days: int = 30) -> dict:
         )
         .filter(
             Feedback.business_id == business_id,
-            Feedback.submitted_at >= _since(days),
+            Feedback.score.isnot(None),
+            Feedback.submitted_at >= since,
         )
         .first()
     )
@@ -460,8 +644,8 @@ def get_csat_average(db: Session, business_id: int, days: int = 30) -> dict:
         "total_feedbacks": result.total if result else 0,
         "value": round(avg, 2),
         "threshold": THRESHOLDS["csat_average"]["warning"],
-        "status": _status(avg, "csat_average", higher_is_better=True),
-        "period": f"{days}d",
+        "status": _status(avg, "csat_average", higher_is_better=True, business_thresholds=biz_thresholds),
+        "period": period_label,
     }
 
 
@@ -484,21 +668,27 @@ def get_all_metrics(
     Si start_date/end_date están presentes, tienen precedencia sobre days.
     segment_by se aplica como filtro a nivel de get_all_metrics.
     """
+    days = _validate_days(days)
+    since, period_label = _resolve_window(days, start_date, end_date)
+
+    # Cargar thresholds por negocio una sola vez para todas las métricas
+    biz_thresholds = _load_business_thresholds(db, business_id) if business_id else {}
+
     result = {
         "business_id": business_id,
-        "period": f"{days}d",
-        "conversion_rate": get_conversion_rate(db, business_id, days),
-        "bot_autonomy_rate": get_bot_autonomy_rate(db, business_id, days),
-        "abandonment_rate": get_abandonment_rate(db, business_id, days),
-        "fallback_rate": get_fallback_rate(db, business_id, days),
-        "top_fallback_messages": get_top_fallback_messages(db, business_id, days),
-        "nocturnal_appointment_rate": get_nocturnal_appointment_rate(db, business_id, days),
-        "autonomous_resolution_rate": get_autonomous_resolution_rate(db, business_id, days),
-        "cancellation_rate": get_cancellation_rate(db, business_id, days),
-        "no_show_rate": get_no_show_rate(db, business_id, days),
-        "reminder_confirmation_rate": get_reminder_confirmation_rate(db, business_id, days),
-        "top_services": get_top_services(db, business_id, days),
-        "csat_average": get_csat_average(db, business_id, days),
+        "period": period_label,
+        "conversion_rate": get_conversion_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "bot_autonomy_rate": get_bot_autonomy_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "abandonment_rate": get_abandonment_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "fallback_rate": get_fallback_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "top_fallback_messages": get_top_fallback_messages(db, business_id, since=since, period_label=period_label),
+        "nocturnal_appointment_rate": get_nocturnal_appointment_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "autonomous_resolution_rate": get_autonomous_resolution_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "cancellation_rate": get_cancellation_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "no_show_rate": get_no_show_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "reminder_confirmation_rate": get_reminder_confirmation_rate(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
+        "top_services": get_top_services(db, business_id, since=since, period_label=period_label),
+        "csat_average": get_csat_average(db, business_id, since=since, period_label=period_label, biz_thresholds=biz_thresholds),
     }
 
     if include_extended:
@@ -506,60 +696,60 @@ def get_all_metrics(
         ext = result["extended"]
 
         # C1 — Agendar turno (6)
-        ext["conversion_by_service"] = get_conversion_by_service(db, business_id, days)
-        ext["fallback_retry_rate"] = get_fallback_retry_rate(db, business_id, days)
-        ext["appointment_lead_time"] = get_appointment_lead_time_distribution(db, business_id, days)
-        ext["preferred_hours"] = get_preferred_hours_distribution(db, business_id, days)
-        ext["new_vs_returning"] = get_new_vs_returning_clients(db, business_id, days)
-        ext["avg_time_to_appointment"] = get_avg_time_to_appointment(db, business_id, days)
+        ext["conversion_by_service"] = _get_conversion_by_service(db, business_id, since, period_label, biz_thresholds)
+        ext["fallback_retry_rate"] = _get_fallback_retry_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["appointment_lead_time"] = _get_appointment_lead_time_distribution(db, business_id, since, period_label)
+        ext["preferred_hours"] = _get_preferred_hours_distribution(db, business_id, since, period_label)
+        ext["new_vs_returning"] = _get_new_vs_returning_clients(db, business_id, since, period_label)
+        ext["avg_time_to_appointment"] = _get_avg_time_to_appointment(db, business_id, since, period_label, biz_thresholds)
 
         # C2 — Modificar (4)
-        ext["self_service_modification_rate"] = get_self_service_modification_rate(db, business_id, days)
-        ext["modification_reasons"] = get_modification_reasons(db, business_id, days)
-        ext["post_reminder_modifications"] = get_post_reminder_modifications(db, business_id, days)
-        ext["avg_modification_time"] = get_avg_modification_time(db, business_id, days)
+        ext["self_service_modification_rate"] = _get_self_service_modification_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["modification_reasons"] = _get_modification_reasons(db, business_id, since, period_label)
+        ext["post_reminder_modifications"] = _get_post_reminder_modifications(db, business_id, since, period_label)
+        ext["avg_modification_time"] = _get_avg_modification_time(db, business_id, since, period_label)
 
         # C3 — Cancelar (3)
-        ext["late_cancellation_rate"] = get_late_cancellation_rate(db, business_id, days)
-        ext["cancellation_reasons"] = get_cancellation_reasons(db, business_id, days)
-        ext["post_reminder_cancellations"] = get_post_reminder_cancellations(db, business_id, days)
+        ext["late_cancellation_rate"] = _get_late_cancellation_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["cancellation_reasons"] = _get_cancellation_reasons(db, business_id, since, period_label)
+        ext["post_reminder_cancellations"] = _get_post_reminder_cancellations(db, business_id, since, period_label)
 
         # C4 — Recordatorios (6)
-        ext["reminder_delivery_rate"] = get_reminder_delivery_rate(db, business_id, days)
-        ext["reminder_read_rate"] = get_reminder_read_rate(db, business_id, days)
-        ext["reminder_response_rate"] = get_reminder_response_rate(db, business_id, days)
-        ext["avg_reminder_response_time"] = get_avg_reminder_response_time(db, business_id, days)
-        ext["no_show_reminder_impact"] = get_no_show_reminder_impact(db, business_id, days)
-        ext["cancellation_no_confirmation"] = get_cancellation_no_confirmation_impact(db, business_id, days)
+        ext["reminder_delivery_rate"] = _get_reminder_delivery_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["reminder_read_rate"] = _get_reminder_read_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["reminder_response_rate"] = _get_reminder_response_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["avg_reminder_response_time"] = _get_avg_reminder_response_time(db, business_id, since, period_label, biz_thresholds)
+        ext["no_show_reminder_impact"] = _get_no_show_reminder_impact(db, business_id, since, period_label)
+        ext["cancellation_no_confirmation"] = _get_cancellation_no_confirmation_impact(db, business_id, since, period_label)
 
         # C5 — Escalamiento (4)
-        ext["manual_escalation_rate"] = get_manual_escalation_rate(db, business_id, days)
-        ext["escalation_reasons"] = get_escalation_reasons(db, business_id, days)
-        ext["post_escalation_conversion"] = get_post_escalation_conversion(db, business_id, days)
-        ext["auto_escalation_rate"] = get_auto_escalation_rate(db, business_id, days)
+        ext["manual_escalation_rate"] = _get_manual_escalation_rate(db, business_id, since, period_label, biz_thresholds)
+        ext["escalation_reasons"] = _get_escalation_reasons(db, business_id, since, period_label)
+        ext["post_escalation_conversion"] = _get_post_escalation_conversion(db, business_id, since, period_label, biz_thresholds)
+        ext["auto_escalation_rate"] = _get_auto_escalation_rate(db, business_id, since, period_label, biz_thresholds)
 
         # C6 — Retención (4)
-        ext["returning_users_30d"] = get_returning_users_30d(db, business_id, days)
-        ext["usage_frequency"] = get_usage_frequency(db, business_id, days)
-        ext["churn_by_channel"] = get_churn_by_channel(db, business_id, days)
-        ext["avg_time_first_second"] = get_avg_time_between_first_second(db, business_id, days)
+        ext["returning_users_30d"] = _get_returning_users_30d(db, business_id, since, period_label, biz_thresholds)
+        ext["usage_frequency"] = _get_usage_frequency(db, business_id, since, period_label, biz_thresholds)
+        ext["churn_by_channel"] = _get_churn_by_channel(db, business_id, since, period_label, biz_thresholds)
+        ext["avg_time_first_second"] = _get_avg_time_between_first_second(db, business_id, since, period_label)
 
         # C7 — No-Show (2)
-        ext["no_show_by_user_type"] = get_no_show_by_user_type(db, business_id, days)
-        ext["no_show_by_service"] = get_no_show_by_service(db, business_id, days)
+        ext["no_show_by_user_type"] = _get_no_show_by_user_type(db, business_id, since, period_label, biz_thresholds)
+        ext["no_show_by_service"] = _get_no_show_by_service(db, business_id, since, period_label, biz_thresholds)
 
         # C8 — WhatsApp (6)
-        ext["message_hourly_distribution"] = get_message_hourly_distribution(db, business_id, days)
-        ext["message_dow_distribution"] = get_message_dow_distribution(db, business_id, days)
-        ext["response_speed_percentiles"] = get_response_speed_percentiles(db, business_id, days)
-        ext["input_type_ratio"] = get_input_type_ratio(db, business_id, days)
-        ext["avg_message_length"] = get_avg_message_length(db, business_id, days)
-        ext["read_receipt_buckets"] = get_read_receipt_buckets(db, business_id, days)
+        ext["message_hourly_distribution"] = _get_message_hourly_distribution(db, business_id, since, period_label)
+        ext["message_dow_distribution"] = _get_message_dow_distribution(db, business_id, since, period_label)
+        ext["response_speed_percentiles"] = _get_response_speed_percentiles(db, business_id, since, period_label)
+        ext["input_type_ratio"] = _get_input_type_ratio(db, business_id, since, period_label)
+        ext["avg_message_length"] = _get_avg_message_length(db, business_id, since, period_label)
+        ext["read_receipt_buckets"] = _get_read_receipt_buckets(db, business_id, since, period_label)
 
         # C9 — Satisfacción (3)
-        ext["csat_by_outcome"] = get_csat_by_outcome(db, business_id, days)
-        ext["nps"] = get_nps(db, business_id, days)
-        ext["feedback_clustering"] = get_feedback_clustering(db, business_id, days)
+        ext["csat_by_outcome"] = _get_csat_by_outcome(db, business_id, since, period_label, biz_thresholds)
+        ext["nps"] = _get_nps(db, business_id, since, period_label, biz_thresholds)
+        ext["feedback_clustering"] = _get_feedback_clustering(db, business_id, since, period_label)
 
     return result
 
@@ -619,7 +809,7 @@ def get_conversion_by_service(db: Session, business_id: int, days: int = 30) -> 
         "services": services,
         "value": round(overall_rate * 100, 2),
         "threshold": 30.0,
-        "status": _status(overall_rate, "conversion_rate"),
+        "status": _status(overall_rate, "conversion_by_service"),
         "period": f"{days}d",
     }
 
@@ -664,7 +854,7 @@ def get_fallback_retry_rate(db: Session, business_id: int, days: int = 30) -> di
         "total_fallback_users": total_fallback_users,
         "value": round(rate * 100, 2),
         "threshold": 40.0,
-        "status": _status(rate, "fallback_rate"),
+        "status": _status(rate, "fallback_retry_rate"),
         "period": f"{days}d",
     }
 
@@ -804,7 +994,7 @@ def get_avg_time_to_appointment(db: Session, business_id: int, days: int = 30) -
         "avg_seconds": round(avg_seconds, 1),
         "value": round(avg_seconds, 1),
         "threshold": 180.0,
-        "status": _status(avg_seconds, "conversion_rate"),
+        "status": _status(avg_seconds, "avg_time_to_appointment"),
         "period": f"{days}d",
     }
 
@@ -1206,7 +1396,7 @@ def get_avg_reminder_response_time(db: Session, business_id: int, days: int = 30
         "total_reminders": total,
         "value": round(avg_min, 1),
         "threshold": 60.0,
-        "status": _status(avg_min, "conversion_rate"),
+        "status": _status(avg_min, "avg_reminder_response_time"),
         "period": f"{days}d",
     }
 
@@ -1339,7 +1529,7 @@ def get_manual_escalation_rate(db: Session, business_id: int, days: int = 30) ->
         "total_conversations": total_conversations,
         "value": round(rate * 100, 2),
         "threshold": 30.0,
-        "status": _status(rate, "fallback_rate"),
+        "status": _status(rate, "manual_escalation_rate"),
         "period": f"{days}d",
     }
 
@@ -1443,7 +1633,7 @@ def get_auto_escalation_rate(db: Session, business_id: int, days: int = 30) -> d
         "total_conversations": total_conversations,
         "value": round(rate * 100, 2),
         "threshold": 20.0,
-        "status": _status(rate, "fallback_rate"),
+        "status": _status(rate, "auto_escalation_rate"),
         "period": f"{days}d",
     }
 
@@ -1961,16 +2151,26 @@ def get_csat_by_outcome(db: Session, business_id: int, days: int = 30) -> dict:
 
 
 def get_nps(db: Session, business_id: int, days: int = 30) -> dict:
-    """C9.2 — Net Promoter Score: %promotores(9-10) - %detractores(0-6)."""
+    """C9.2 — Net Promoter Score adaptado a escala 1-5 del Feedback.
+
+    La escala del modelo Feedback es 1-5 (no 0-10 estándar).
+    Promotores: score >= 5. Detractores: score <= 3. Pasivos: score = 4.
+    NPS = (%promotores - %detractores) * 100.
+    NOTA: Este NPS no es comparable con benchmarks estándar (escala diferente).
+    """
     since = _since(days)
     total = (
         db.query(func.count(Feedback.id))
         .filter(
             Feedback.business_id == business_id,
+            Feedback.score.isnot(None),
             Feedback.submitted_at >= since,
         )
         .scalar()
     )
+    if not total:
+        return {"promoters": 0, "detractors": 0, "passives": 0, "total": 0,
+                "value": 0.0, "threshold": 50.0, "status": "ok", "period": f"{days}d"}
     promoters = (
         db.query(func.count(Feedback.id))
         .filter(

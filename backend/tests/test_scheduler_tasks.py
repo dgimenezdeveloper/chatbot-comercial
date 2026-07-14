@@ -38,16 +38,15 @@ class TestSendRemindersFilter:
         """The query must include Appointment.notification_sent_at.is_(None)."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.all.return_value = []
-        mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "notified_owner": 0}
+        # Updated chain: query().filter().with_for_update().limit().all()
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.limit.return_value.all.return_value = []
+        mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
 
         # Verify filter was called
         filter_call = mock_db.query.return_value.filter
         assert filter_call.called, "send_reminders must call .filter() on the query"
-        # The notification_sent_at IS NULL filter is part of the chain; we verify
-        # it's triggered by checking the query was built
         mock_db.query.assert_called_once()
 
     @patch("app.scheduler.tasks.SessionLocal")
@@ -80,13 +79,17 @@ class TestSendRemindersFilter:
     @patch("app.scheduler.tasks.SessionLocal")
     @patch("app.scheduler.tasks.asyncio.run")
     def test_closes_db_even_on_error(self, mock_async_run, mock_session_local):
-        """db.close() is called even if an exception occurs."""
+        """db.close() is called even if an exception occurs.
+        
+        send_reminders now catches exceptions and returns an error dict
+        instead of propagating. db.close() is still called in finally.
+        """
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.all.side_effect = RuntimeError("DB error")
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
 
-        with pytest.raises(RuntimeError):
-            send_reminders()
+        result = send_reminders()
+        assert result["error"] is True
         mock_db.close.assert_called_once()
 
 
@@ -164,9 +167,14 @@ class TestWithin24hWindow:
         assert result is False
 
     def test_exactly_24h_returns_true(self):
-        """Exactly at 24h boundary → True (edge case)."""
+        """Exactly at 24h boundary → True (edge case).
+
+        Uses a fraction of a second inside the window to avoid timing race
+        between test execution and function call.
+        """
         mock_db = MagicMock()
-        edge = datetime.now(timezone.utc) - timedelta(hours=24)
+        # 23h 59min 59s ago — still within the 24h window
+        edge = datetime.now(timezone.utc) - timedelta(hours=23, minutes=59, seconds=59)
         mock_db.query.return_value.filter.return_value.scalar.return_value = edge
 
         appointment = MagicMock()
@@ -175,6 +183,17 @@ class TestWithin24hWindow:
 
         result = _within_24h_window(mock_db, appointment)
         assert result is True
+
+    def test_null_session_id_returns_false(self):
+        """NULL session_id → cannot check window → False."""
+        mock_db = MagicMock()
+
+        appointment = MagicMock()
+        appointment.business_id = 1
+        appointment.session_id = None
+
+        result = _within_24h_window(mock_db, appointment)
+        assert result is False
 
 
 # ============================================================================
@@ -187,7 +206,7 @@ class TestRollbackOnException:
     @patch("app.scheduler.tasks.log_event")
     @patch("app.scheduler.tasks.send_message", new_callable=AsyncMock)
     def test_rollback_called_on_failure(self, mock_send, mock_log_event):
-        """When send_message raises, db.rollback() is called."""
+        """When send_message raises, savepoint is used (begin_nested)."""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
             id=1,
@@ -209,7 +228,8 @@ class TestRollbackOnException:
 
         assert results["failed"] == 1
         assert results["sent"] == 0
-        mock_db.rollback.assert_called()
+        # Savepoint is used instead of global rollback
+        mock_db.begin_nested.assert_called()
         mock_db.add.assert_called()  # Log entry is still added
 
     @patch("app.scheduler.tasks.log_event")
@@ -324,9 +344,9 @@ class TestFourLevelFallback:
 
         results = run_async(_process_reminders(mock_db, [appointment]))
 
-        # Currently _has_alternative_channel always returns False,
-        # but when True, it should result in failed=1 (fallback_channel)
-        assert results["failed"] == 1
+        # Level 3 now results in "skipped" instead of "failed"
+        assert results["skipped"] == 1
+        assert results["failed"] == 0
 
     @patch("app.scheduler.tasks.log_event")
     @patch("app.scheduler.tasks.send_message", new_callable=AsyncMock)
@@ -526,4 +546,6 @@ class TestProcessRemindersLogEvent:
         results = run_async(_process_reminders(mock_db, [appointment]))
 
         assert results["sent"] == 1
-        assert appointment.notification_sent_at is not None
+        # notification_sent_at is set at DB level in send_reminders(),
+        # not in _process_reminders(). The DB update happens before the async processing.
+        # _process_reminders only maintains it (sets to None on failure).
