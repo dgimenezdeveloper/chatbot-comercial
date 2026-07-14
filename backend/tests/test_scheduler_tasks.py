@@ -370,9 +370,11 @@ class TestFourLevelFallback:
             id=1,
             use_whatsapp_templates=False,
             owner_phone="+5491122223333",
+            sms_enabled=False,
+            email_enabled=False,
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone="+5491122223333")
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone="+5491122223333", sms_enabled=False, email_enabled=False)
         ]
         mock_within.return_value = False
 
@@ -403,9 +405,11 @@ class TestFourLevelFallback:
             id=1,
             use_whatsapp_templates=False,
             owner_phone=None,
+            sms_enabled=False,
+            email_enabled=False,
         )
         mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None, sms_enabled=False, email_enabled=False)
         ]
         mock_within.return_value = False
 
@@ -447,9 +451,20 @@ class TestHasAlternativeChannel:
     """_has_alternative_channel placeholder — always returns False."""
 
     def test_returns_false(self):
-        """Current implementation returns False as a placeholder."""
-        result = _has_alternative_channel(MagicMock())
+        """Returns False when Business has no alternative channels enabled."""
+        business = MagicMock(sms_enabled=False, email_enabled=False)
+        result = _has_alternative_channel(business)
         assert result is False
+
+    def test_returns_true_when_sms_enabled(self):
+        """Returns True when Business has sms_enabled=True."""
+        business = MagicMock(sms_enabled=True, email_enabled=False)
+        assert _has_alternative_channel(business) is True
+
+    def test_returns_true_when_email_enabled(self):
+        """Returns True when Business has email_enabled=True."""
+        business = MagicMock(sms_enabled=False, email_enabled=True)
+        assert _has_alternative_channel(business) is True
 
 
 # ============================================================================

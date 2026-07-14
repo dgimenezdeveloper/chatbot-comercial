@@ -135,12 +135,11 @@ async def _process_reminders(db, appointments) -> dict:
             logger.warning("send_reminders: teléfono inválido para appt %s", appt.id)
             continue
 
-        # status="failed" es el default de seguridad — cada nivel lo sobreescribe
-        # (nota: agregar "pending" al enum reminder_status requiere migración DB)
+        # status="pending" indica que aún no se procesó — se actualiza en cada nivel
         log_entry = ReminderLog(
             appointment_id=appt.id,
             business_id=appt.business_id,
-            status="failed",
+            status="pending",
             channel="whatsapp_text",
         )
         current_channel = "whatsapp_text"  # se actualiza en cada nivel
@@ -290,12 +289,13 @@ def _has_alternative_channel(business) -> bool:
     """Verifica si el negocio tiene un canal alternativo para notificar
     al cliente cuando no se puede usar WhatsApp (fuera de ventana 24h).
 
-    TODO: Implementar cuando se agregue soporte SMS/email al modelo Business.
-    Campos esperados: business.sms_enabled, business.email_enabled.
-    Por ahora siempre retorna False → Level 3 delega a Level 4 (notify owner).
+    Revisa los flags sms_enabled y email_enabled del modelo Business.
+    Si ambos están en False, Level 3 delega a Level 4 (notify owner).
     """
-    # TODO: reemplazar con business.sms_enabled or business.email_enabled
-    return False
+    return bool(
+        getattr(business, "sms_enabled", False)
+        or getattr(business, "email_enabled", False)
+    )
 
 
 async def _send_template_reminder(appointment, business) -> None:

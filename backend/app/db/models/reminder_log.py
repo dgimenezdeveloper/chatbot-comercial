@@ -28,10 +28,10 @@ class ReminderLog(Base):
     )
 
     status = Column(
-        Enum("sent", "failed", "outside_window", "fallback_channel", "notified_owner",
+        Enum("pending", "sent", "failed", "outside_window", "fallback_channel", "notified_owner",
              name="reminder_status"),
         nullable=False,
-        comment="Estado del intento",
+        comment="Estado del intento (pending: creado, aún no procesado)",
     )
     channel = Column(
         Enum("whatsapp_text", "whatsapp_template", "sms", "email",

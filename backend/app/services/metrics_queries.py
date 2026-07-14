@@ -22,6 +22,7 @@ from app.db.models.appointment import Appointment
 from app.db.models.events import Event
 from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
+from app.db.models.reminder_log import ReminderLog
 from app.services.metrics_types import EventType
 
 logger = logging.getLogger(__name__)
@@ -327,11 +328,14 @@ def get_fallback_rate(db: Session, business_id: int, days: int = 30,
         )
         .scalar()
     )
+    # Denominador: todas las interacciones del usuario (estructuradas + free-text).
+    # CONVERSATION_STARTED representa mensajes free-text que el bot manejó sin fallback.
     interactions = (
         db.query(func.count(Event.id))
         .filter(
             Event.business_id == business_id,
             Event.event_type.in_([
+                EventType.CONVERSATION_STARTED,
                 EventType.MENU_OPTION_SELECTED,
                 EventType.SERVICE_SELECTED,
                 EventType.FALLBACK_TRIGGERED,
@@ -1337,11 +1341,17 @@ def get_post_reminder_cancellations(db: Session, business_id: int, days: int = 3
 def get_reminder_delivery_rate(db: Session, business_id: int, days: int = 30,
             since: datetime | None = None, period_label: str | None = None,
             biz_thresholds: dict | None = None) -> dict:
-    """C4.1 — Tasa de envío exitoso de recordatorios."""
+    """C4.1 — Tasa de envío exitoso de recordatorios.
+
+    Numerador: appointments con al menos un ReminderLog status='sent'
+    (fuente autoritativa — refleja envíos reales, no intenciones).
+    Denominador: appointments marcados para notificación (notification_sent_at).
+    """
     if since is None:
         since = _since(days)
     if period_label is None:
         period_label = f"{days}d"
+    # Denominador: todos los appointments programados para notificación
     total_scheduled = (
         db.query(func.count(Appointment.id))
         .filter(
@@ -1351,12 +1361,13 @@ def get_reminder_delivery_rate(db: Session, business_id: int, days: int = 30,
         )
         .scalar()
     )
+    # Numerador: appointments con envío confirmado vía ReminderLog (fuente autoritativa)
     sent = (
-        db.query(func.count(Event.id))
+        db.query(func.count(func.distinct(ReminderLog.appointment_id)))
         .filter(
-            Event.business_id == business_id,
-            Event.event_type == EventType.REMINDER_SENT,
-            Event.timestamp >= since,
+            ReminderLog.business_id == business_id,
+            ReminderLog.status == "sent",
+            ReminderLog.created_at >= since,
         )
         .scalar()
     )

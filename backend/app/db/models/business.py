@@ -77,6 +77,16 @@ class Business(Base):
         comment="WhatsApp del dueño para notificaciones de fallo de recordatorio",
     )
 
+    # Canales alternativos de notificación
+    sms_enabled = Column(
+        Boolean, default=False,
+        comment="SMS habilitado como canal alternativo de recordatorio",
+    )
+    email_enabled = Column(
+        Boolean, default=False,
+        comment="Email habilitado como canal alternativo de recordatorio",
+    )
+
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(),
         comment="Fecha de creación del registro",
