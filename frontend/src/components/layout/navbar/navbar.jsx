@@ -21,7 +21,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="w-full bg-white border-b border-gray-100">
+    <nav className="w-full bg-white border-b border-gray-100 px-5">
       <div className="max-w-300 mx-auto h-22 flex justify-between">
         <Link href="/" className="shrink-0 flex items-center">
           <LogoPymio className="w-22.5 h-11.5 lg:w-31.25 lg:h-16" />
