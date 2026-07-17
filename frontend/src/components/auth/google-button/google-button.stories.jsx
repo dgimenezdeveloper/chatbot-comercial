@@ -1,10 +1,10 @@
-import { GoogleButton } from '@/components/auth/google-button/google-button';
+import { GoogleButton } from "@/components/auth/google-button/google-button";
 
 const meta = {
-  title: 'Components/Auth/GoogleButton',
+  title: "Components/Auth/GoogleButton",
   component: GoogleButton,
   parameters: {
-    layout: 'centered',
+    layout: "centered",
   },
 };
 
