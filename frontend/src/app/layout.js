@@ -12,8 +12,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "chatbot-comercial",
-  description: "Landing page and admin dashboard for chatbot-comercial",
+  title: "Pymio chatbot para tu Pyme",
+  description:
+    "Un Chatbot para tu Pyme, gestioná tus turnos y recordatorios de manera automatizada",
 };
 
 export default function RootLayout({ children }) {
