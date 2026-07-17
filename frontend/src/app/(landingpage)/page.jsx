@@ -6,12 +6,12 @@ import ContactSection from "@/components/landing-page/contact-section/contact-se
 
 export default function Page() {
   return (
-    <>
+    <div className="flex flex-col gap-20">
       <HeroSection />
       <FeaturesSection />
       <OnboardingSection />
       <HowToSection />
       <ContactSection />
-    </>
+    </div>
   );
 }
