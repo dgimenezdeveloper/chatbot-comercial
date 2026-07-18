@@ -384,16 +384,16 @@ def seed_metric_thresholds(db) -> list:
     defaults = [
         {"metric_name": "conversion_rate", "warning_value": 0.20, "critical_value": 0.10, "operator": "lt"},
         {"metric_name": "bot_autonomy_rate", "warning_value": 0.40, "critical_value": 0.25, "operator": "lt"},
-        {"metric_name": "abandonment_rate", "warning_value": 0.30, "critical_value": 0.40, "operator": "lt"},
-        {"metric_name": "fallback_rate", "warning_value": 0.15, "critical_value": 0.25, "operator": "lt"},
-        {"metric_name": "nocturnal_appointment_rate", "warning_value": 0.30, "critical_value": 0.10, "operator": "lt"},
+        {"metric_name": "abandonment_rate", "warning_value": 0.30, "critical_value": 0.40, "operator": "gt"},
+        {"metric_name": "fallback_rate", "warning_value": 0.15, "critical_value": 0.25, "operator": "gt"},
+        {"metric_name": "nocturnal_appointment_rate", "warning_value": 0.10, "critical_value": 0.30, "operator": "gt"},
         {"metric_name": "autonomous_resolution_rate", "warning_value": 0.70, "critical_value": 0.50, "operator": "lt"},
-        {"metric_name": "cancellation_rate", "warning_value": 0.15, "critical_value": 0.20, "operator": "lt"},
-        {"metric_name": "no_show_rate", "warning_value": 0.10, "critical_value": 0.15, "operator": "lt"},
+        {"metric_name": "cancellation_rate", "warning_value": 0.15, "critical_value": 0.20, "operator": "gt"},
+        {"metric_name": "no_show_rate", "warning_value": 0.10, "critical_value": 0.15, "operator": "gt"},
         {"metric_name": "reminder_confirmation_rate", "warning_value": 0.60, "critical_value": 0.50, "operator": "lt"},
         {"metric_name": "csat_average", "warning_value": 4.0, "critical_value": 3.5, "operator": "lt"},
         {"metric_name": "reminder_delivery_rate", "warning_value": 0.90, "critical_value": 0.75, "operator": "lt"},
-        {"metric_name": "manual_escalation_rate", "warning_value": 0.30, "critical_value": 0.50, "operator": "lt"},
+        {"metric_name": "manual_escalation_rate", "warning_value": 0.30, "critical_value": 0.50, "operator": "gt"},
         {"metric_name": "nps", "warning_value": 50.0, "critical_value": 0.0, "operator": "lt"},
     ]
 
