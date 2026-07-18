@@ -1,5 +1,7 @@
 """Health check endpoint — verifica que Celery worker esté corriendo."""
 
+import asyncio
+
 from fastapi import APIRouter
 
 router = APIRouter()
@@ -13,7 +15,7 @@ async def health_check():
     celery_status = "ok"
     celery_detail = None
     try:
-        celery_app.control.ping(timeout=2)
+        await asyncio.to_thread(celery_app.control.ping, timeout=2)
     except Exception as e:
         celery_status = "degraded"
         celery_detail = str(e)
