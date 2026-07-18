@@ -83,35 +83,33 @@ def send_reminders() -> dict:
             .order_by(Appointment.id)
         )
 
+        # Colectar todos los appointments (con batching para limitar memoria)
+        all_appointments: list[Appointment] = []
         offset = 0
         while True:
             batch = base_query.offset(offset).limit(_BATCH_SIZE).all()
             if not batch:
                 break
-
-            results["batches"] += 1
-            results["total"] += len(batch)
-
-            # Marcar notification_sent_at a nivel DB antes del envío
-            batch_ids = [a.id for a in batch]
-            db.query(Appointment).filter(
-                Appointment.id.in_(batch_ids),
-            ).update(
-                {"notification_sent_at": datetime.now(timezone.utc)},
-                synchronize_session="fetch",
-            )
-            db.flush()
-
-            # Procesar batch
-            batch_results = asyncio.run(_process_reminders(db, batch))
-            results["sent"] += batch_results["sent"]
-            results["failed"] += batch_results["failed"]
-            results["skipped"] += batch_results["skipped"]
-            results["notified_owner"] += batch_results["notified_owner"]
-
+            all_appointments.extend(batch)
             if len(batch) < _BATCH_SIZE:
                 break  # último batch (incompleto)
             offset += _BATCH_SIZE
+
+        if not all_appointments:
+            logger.info("send_reminders: 0 turnos para mañana")
+            return results
+
+        results["total"] = len(all_appointments)
+        results["batches"] = -(-len(all_appointments) // _BATCH_SIZE)  # ceil division
+
+        # Procesar todos los recordatorios en un solo event loop asyncio.
+        # notification_sent_at se marca individualmente en _process_reminders
+        # después de cada envío exitoso (no a nivel batch).
+        batch_results = asyncio.run(_process_reminders(db, all_appointments))
+        results["sent"] = batch_results["sent"]
+        results["failed"] = batch_results["failed"]
+        results["skipped"] = batch_results["skipped"]
+        results["notified_owner"] = batch_results["notified_owner"]
 
         db.commit()
 
@@ -240,7 +238,7 @@ async def _process_reminders(db, appointments) -> dict:
                     log_entry.error_reason = "all_channels_failed"
                     results["notified_owner"] += 1
 
-                # Solo loggear evento y mantener notification_sent_at si se envió
+                # Solo loggear evento y marcar notification_sent_at si se envió
                 if log_entry.status == "sent":
                     log_event(
                         session_id=appt.session_id or str(appt.user_phone),
@@ -251,7 +249,8 @@ async def _process_reminders(db, appointments) -> dict:
                             "channel": log_entry.channel,
                         },
                     )
-                    # notification_sent_at ya fue seteado en send_reminders() a nivel DB
+                    # Marcar como notificado para que no se reintente
+                    appt.notification_sent_at = datetime.now(timezone.utc)
                 else:
                     # No se envió — limpiar notification_sent_at para reintento
                     appt.notification_sent_at = None
