@@ -397,3 +397,7 @@ reports/
 # cline
 *.cline
 .clinerules/
+
+# Celery Beat scheduler database
+celerybeat-schedule
+celerybeat-schedule.db

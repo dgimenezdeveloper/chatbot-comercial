@@ -2014,8 +2014,8 @@ def get_avg_time_between_first_second(db: Session, business_id: int, days: int =
     pairs = (
         db.query(
             ranked.c.user_id,
-            func.max(case([(ranked.c.rn == 1, ranked.c.created_at)], else_=None)).label("first_date"),
-            func.max(case([(ranked.c.rn == 2, ranked.c.created_at)], else_=None)).label("second_date"),
+            func.max(case((ranked.c.rn == 1, ranked.c.created_at), else_=None)).label("first_date"),
+            func.max(case((ranked.c.rn == 2, ranked.c.created_at), else_=None)).label("second_date"),
         )
         .filter(ranked.c.rn.in_([1, 2]))
         .group_by(ranked.c.user_id)
@@ -2117,7 +2117,7 @@ def get_no_show_by_service(db: Session, business_id: int, days: int = 30,
             Service.name.label("service_name"),
             func.count(Appointment.id).label("total"),
             func.sum(
-                func.case((Appointment.no_show_status == "confirmed_no", 1), else_=0)
+                case((Appointment.no_show_status == "confirmed_no", 1), else_=0)
             ).label("no_shows"),
         )
         .outerjoin(Service, Appointment.service_id == Service.id)
