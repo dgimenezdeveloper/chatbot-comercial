@@ -1,5 +1,5 @@
 import { OnboardingProvider } from "@/components/features/onboarding/shared/onboarding-context/onboarding-context";
-import OnboardingSidebar from "@/components/layout/sidebar/onborading-sidebar";
+import OnboardingSidebar from "@/components/layout/sidebar/onboarding-sidebar";
 
 export default function OnboardingLayout({ children }) {
   return (

@@ -17,6 +17,7 @@ const initialBusinessData = {
   address: "",
   phone: "",
   email: "",
+  website: "",
   social: {
     whatsapp: "",
     instagram: "",
