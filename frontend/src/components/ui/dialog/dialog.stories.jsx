@@ -18,7 +18,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="p-12 bg-slate-100 dark:bg-slate-900 rounded-xl shadow-inner min-w-125 flex justify-center items-center">
+      <div className="p-12 rounded-xl border-2 shadow-inner min-w-125 flex justify-center items-center">
         <Story />
       </div>
     ),
