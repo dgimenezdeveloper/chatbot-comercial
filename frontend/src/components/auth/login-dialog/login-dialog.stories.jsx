@@ -1,6 +1,6 @@
 import React from "react";
 import { LoginDialog } from "@/components/auth/login-dialog/login-dialog";
-import { Dialog } from "@/components/ui/dialog/dialog";
+import { Button } from "@/components/ui/button/button";
 
 const meta = {
   title: "Components/Auth/LoginDialog",
@@ -13,5 +13,9 @@ const meta = {
 export default meta;
 
 export const Default = {
-  render: () => <LoginDialog />,
+  render: () => (
+    <LoginDialog>
+      <Button variant="outline">Ingresar</Button>
+    </LoginDialog>
+  ),
 };
