@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button/button";
 import { Loader2 } from "lucide-react";
 
-export function GoogleButton({ onClick, isLoading }) {
+export function GoogleButton({ onClick, isLoading, className }) {
   return (
     <Button
       type="button"
       variant="outline"
-      className="w-full gap-2"
+      className={className || "w-full gap-2"}
       onClick={onClick}
       disabled={isLoading}
     >

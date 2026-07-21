@@ -5,19 +5,44 @@ import Link from "next/link";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet/sheet";
 import { Menu } from "lucide-react";
 import LogoPymio from "@/components/icons/logo-pymio";
+import { LoginDialog } from "@/components/auth/login-dialog/login-dialog";
+import { signIn } from "next-auth/react";
+import { Button } from "@/components/ui/button/button";
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const handleGoogleSignIn = () => {
+    setIsGoogleLoading(true);
+    signIn("google", { redirectTo: "/dashboard" });
+  };
+
+  const handleOpenLoginMobile = () => {
+    setIsMobileMenuOpen(false);
+    setIsLoginDialogOpen(true);
+  };
 
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        setIsOpen(false);
+        setIsMobileMenuOpen(false);
       }
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handlePageShow = () => {
+      setIsGoogleLoading(false);
+      setIsLoginDialogOpen(false);
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
   return (
@@ -55,19 +80,19 @@ export default function Navbar() {
             href="/registro"
             className="text-[1rem] font-medium text-[#486284]/75 underline tracking-[-0.03em] hover:text-[#1A202C] transition-colors"
           >
-            Registro
+            Registrarse
           </Link>
 
-          <Link
-            href="/login"
-            className="flex items-center justify-center bg-[#486284] text-white hover:bg-[#486284]/90 rounded-[.25rem] w-[5.125rem] h-[2.375rem] text-[.875rem] font-medium tracking-[-0.03em] transition-colors"
+          <Button
+            onClick={() => setIsLoginDialogOpen(true)}
+            className="flex items-center justify-center bg-[#486284]  text-white hover:bg-[#486284]/90 rounded-lg w-23 h-9.5 text-[.875rem] font-medium tracking-[-0.03em] transition-colors"
           >
-            Log In
-          </Link>
+            Ingresar
+          </Button>
         </div>
 
         <div className="lg:hidden flex items-center">
-          <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-slate-50 h-10 w-10 transition-colors">
               <Menu className="h-7 w-7 text-[#486284]" />
             </SheetTrigger>
@@ -80,53 +105,59 @@ export default function Navbar() {
                 <a
                   href="#home"
                   className="text-[1.125rem] font-semibold text-[#1A202C] py-2 border-b border-transparent hover:border-gray-100 transition-colors"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Home
                 </a>
                 <a
                   href="#propuesta"
                   className="text-[1.125rem] font-medium text-[#486284]/90 py-2 border-b border-transparent hover:border-gray-100 transition-colors"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Propuesta
                 </a>
                 <a
                   href="#beneficios"
                   className="text-[1.125rem] font-medium text-[#486284]/90 py-2 border-b border-transparent hover:border-gray-100 transition-colors"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Beneficios
                 </a>
                 <a
                   href="#indicaciones"
                   className="text-[1.125rem] font-medium text-[#486284]/90 py-2 border-b border-transparent hover:border-gray-100 transition-colors"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Indicaciones
                 </a>
               </div>
 
-              <div className="mt-6 flex flex-col gap-5 border-t border-gray-100 pt-8">
+              <div className="mt-6 flex flex-col gap-5 border-t text-center border-gray-100 pt-8">
                 <Link
                   href="/registro"
-                  className="text-[1.125rem] font-medium text-[#486284]/90 underline text-center py-2"
-                  onClick={() => setIsOpen(false)}
+                  className="text-[1.125rem] font-medium text-[#486284]/90 underline  py-2"
+                  onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Register
+                  Registrarse
                 </Link>
-                <Link
-                  href="/login"
+                <Button
+                  onClick={handleOpenLoginMobile}
                   className="flex items-center justify-center bg-[#486284] text-white rounded-[.25rem] h-[3.25rem] w-full text-[1rem] font-semibold transition-colors hover:bg-[#486284]/90 shadow-sm"
-                  onClick={() => setIsOpen(false)}
                 >
-                  Log In
-                </Link>
+                  Ingresar
+                </Button>
               </div>
             </SheetContent>
           </Sheet>
         </div>
       </div>
+
+      <LoginDialog
+        open={isLoginDialogOpen}
+        onOpenChange={setIsLoginDialogOpen}
+        onGoogleSignIn={handleGoogleSignIn}
+        isGoogleLoading={isGoogleLoading}
+      />
     </nav>
   );
 }
