@@ -6,6 +6,10 @@ engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Importar todos los modelos para que Base.metadata los registre
+# (necesario para create_all() y Alembic autogenerate)
+import app.db.models  # noqa: E402, F401
+
 def get_db():
     db = SessionLocal()
     try:
