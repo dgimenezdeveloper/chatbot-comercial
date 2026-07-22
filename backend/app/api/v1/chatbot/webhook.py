@@ -361,11 +361,16 @@ async def verify_webhook(
     return Response(content="Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
 
-def clean_phone_number(phone: str) -> str:
+""" def clean_phone_number(phone: str) -> str:
     if phone.startswith("549"):
         return "54" + phone[3:]
-    return phone
+    return phone """
 
+def clean_phone_number(phone: str) -> str:
+    # Traduce del formato internacional al formato con 15 verificado en tu Sandbox
+    if phone.startswith("54911"):
+        return "541115" + phone[5:]
+    return phone
 
 # 2. Endpoint POST: Recepción y Enrutamiento asíncrono de Eventos
 @router.post("/webhook")
