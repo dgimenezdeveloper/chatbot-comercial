@@ -367,7 +367,9 @@ async def verify_webhook(
     return phone """
 
 def clean_phone_number(phone: str) -> str:
-    # Bypass temporal para el Sandbox de Meta (No remover el 9 de Argentina)
+    # Traduce del formato internacional al formato con 15 verificado en tu Sandbox
+    if phone.startswith("54911"):
+        return "541115" + phone[5:]
     return phone
 
 # 2. Endpoint POST: Recepción y Enrutamiento asíncrono de Eventos
