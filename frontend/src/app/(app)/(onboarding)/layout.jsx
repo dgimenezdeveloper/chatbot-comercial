@@ -4,7 +4,7 @@ import OnboardingSidebar from "@/components/layout/sidebar/onboarding-sidebar";
 export default function OnboardingLayout({ children }) {
   return (
     <OnboardingProvider>
-      <div className="theme-app flex min-h-screen bg-surface">
+      <div className="flex min-h-screen bg-surface">
         <div className="hidden shrink-0 lg:block">
           <OnboardingSidebar />
         </div>
