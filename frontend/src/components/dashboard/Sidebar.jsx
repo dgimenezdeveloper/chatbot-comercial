@@ -1,18 +1,32 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { PanelIcon } from "@/components/icons/PanelIcon";
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
 import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
 import { ConfiguracionIcon } from "@/components/icons/ConfiguracionIcon";
+import { MetricasIcon } from "@/components/icons/MetricasIcon";
 
 const menuItems = [
   { label: "Panel", href: "/dashboard", icon: PanelIcon },
   { label: "Agenda", href: "/dashboard/agenda", icon: AgendaIcon },
   { label: "Clientes", href: "/dashboard/clientes", icon: ClientesIcon },
+  { label: "Métricas", href: "/dashboard/metrics", icon: MetricasIcon },
   { label: "Servicios", href: "/dashboard/servicios", icon: ServiciosIcon },
   { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
 ];
 
 export function Sidebar() {
+  const pathname = usePathname();
+
+  const isActive = (href) => {
+    if (href === "/dashboard") {
+      return pathname === href;
+    }
+    return pathname.startsWith(href);
+  };
   return (
     <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
       {/* Logo / nombre del negocio */}
@@ -24,16 +38,21 @@ export function Sidebar() {
       <nav className="flex-1 p-4 space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
+          const active = isActive(item.href);
+          
           return (
-            
-             <a key={item.label}
+            <Link
+              key={item.label}
               href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                active
+                  ? "bg-blue-50 text-blue-600 font-medium"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              }`}
             >
               <Icon className="w-5 h-5" />
               <span className="text-sm font-medium">{item.label}</span>
-
-            </a>
+            </Link>
           );
         })}
       </nav>
