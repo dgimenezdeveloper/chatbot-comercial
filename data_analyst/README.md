@@ -21,41 +21,17 @@ Este directorio contiene la documentación, esquemas y diagramas relacionados co
 | `deploy.md` | Pasos para desplegar la aplicación en un entorno nuevo o reconstruir desde cero |
 | `tech-debt.md` | Deuda técnica documentada: operadores PostgreSQL, decisión CSAT data flow |
 
-## 🛠️ Stack del Proyecto
-
-### Backend
-- Python 3.11+, FastAPI 0.110.0
-- SQLAlchemy 2.0.28 (engine síncrono)
-- Alembic 1.13.1
-- Celery + Redis (recordatorios T-24hs)
-- Pydantic 2.6.4, httpx 0.27.0, PyJWT 2.8.0
-- PostgreSQL 15+ (principal), Redis 7+ (cache + state management + broker Celery)
-
-### Frontend
-- Next.js 16.2.9 (App Router), React 19.2.4
-- TailwindCSS 4, shadcn/ui 4.11.0
-- NextAuth v5 (beta) + Google OAuth2 Provider
-- Pino logger, Storybook 10.4, Vitest 8.0
-- Dockerfile Node 22-alpine
-
-### DevOps
-- Docker Compose (6 servicios: API, Frontend, PostgreSQL, Redis, Celery Worker, Celery Beat)
-- GitHub Actions CI/CD (`.github/workflows/ci-cd.yml`)
-
-### Integraciones
-- WhatsApp Cloud API v25.0 (Meta Business)
-- Google OAuth2 (backend + frontend)
 
 ## 📊 Métricas Clave (MVP)
 
 12 métricas críticas definidas con umbrales de alerta configurables por negocio en `Documentacion_de_proyecto.md`:
 
 1. Tasa conversión inicio → turno (< 20% = alerta)
-2. % turnos creados por bot (< 40% = alerta)
+2. Porcentajes de turnos creados por bot (< 40% = alerta)
 3. Tasa abandono por paso (> 40% = alerta)
 4. Tasa fallback (> 25% = alerta)
 5. Top 10 mensajes con fallback (roadmap)
-6. % turnos nocturnos (20-8hs) (< 30% = sin valor agregado)
+6. Porcentajes de turnos nocturnos (20-8hs) (< 30% = sin valor agregado)
 7. Tasa resolución autónoma (< 50% = necesita humano)
 8. Tasa cancelación (> 20% = alerta)
 9. Tasa no-show (> 15% = pérdida ingresos)
@@ -86,5 +62,3 @@ Este directorio contiene la documentación, esquemas y diagramas relacionados co
 - Sincronizar este directorio con los cambios en develop antes de cada release.
 
 ---
-
-> 💡 **Nota:** Este directorio fue actualizado el 23 de julio 2026 para reflejar PR #58 (data-models-metrics + chatbot-mvp-completion): 12 modelos SQLAlchemy, 50 métricas, scheduler Celery, umbrales configurables, CSAT fix y 73 tests.
