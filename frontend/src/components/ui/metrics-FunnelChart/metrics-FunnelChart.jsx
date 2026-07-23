@@ -72,7 +72,7 @@ export function MetricsFunnelChart({
     };
   });
 
-  // Colores secuenciales (oscureciendo progresivamente)
+  
   const colors = [
     "hsl(var(--primary))",
     "hsl(var(--primary) / 0.8)",
@@ -117,7 +117,7 @@ export function MetricsFunnelChart({
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Anotaciones */}
+      
       <div className="flex flex-wrap gap-4 justify-center mt-2">
         {data.slice(1).map((step, i) => (
           <span

@@ -11,7 +11,7 @@ import { useState, useCallback } from "react";
  * @param {boolean} [defaults.includeExtended=false]
  * @param {string} [defaults.startDate]
  * @param {string} [defaults.endDate]
- * @param {string} [defaults.segmentBy] - "service" | "channel"
+ * @param {string} [defaults.segmentBy]
  * @returns {{ filters: Object, setFilters: Function }}
  */
 export function useMetricsFilter(defaults = {}) {

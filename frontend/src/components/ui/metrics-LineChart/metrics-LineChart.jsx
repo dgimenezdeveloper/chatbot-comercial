@@ -19,8 +19,6 @@ import { EmptyState } from "@/components/ui/empty-state/empty-state";
 
 /**
  * Gráfico de líneas configurable con soporte para umbral, área y comparativas.
- * C-2 FIX: comparisonLines se mergea al dataset principal con sufijo `_prev`.
- * Responsive: usa ResponsiveContainer con height="100%", padre debe tener altura.
  *
  * @param {Object} props
  * @param {Array} props.data - Datos del gráfico
@@ -44,7 +42,6 @@ export function MetricsLineChart({
   showLegend = true,
   className,
 }) {
-  // C-2 FIX: mergear comparisonLines al dataset principal
   const mergedData = useMemo(() => {
     if (!comparisonLines || !comparisonLines.length) return data || [];
     const cmpMap = new Map(comparisonLines[0]?.data?.map?.((d) => [d[xKey], d]) || []);

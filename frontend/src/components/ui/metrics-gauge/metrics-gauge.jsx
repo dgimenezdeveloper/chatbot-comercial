@@ -33,7 +33,7 @@ export function MetricsGauge({
   const clamped = Math.min(100, Math.max(0, value));
   const color = STATUS_COLORS[status] || STATUS_COLORS.ok;
 
-  // Parámetros del arco
+  
   const size = height * 0.8;
   const strokeWidth = 14;
   const radius = (size - strokeWidth) / 2;
@@ -51,7 +51,7 @@ export function MetricsGauge({
         viewBox={`0 0 ${size} ${size * 0.65}`}
         style={{ overflow: "visible" }}
       >
-        {/* Arco de fondo (gris) */}
+       
         <path
           d={describeArc(size / 2, size * 0.6, radius, 180, 0)}
           fill="none"
@@ -59,7 +59,7 @@ export function MetricsGauge({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
-        {/* Arco de valor (coloreado) */}
+        
         <path
           d={describeArc(size / 2, size * 0.6, radius, 180, 0)}
           fill="none"
@@ -71,7 +71,7 @@ export function MetricsGauge({
         />
       </svg>
 
-      {/* Texto centrado */}
+      
       <div className="absolute flex flex-col items-center justify-center" style={{ bottom: "8%" }}>
         <span className="text-2xl font-bold text-slate-800 dark:text-slate-100" style={{ color }}>
           {clamped}%
@@ -86,10 +86,7 @@ export function MetricsGauge({
   );
 }
 
-/**
- * Describe un arco SVG de startAngle a endAngle (en grados).
- * Basado en: https://stackoverflow.com/a/18473154
- */
+
 function describeArc(cx, cy, radius, startAngle, endAngle) {
   const start = polarToCartesian(cx, cy, radius, endAngle);
   const end = polarToCartesian(cx, cy, radius, startAngle);
@@ -104,6 +101,6 @@ function polarToCartesian(cx, cy, radius, angleInDegrees) {
   const angleInRadians = ((angleInDegrees - 180) * Math.PI) / 180;
   return {
     x: cx + radius * Math.cos(angleInRadians),
-    y: cy + (radius * Math.sin(angleInRadians)) * 0.55, // compresión vertical para efecto semicircular
+    y: cy + (radius * Math.sin(angleInRadians)) * 0.55, 
   };
 }

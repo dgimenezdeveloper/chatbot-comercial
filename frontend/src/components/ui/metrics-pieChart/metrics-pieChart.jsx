@@ -55,7 +55,6 @@ export function MetricsPieChart({
   showLegend = true,
   className,
 }) {
-  // Asegurar que cada item tenga fill
   const coloredData = (data || []).map((entry, i) => ({
     ...entry,
     fill: entry.fill || DEFAULT_COLORS[i % DEFAULT_COLORS.length],

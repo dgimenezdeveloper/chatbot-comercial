@@ -12,15 +12,15 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v
  * Obtiene métricas del chatbot para un negocio.
  *
  * @param {Object} params
- * @param {number} [params.days=30] - Días hacia atrás para calcular métricas
- * @param {number} [params.businessId=1] - ID del negocio
- * @param {boolean} [params.includeExtended=false] - Incluir 38 métricas extendidas
- * @param {string} [params.startDate] - Fecha inicio (YYYY-MM-DD). Precede a days
- * @param {string} [params.endDate] - Fecha fin (YYYY-MM-DD). Precede a days
- * @param {string} [params.segmentBy] - Segmentar por: "service" | "channel"
- * @param {string} [params.accessToken] - Token de acceso backend (desde session)
- * @returns {Promise<Object>} Respuesta JSON con métricas
- * @throws {Error} Si la request falla o retorna status no-ok
+ * @param {number} [params.days=30] 
+ * @param {number} [params.businessId=1]  
+ * @param {boolean} [params.includeExtended=false] 
+ * @param {string} [params.startDate] 
+ * @param {string} [params.endDate] 
+ * @param {string} [params.segmentBy] 
+ * @param {string} [params.accessToken] 
+ * @returns {Promise<Object>} 
+ * @throws {Error} 
  */
 export async function fetchMetrics({
   days = 30,
