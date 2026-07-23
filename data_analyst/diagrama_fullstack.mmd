@@ -310,7 +310,7 @@ flowchart LR
     ChatbotRouter -->|State Management| StateManager
     WhatsAppService -->|Calls API| Meta
     
-    ChatbotRouter -->|log_event()| EventLogger
+    ChatbotRouter -->|log_event| EventLogger
     EventLogger -->|INSERT| PG
     MetricsQueries -->|SELECT| PG
     
