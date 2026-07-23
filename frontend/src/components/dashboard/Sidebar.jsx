@@ -1,48 +1,75 @@
-import { PanelIcon } from "@/components/icons/PanelIcon";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
-import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
 import { ConfiguracionIcon } from "@/components/icons/ConfiguracionIcon";
+import { PanelIcon } from "@/components/icons/PanelIcon";
+import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
+import { AppSidebarShell } from "@/components/layout/sidebar/app-sidebar-shell";
+import { cn } from "@/lib/utils";
 
 const menuItems = [
-  { label: "Panel", href: "/dashboard", icon: PanelIcon },
+  { label: "Panel", href: "/dashboard", icon: PanelIcon, exact: true },
   { label: "Agenda", href: "/dashboard/agenda", icon: AgendaIcon },
   { label: "Clientes", href: "/dashboard/clientes", icon: ClientesIcon },
   { label: "Servicios", href: "/dashboard/servicios", icon: ServiciosIcon },
-  { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
+  {
+    label: "Configuración",
+    href: "/dashboard/configuracion",
+    icon: ConfiguracionIcon,
+  },
 ];
 
-export function Sidebar() {
-  return (
-    <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
-      {/* Logo / nombre del negocio */}
-      <div className="p-6 border-b border-gray-200">
-        <span className="text-xl font-bold text-gray-800">HairBot</span>
-      </div>
+function isActiveRoute(pathname, href, exact = false) {
+  if (exact) {
+    return pathname === href;
+  }
 
-      {/* Menú de navegación */}
-      <nav className="flex-1 p-4 space-y-1">
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function Sidebar() {
+  const pathname = usePathname();
+
+  return (
+    <AppSidebarShell
+      footer={
+        <div className="flex items-center gap-3 rounded-lg bg-background p-2">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-accent text-lg">
+            🏪
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Tu negocio</p>
+            <p className="text-sm font-medium text-foreground">Salón de Belleza</p>
+          </div>
+        </div>
+      }
+    >
+      <nav className="space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          return (
-            
-             <a key={item.label}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{item.label}</span>
+          const active = isActiveRoute(pathname, item.href, item.exact);
 
-            </a>
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                active
+                  ? "bg-nav-active text-nav-active-foreground"
+                  : "text-sidebar-foreground hover:bg-background hover:text-foreground",
+              )}
+            >
+              <Icon className="size-5" />
+              <span>{item.label}</span>
+            </Link>
           );
         })}
       </nav>
-
-      {/* Bloque inferior */}
-      <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-400">Tu negocio</p>
-        <p className="text-sm font-medium text-gray-700">Salón de Belleza</p>
-      </div>
-    </aside>
+    </AppSidebarShell>
   );
 }
