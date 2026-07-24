@@ -41,6 +41,7 @@ async def get_business(
         "timezone": biz.timezone,
         "use_whatsapp_templates": biz.use_whatsapp_templates,
         "owner_phone": biz.owner_phone,
+        "google_calendar_id": biz.google_calendar_id,
     }
 
 
@@ -49,10 +50,11 @@ async def update_business(
     business_id: int,
     use_whatsapp_templates: bool | None = Body(None),
     owner_phone: str | None = Body(None),
+    google_calendar_id: str | None = Body(None),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Actualiza configuración de recordatorios del negocio de la sesión."""
+    """Actualiza configuración de recordatorios y calendario del negocio de la sesión."""
     user_business_id = current_user.get("business_id", 1)
     if business_id != user_business_id:
         raise HTTPException(
@@ -68,6 +70,8 @@ async def update_business(
         biz.use_whatsapp_templates = use_whatsapp_templates
     if owner_phone is not None:
         biz.owner_phone = owner_phone
+    if google_calendar_id is not None:
+        biz.google_calendar_id = google_calendar_id
 
     db.commit()
     db.refresh(biz)
@@ -76,4 +80,5 @@ async def update_business(
         "name": biz.name,
         "use_whatsapp_templates": biz.use_whatsapp_templates,
         "owner_phone": biz.owner_phone,
+        "google_calendar_id": biz.google_calendar_id,
     }
