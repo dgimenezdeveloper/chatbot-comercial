@@ -1,10 +1,15 @@
-from fastapi import APIRouter, HTTPException, status
 import httpx
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+
 from app.core.settings import settings
 from app.core.security import create_access_token
+from app.db.database import get_db
+from app.db.models.user import User
 from app.schemas.auth import LoginMockRequest, GoogleLoginRequest, LoginResponse
 
 router = APIRouter()
+
 
 @router.post(
     "/login", 
@@ -14,17 +19,19 @@ router = APIRouter()
     description="Emite un JWT firmado interno usando credenciales estáticas mockeadas para desarrollo o QA."
 )
 async def login_mock(payload: LoginMockRequest):
-    """
-    Endpoint para pruebas rápidas que permite validar que el sistema de firmas JWT funcione.
-    """
     if payload.username == "admin" and payload.password == "admin123":
-        jwt_token = create_access_token(data={"sub": "admin@negocio.com", "role": "admin"})
+        jwt_token = create_access_token(data={
+            "sub": "dgimenez.developer@gmail.com",
+            "role": "admin",
+            "business_id": 1
+        })
         return LoginResponse(
             access_token=jwt_token,
             user={
-                "email": "admin@negocio.com",
-                "name": "Administrador de Pruebas",
-                "picture": ""
+                "email": "dgimenez.developer@gmail.com",
+                "name": "Diego Gimenez (Peluquería)",
+                "picture": "",
+                "business_id": 1
             }
         )
     raise HTTPException(
@@ -32,18 +39,15 @@ async def login_mock(payload: LoginMockRequest):
         detail="Credenciales de prueba inválidas (Pruebe con admin / admin123)."
     )
 
+
 @router.post(
     "/google", 
     response_model=LoginResponse, 
     status_code=status.HTTP_200_OK,
     summary="Login de Google real para NextAuth.js",
-    description="Recibe el access_token de Google, lo valida contra los servidores de Google y emite nuestro JWT interno de sesión."
+    description="Valida el correo devuelto por Google contra la Lista Blanca estricta en la DB y emite nuestro JWT."
 )
-async def login_google_real(payload: GoogleLoginRequest):
-    """
-    Endpoint que consume el servidor de NextAuth en el frontend mediante canal trasero (POST).
-    Evita redirecciones que rompan el enrutamiento interno de la SPA.
-    """
+async def login_google_real(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
     headers = {"Authorization": f"Bearer {payload.access_token}"}
     
@@ -65,14 +69,28 @@ async def login_google_real(payload: GoogleLoginRequest):
                 detail="No se pudo extraer el correo electrónico del usuario desde Google."
             )
         
-        # Emitimos nuestro propio JWT firmado
-        jwt_token = create_access_token(data={"sub": email, "role": "admin"})
+        # --- VALIDACIÓN ESTRICTA POR LISTA BLANCA EN DB ---
+        user_db = db.query(User).filter(User.email == email, User.is_active.is_(True)).first()
+        
+        if not user_db:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acceso denegado: El correo '{email}' no está autorizado en la lista blanca de la plataforma."
+            )
+
+        # Emitimos nuestro propio JWT firmado inyectando business_id
+        jwt_token = create_access_token(data={
+            "sub": email,
+            "role": user_db.role,
+            "business_id": user_db.business_id
+        })
         
         return LoginResponse(
             access_token=jwt_token,
             user={
                 "email": email,
-                "name": user_info.get("name"),
-                "picture": user_info.get("picture")
+                "name": user_db.name or user_info.get("name"),
+                "picture": user_info.get("picture"),
+                "business_id": user_db.business_id
             }
         )

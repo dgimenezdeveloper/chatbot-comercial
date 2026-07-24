@@ -1,7 +1,8 @@
 """Script de seed data — modo básico y modo enriquecido.
 
-Modo básico (default): Crea datos de prueba: negocio, servicios, productos, FAQs y admin.
-    Seguro para ejecutar múltiples veces (maneja IntegrityError).
+Modo básico (default): Crea datos de prueba: negocios (1 y 2), usuarios de la lista blanca,
+    servicios, productos, FAQs y thresholds.
+    Seguro para ejecutar múltiples veces (idempotente).
 
 Modo enriquecido (--enriched): Genera 30 días de datos realistas (~500 conversaciones,
     ~350 turnos, ~60 fallbacks, ~50 feedbacks, ~100 recordatorios) para probar TODAS
@@ -37,13 +38,25 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 random.seed(42)
-
 NOW = datetime.now(timezone.utc)
 
-SERVICE_NAMES = [
-    "Corte de Cabello", "Tinte de Raíz", "Mechas Californianas",
-    "Tratamiento Capilar", "Corte de Barba", "Peinado Profesional",
-    "Alisado Brasileño", "Masaje Capilar",
+# Lista blanca oficial del Equipo 10 -> Inquilino 1 (Peluquería)
+TEAM_MEMBERS_BUSINESS_1 = [
+    ("Dario Sebastian Gimenez", "dgimenez.developer@gmail.com"),
+    ("Darle Miguel Sanabria", "sanajani410@gmail.com"),
+    ("Aleska Cegarra", "cegarraaleska91@gmail.com"),
+    ("Manfred Camacho", "manfred.camacho.dev@gmail.com"),
+    ("Arlene Rojas", "arleni1108@gmail.com"),
+    ("Veronica Ledezma", "chibi.viky@gmail.com"),
+    ("Feliangela Garcia", "fgfscg@gmail.com"),
+    ("Dana Stornello", "stornellodana@gmail.com"),
+    ("Yanina Nabel", "yaninanabel@hotmail.com"),
+    ("Ariadna Arias", "ariasari.7066@gmail.com"),
+    ("Matias Joaquin Lobos", "matiasjoaquinlobos@gmail.com"),
+    ("Victor Villamizar", "vmvillamar@gmail.com"),
+    ("Roberto Rossa", "roberto.carlo.rossa@gmail.com"),
+    ("Gaspar Nicolás Martínez", "gnmartinez214@gmail.com"),
+    ("Janneth Chura", "janneth.chura@bue.edu.ar"),
 ]
 
 FALLBACK_MESSAGES = [
@@ -66,41 +79,96 @@ CSAT_COMMENTS = [
     "No me gustó la demora", "Perfecto todo",
 ]
 
-REMINDER_RESPONSES = ["confirmo", "cancelo", None]
-
-
 # =====================================================================
-# MODO BÁSICO — Funciones idempotentes (preservan datos existentes)
+# MODO BÁSICO — Funciones idempotentes
 # =====================================================================
 
+def seed_businesses(db) -> tuple[Business, Business]:
+    """Crea los negocios de la demo si no existen."""
+    b1 = db.query(Business).filter(Business.id == 1).first()
+    if not b1:
+        b1 = Business(
+            id=1,
+            name="Salon Demo Belén",
+            slug="salon-demo-belen",
+            description="Peluquería de ejemplo para pruebas y desarrollo del chatbot comercial.",
+            active=True,
+            timezone="America/Argentina/Buenos_Aires",
+            currency="ARS",
+            accept_cards=True,
+            accepts_cash=True,
+            owner_phone="+5491112345678",
+        )
+        db.add(b1)
+        db.commit()
+        db.refresh(b1)
+        logger.info("Business 1 creado: %s (id=1)", b1.name)
 
-def seed_business(db) -> Business:
-    """Crea el negocio de prueba si no existe."""
-    existing = db.query(Business).filter(Business.slug == "salon-demo-belen").first()
-    if existing:
-        logger.info("Business ya existe: %s (id=%s)", existing.name, existing.id)
-        return existing
+    b2 = db.query(Business).filter(Business.id == 2).first()
+    if not b2:
+        b2 = Business(
+            id=2,
+            name="Barbería Innova",
+            slug="barberia-innova",
+            description="Barbería moderna y de vanguardia para demostración de nuevo cliente SaaS.",
+            active=True,
+            timezone="America/Argentina/Buenos_Aires",
+            currency="ARS",
+            accept_cards=True,
+            accepts_cash=True,
+            owner_phone="+5491199998888",
+        )
+        db.add(b2)
+        db.commit()
+        db.refresh(b2)
+        logger.info("Business 2 creado: %s (id=2)", b2.name)
 
-    business = Business(
-        name="Salon Demo Belén",
-        slug="salon-demo-belen",
-        description="Peluquería de ejemplo para pruebas y desarrollo del chatbot comercial.",
-        active=True,
-        timezone="America/Argentina/Buenos_Aires",
-        currency="ARS",
-        accept_cards=True,
-        accepts_cash=True,
-        owner_phone="+5491112345678",
-    )
-    db.add(business)
+    return b1, b2
+
+
+def seed_admin_users(db, b1_id: int, b2_id: int):
+    """Siembra los usuarios autorizados de la lista blanca en la DB."""
+    # 1. Miembros del Equipo -> Inquilino 1 (Peluquería)
+    for name, email in TEAM_MEMBERS_BUSINESS_1:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            user = User(
+                business_id=b1_id,
+                name=name,
+                email=email,
+                role="admin",
+                is_active=True,
+                can_manage_appointments=True,
+                can_view_analytics=True,
+                oauth_provider="google",
+            )
+            db.add(user)
+            logger.info("Usuario Lista Blanca 1 creado: %s (%s)", name, email)
+
+    # 2. Admin Barbería -> Inquilino 2 (Barbería)
+    u2 = db.query(User).filter(User.email == "barberia.demo26@gmail.com").first()
+    if not u2:
+        u2 = User(
+            business_id=b2_id,
+            name="Barbería Admin",
+            email="barberia.demo26@gmail.com",
+            role="admin",
+            is_active=True,
+            can_manage_appointments=True,
+            can_view_analytics=True,
+            oauth_provider="google",
+        )
+        db.add(u2)
+        logger.info("Usuario Lista Blanca 2 creado: barberia.demo26@gmail.com")
+
     db.commit()
-    db.refresh(business)
-    logger.info("Business creado: %s (id=%s)", business.name, business.id)
-    return business
 
 
 def seed_services(db, business_id: int) -> list[Service]:
-    """Crea el catálogo inicial de servicios."""
+    """Crea el catálogo inicial de servicios solo para Business 1."""
+    if business_id != 1:
+        return []
+
     existing = db.query(Service).filter(Service.business_id == business_id).first()
     if existing:
         logger.info("Servicios ya existen para business_id=%s", business_id)
@@ -136,7 +204,10 @@ def seed_services(db, business_id: int) -> list[Service]:
 
 
 def seed_products(db, business_id: int) -> list[Product]:
-    """Crea productos de venta iniciales."""
+    """Crea productos de venta iniciales solo para Business 1."""
+    if business_id != 1:
+        return []
+
     existing = db.query(Product).filter(Product.business_id == business_id).first()
     if existing:
         logger.info("Productos ya existen para business_id=%s", business_id)
@@ -168,7 +239,10 @@ def seed_products(db, business_id: int) -> list[Product]:
 
 
 def seed_faqs(db, business_id: int) -> list[FAQ]:
-    """Crea preguntas frecuentes iniciales."""
+    """Crea preguntas frecuentes solo para Business 1."""
+    if business_id != 1:
+        return []
+
     existing = db.query(FAQ).filter(FAQ.business_id == business_id).first()
     if existing:
         logger.info("FAQs ya existen para business_id=%s", business_id)
@@ -191,34 +265,6 @@ def seed_faqs(db, business_id: int) -> list[FAQ]:
     db.commit()
     logger.info("Creadas %s FAQs para business_id=%s", len(faqs), business_id)
     return faqs
-
-
-def seed_admin_user(db, business_id: int) -> User:
-    """Crea un usuario administrador para el negocio."""
-    existing = db.query(User).filter(
-        User.business_id == business_id, User.role == "admin"
-    ).first()
-    if existing:
-        logger.info("Admin user ya existe: %s (id=%s)", existing.email, existing.id)
-        return existing
-
-    user = User(
-        business_id=business_id,
-        name="Administrador Demo",
-        email="admin@salondemo.com",
-        phone="5491123456789",
-        role="admin",
-        is_active=True,
-        can_manage_appointments=True,
-        can_view_analytics=True,
-        oauth_provider="google",
-        oauth_id="google-12345",
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    logger.info("Admin user creado: %s (id=%s)", user.email, user.id)
-    return user
 
 
 def seed_metric_thresholds(db) -> list:
@@ -266,25 +312,20 @@ def seed_metric_thresholds(db) -> list:
 def run_basic_seed(db):
     """Orquesta la creación de seed data básica e idempotente."""
     logger.info("=== Seed BÁSICO ===")
-    business = seed_business(db)
-    if not business.owner_phone:
-        business.owner_phone = "+5491112345678"
-    if business.use_whatsapp_templates is None:
-        business.use_whatsapp_templates = False
-    user = seed_admin_user(db, business.id)
-    seed_services(db, business.id)
-    seed_products(db, business.id)
-    seed_faqs(db, business.id)
+    b1, b2 = seed_businesses(db)
+    seed_admin_users(db, b1.id, b2.id)
+    seed_services(db, b1.id)
+    seed_products(db, b1.id)
+    seed_faqs(db, b1.id)
     seed_metric_thresholds(db)
     db.commit()
     logger.info("=== Seed BÁSICO completado ===")
-    return business, user
+    return b1, b2
 
 
 # =====================================================================
-# MODO ENRIQUECIDO — Funciones que generan datos transaccionales masivos
+# MODO ENRIQUECIDO — Datos transaccionales para Business 1
 # =====================================================================
-
 
 def truncate_transactional_tables(db):
     """Limpia todas las tablas de datos transaccionales preservando schema."""
@@ -311,17 +352,17 @@ def generate_sessions(db, business_id: int, user: User, count: int = 500) -> lis
         started = generate_random_date(days_ago)
 
         r = random.random()
-        if r < 0.65:  # 65% completadas
+        if r < 0.65:
             status = "completed"
             duration = random.randint(3, 25)
             n_messages = random.randint(5, 20)
             n_fallbacks = random.choices([0, 1, 2, 3], weights=[50, 30, 15, 5])[0]
-        elif r < 0.85:  # 20% abandonadas
+        elif r < 0.85:
             status = "abandoned"
             duration = random.randint(1, 8)
             n_messages = random.randint(2, 5)
             n_fallbacks = random.choices([0, 1, 2, 3], weights=[20, 40, 30, 10])[0]
-        else:  # 15% active (solo últimos 2 días)
+        else:
             status = "active"
             days_ago = random.randint(0, 1)
             started = generate_random_date(days_ago)
@@ -334,7 +375,7 @@ def generate_sessions(db, business_id: int, user: User, count: int = 500) -> lis
         s = ChatSession(
             business_id=business_id,
             session_id=f"wa-enriched-{business_id}-{i:04d}",
-            user_id=user.id,
+            user_id=user.id if user else None,
             user_phone=f"54911{random.randint(20000000, 99999999)}",
             status=status,
             n_messages_total=n_messages,
@@ -360,20 +401,17 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
         sid = session.session_id
         uid = session.user_id
 
-        # 1. conversation_started (SIEMPRE)
         events.append(Event(session_id=sid, business_id=business_id,
                             event_type="conversation_started",
                             payload_json={"is_new_user": random.random() > 0.4, "channel": "whatsapp"},
                             timestamp=t, user_id=uid, channel="whatsapp"))
 
-        # 2. menu_option_selected (SIEMPRE)
         events.append(Event(session_id=sid, business_id=business_id,
                             event_type="menu_option_selected",
                             payload_json={"option_name": random.choice(["btn_turnos", "btn_precios", "btn_faq"])},
                             timestamp=t + timedelta(seconds=random.randint(5, 30)),
                             user_id=uid, channel="whatsapp"))
 
-        # 3. service_selected (si no es abandoned temprano)
         if session.status != "abandoned" or random.random() > 0.3:
             svc_id = random.choice(service_ids)
             events.append(Event(session_id=sid, business_id=business_id,
@@ -382,7 +420,6 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=t + timedelta(seconds=random.randint(30, 90)),
                                 user_id=uid, channel="whatsapp"))
 
-        # 4. fallbacks
         for fb_n in range(session.n_fallbacks):
             events.append(Event(session_id=sid, business_id=business_id,
                                 event_type="fallback_triggered",
@@ -394,7 +431,6 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=t + timedelta(seconds=random.randint(60, 180)),
                                 user_id=uid, channel="whatsapp"))
 
-        # 5. escalamiento (si tiene 2+ fallbacks o es abandoned)
         if session.n_fallbacks >= 2 or (session.status == "abandoned" and random.random() > 0.5):
             events.append(Event(session_id=sid, business_id=business_id,
                                 event_type="escalation_to_human",
@@ -405,7 +441,6 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=t + timedelta(seconds=random.randint(120, 300)),
                                 user_id=uid, channel="whatsapp"))
 
-        # 6. appointment_created (solo completed)
         if session.status == "completed" and random.random() > 0.15:
             hour = t.hour + random.randint(0, 3)
             nocturnal = hour >= 20 or hour < 8
@@ -421,7 +456,6 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=t + timedelta(seconds=random.randint(90, 240)),
                                 user_id=uid, channel="whatsapp"))
 
-            # 7. reminder_sent (a ~24h del turno)
             reminder_time = t + timedelta(hours=random.randint(20, 28))
             events.append(Event(session_id=sid, business_id=business_id,
                                 event_type="reminder_sent",
@@ -429,19 +463,14 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=reminder_time,
                                 user_id=uid, channel="whatsapp"))
 
-            # 8. reminder_response (~70% responden)
             if random.random() > 0.3:
-                resp = random.choices(
-                    ["confirmo", "cancelo", "cambio"],
-                    weights=[65, 25, 10]
-                )[0]
+                resp = random.choices(["confirmo", "cancelo", "cambio"], weights=[65, 25, 10])[0]
                 events.append(Event(session_id=sid, business_id=business_id,
                                     event_type="reminder_response",
                                     payload_json={"response_type": resp, "appointment_id": f"appt-{sid}"},
                                     timestamp=reminder_time + timedelta(minutes=random.randint(1, 120)),
                                     user_id=uid, channel="whatsapp"))
 
-        # 9. csat_submitted (solo completed, ~60% responden)
         if session.status == "completed" and random.random() > 0.4:
             score = random.choices([5, 4, 3, 2, 1], weights=[40, 30, 15, 10, 5])[0]
             events.append(Event(session_id=sid, business_id=business_id,
@@ -450,7 +479,6 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
                                 timestamp=t + timedelta(seconds=random.randint(180, 600)),
                                 user_id=uid, channel="whatsapp"))
 
-        # 10. conversation_closed (completed y abandoned)
         if session.status in ("completed", "abandoned"):
             events.append(Event(session_id=sid, business_id=business_id,
                                 event_type="conversation_closed",
@@ -472,14 +500,13 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
 def generate_appointments(db, business_id: int, user: User, services: list[Service]) -> list[Appointment]:
     """Crea turnos reales en la tabla appointment con distribución realista."""
     appointments = []
-    service_ids = [s.id for s in services]
+    service_ids = [s.id for s in services] if services else [1]
 
     def random_hour(nocturnal):
         if nocturnal:
             return random.choice(list(range(0, 8)) + list(range(20, 24)))
         return random.randint(8, 19)
 
-    # Turnos pasados (70%) — últimos 30 días
     for _ in range(200):
         days_ago = random.randint(0, 29)
         nocturnal = random.random() < 0.4
@@ -487,13 +514,9 @@ def generate_appointments(db, business_id: int, user: User, services: list[Servi
         scheduled = NOW - timedelta(days=days_ago)
         scheduled = scheduled.replace(hour=hour, minute=random.choice([0, 15, 30, 45]), second=0, microsecond=0)
 
-        status = random.choices(
-            ["scheduled", "confirmed", "completed", "cancelled"],
-            weights=[5, 10, 70, 15]
-        )[0]
+        status = random.choices(["scheduled", "confirmed", "completed", "cancelled"], weights=[5, 10, 70, 15])[0]
         no_show = None
         if status == "completed" and random.random() < 0.1:
-            status = "completed"
             no_show = "confirmed_no"
         elif status == "completed":
             no_show = "confirmed_yes"
@@ -502,7 +525,7 @@ def generate_appointments(db, business_id: int, user: User, services: list[Servi
 
         a = Appointment(
             business_id=business_id,
-            user_id=user.id,
+            user_id=user.id if user else None,
             user_phone=f"54911{random.randint(20000000, 99999999)}",
             user_name=f"Cliente {random.randint(1, 500)}",
             service_id=random.choice(service_ids),
@@ -516,7 +539,6 @@ def generate_appointments(db, business_id: int, user: User, services: list[Servi
         db.add(a)
         appointments.append(a)
 
-    # Turnos futuros (30%) — próximos 14 días
     for _ in range(80):
         days_ahead = random.randint(0, 13)
         nocturnal = random.random() < 0.4
@@ -526,7 +548,7 @@ def generate_appointments(db, business_id: int, user: User, services: list[Servi
 
         a = Appointment(
             business_id=business_id,
-            user_id=user.id,
+            user_id=user.id if user else None,
             user_phone=f"54911{random.randint(20000000, 99999999)}",
             user_name=f"Cliente Futuro {random.randint(1, 100)}",
             service_id=random.choice(service_ids),
@@ -541,9 +563,7 @@ def generate_appointments(db, business_id: int, user: User, services: list[Servi
         appointments.append(a)
 
     db.commit()
-    nocturnal_count = sum(1 for a in appointments if a.scheduled_date.hour >= 20 or a.scheduled_date.hour < 8)
-    future_count = sum(1 for a in appointments if a.scheduled_date > NOW)
-    logger.info("Creados %d turnos (%d nocturnos, %d futuros)", len(appointments), nocturnal_count, future_count)
+    logger.info("Creados %d turnos enriquecidos", len(appointments))
     return appointments
 
 
@@ -551,8 +571,8 @@ def generate_feedbacks(db, business_id: int, sessions: list[ChatSession]) -> lis
     """Genera feedbacks CSAT para sesiones completadas."""
     completed = [s for s in sessions if s.status == "completed"]
     feedbacks = []
-    for s in completed[:150]:  # ~150 feedbacks
-        if random.random() > 0.6:  # 40% responden
+    for s in completed[:150]:
+        if random.random() > 0.6:
             continue
         score = random.choices([5, 4, 3, 2, 1], weights=[40, 30, 15, 10, 5])[0]
         f = Feedback(
@@ -572,7 +592,7 @@ def generate_feedbacks(db, business_id: int, sessions: list[ChatSession]) -> lis
 
 
 def generate_reminder_logs(db, business_id: int, sessions: list[ChatSession]) -> list[ReminderLog]:
-    """Genera reminder_logs con estados y canales variados."""
+    """Genera reminder_logs con estados variados."""
     completed = [s for s in sessions if s.status == "completed"]
     logs = []
     for s in completed[:200]:
@@ -581,14 +601,8 @@ def generate_reminder_logs(db, business_id: int, sessions: list[ChatSession]) ->
         rl = ReminderLog(
             business_id=business_id,
             appointment_id=None,
-            status=random.choices(
-                ["sent", "failed", "outside_window", "fallback_channel"],
-                weights=[70, 10, 10, 10]
-            )[0],
-            channel=random.choices(
-                ["whatsapp_text", "whatsapp_template", "sms", "email"],
-                weights=[80, 10, 5, 5]
-            )[0],
+            status=random.choices(["sent", "failed", "outside_window", "fallback_channel"], weights=[70, 10, 10, 10])[0],
+            channel=random.choices(["whatsapp_text", "whatsapp_template", "sms", "email"], weights=[80, 10, 5, 5])[0],
             sent_at=s.ended_at or NOW,
             error_reason="Timeout de conexión" if random.random() < 0.1 else None,
         )
@@ -599,115 +613,27 @@ def generate_reminder_logs(db, business_id: int, sessions: list[ChatSession]) ->
     return logs
 
 
-def print_metrics_summary(db, business_id: int):
-    """Resumen rápido de métricas para verificar los datos generados."""
-    total_sessions = db.query(ChatSession).filter(ChatSession.business_id == business_id).count()
-    total_events = db.query(Event).filter(Event.business_id == business_id).count()
-    total_feedbacks = db.query(Feedback).filter(Feedback.business_id == business_id).count()
-
-    conv_started = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type == "conversation_started"
-    ).count()
-    appt_created = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type == "appointment_created"
-    ).count()
-    fallbacks = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type == "fallback_triggered"
-    ).count()
-    escalations = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type.in_(["escalation_to_human", "escalation_auto"])
-    ).count()
-    reminders = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type == "reminder_response"
-    ).count()
-    csats = db.query(Event).filter(
-        Event.business_id == business_id, Event.event_type == "csat_submitted"
-    ).count()
-
-    avg_csat = db.query(Feedback).filter(
-        Feedback.business_id == business_id, Feedback.score.isnot(None)
-    ).with_entities(Feedback.score).all()
-    avg = sum(s[0] for s in avg_csat) / len(avg_csat) if avg_csat else 0
-
-    # Métricas desde tabla Appointment
-    total_appointments = db.query(Appointment).filter(Appointment.business_id == business_id).count()
-    cancelled = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.status == "cancelled"
-    ).count()
-    no_shows = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.no_show_status == "confirmed_no"
-    ).count()
-    nocturnal_appts = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.status.in_(["scheduled", "confirmed", "completed"])
-    ).filter(
-        or_(
-            func.extract("hour", Appointment.scheduled_date) >= 20,
-            func.extract("hour", Appointment.scheduled_date) < 8
-        )
-    ).count()
-    future_appts = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.scheduled_date > NOW
-    ).count()
-    bot_appts = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.created_via == "chatbot"
-    ).count()
-
-    total_non_cancelled = total_appointments - cancelled
-    nocturnal_pct = (nocturnal_appts / total_non_cancelled * 100) if total_non_cancelled else 0
-
-    logger.info("=" * 60)
-    logger.info("📊 MÉTRICAS DEL SEED ENRIQUECIDO")
-    logger.info("=" * 60)
-    logger.info("Sesiones totales:       %d", total_sessions)
-    logger.info("Eventos totales:        %d", total_events)
-    logger.info("Feedbacks totales:      %d", total_feedbacks)
-    logger.info("---")
-    logger.info("Turnos totales (tabla): %d", total_appointments)
-    logger.info("  - Creados por bot:    %d", bot_appts)
-    logger.info("  - Cancelados:         %d", cancelled)
-    logger.info("  - No-shows:           %d", no_shows)
-    logger.info("  - Nocturnos:          %d (%.1f%%)", nocturnal_appts, nocturnal_pct)
-    logger.info("  - Futuros:            %d", future_appts)
-    logger.info("---")
-    logger.info("Conversaciones inicio:  %d", conv_started)
-    logger.info("Fallbacks:              %d", fallbacks)
-    logger.info("Escalamientos:          %d", escalations)
-    logger.info("Recordatorios resp:     %d", reminders)
-    logger.info("CSAT responses:         %d", csats)
-    logger.info("CSAT promedio:          %.1f / 5", avg)
-    logger.info("=" * 60)
-
-
 def run_enriched_seed(db):
     """Orquesta la creación de seed data enriquecida (trunca datos transaccionales primero)."""
     logger.info("=== Seed ENRIQUECIDO — Inicio ===")
     truncate_transactional_tables(db)
-    business = seed_business(db)
-    if not business.owner_phone:
-        business.owner_phone = "+5491112345678"
-    if business.use_whatsapp_templates is None:
-        business.use_whatsapp_templates = False
-    user = seed_admin_user(db, business.id)
-    services = seed_services(db, business.id)
-    seed_products(db, business.id)
-    seed_faqs(db, business.id)
+    b1, b2 = seed_businesses(db)
+    seed_admin_users(db, b1.id, b2.id)
+    services = seed_services(db, b1.id)
+    seed_products(db, b1.id)
+    seed_faqs(db, b1.id)
     seed_metric_thresholds(db)
-    sessions = generate_sessions(db, business.id, user, count=500)
-    generate_events(db, business.id, sessions)
-    generate_appointments(db, business.id, user, services)
-    generate_feedbacks(db, business.id, sessions)
-    generate_reminder_logs(db, business.id, sessions)
-    print_metrics_summary(db, business.id)
+
+    admin_b1 = db.query(User).filter(User.business_id == b1.id).first()
+    sessions = generate_sessions(db, b1.id, admin_b1, count=500)
+    generate_events(db, b1.id, sessions)
+    generate_appointments(db, b1.id, admin_b1, services)
+    generate_feedbacks(db, b1.id, sessions)
+    generate_reminder_logs(db, b1.id, sessions)
     logger.info("=== Seed ENRIQUECIDO — Completado ===")
 
 
 def main():
-    """Punto de entrada: --enriched para datos masivos, sino modo básico."""
     db = SessionLocal()
     try:
         if "--enriched" in sys.argv:
@@ -716,7 +642,7 @@ def main():
             run_basic_seed(db)
     except IntegrityError as e:
         db.rollback()
-        logger.warning("IntegrityError (posible duplicado): %s", e)
+        logger.warning("IntegrityError durante seed: %s", e)
     except Exception:
         db.rollback()
         logger.exception("Error inesperado durante seed data")
