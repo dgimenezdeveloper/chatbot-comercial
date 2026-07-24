@@ -69,18 +69,25 @@ export function MetricsBarChart({
     );
   }
 
-  const isHorizontal = layout === "horizontal";
+  // Recharts naming is counterintuitive:
+  //   layout="horizontal" (default) → bars grow vertically (categories on X)
+  //   layout="vertical"             → bars grow horizontally (categories on Y)
+  // Our prop `layout` uses intuitive naming:
+  //   "vertical"   → bars grow upward (default)
+  //   "horizontal" → bars grow sideways
+  const rechartsLayout = layout === "horizontal" ? "vertical" : "horizontal";
+  const isHorizontalBars = layout === "horizontal";
 
   return (
     <div className={className} style={{ width: "100%", height: height || 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={mergedData}
-          layout={isHorizontal ? "horizontal" : "vertical"}
+          layout={rechartsLayout}
           margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-          {isHorizontal ? (
+          {isHorizontalBars ? (
             <>
               <YAxis
                 type="category"

@@ -2,7 +2,7 @@ import { MetricsFunnelChart } from "./metrics-FunnelChart";
 
 const meta = {
   component: MetricsFunnelChart,
-  title: "UI/Metrics/FunnelChart",
+  title: "Components/Metrics/FunnelChart",
 };
 
 export default meta;

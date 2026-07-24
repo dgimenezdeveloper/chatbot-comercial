@@ -2,7 +2,7 @@ import { MetricsPieChart } from "./metrics-pieChart";
 
 const meta = {
   component: MetricsPieChart,
-  title: "UI/Metrics/PieChart",
+  title: "Components/Metrics/PieChart",
 };
 
 export default meta;

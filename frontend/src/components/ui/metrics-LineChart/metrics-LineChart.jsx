@@ -35,6 +35,7 @@ export function MetricsLineChart({
   data,
   lines = [],
   xKey = "name",
+  height = 300,
   threshold,
   comparisonLines,
   showDots = true,
@@ -82,7 +83,7 @@ export function MetricsLineChart({
   const ChartType = lines.some((l) => l.area) ? ComposedChart : LineChart;
 
   return (
-    <div className={cn("w-full h-full", className)}>
+    <div className={cn("w-full", className)} style={{ height: height || 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <ChartType
           data={mergedData}

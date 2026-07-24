@@ -2,7 +2,7 @@ import { MetricsBarChart } from "./metrics-barChart";
 
 const meta = {
   component: MetricsBarChart,
-  title: "UI/Metrics/BarChart",
+  title: "Components/Metrics/BarChart",
 };
 
 export default meta;
@@ -37,7 +37,7 @@ export const Vertical = {
 export const Horizontal = {
   args: {
     data: sampleData,
-    bars: [{ key: "count", label: "Turnos", fill: "#22c55e" }],
+    bars: [{ key: "count", label: "Turnos", fill: "hsl(var(--success))" }],
     xKey: "name",
     layout: "horizontal",
     height: 300,
@@ -62,5 +62,6 @@ export const Empty = {
     data: [],
     bars: [{ key: "count", label: "Turnos" }],
     xKey: "name",
+    height: 300,
   },
 };

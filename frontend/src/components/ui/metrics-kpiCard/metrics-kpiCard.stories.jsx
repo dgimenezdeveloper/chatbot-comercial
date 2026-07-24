@@ -2,7 +2,7 @@ import { MetricsKpiCard } from "./metrics-kpiCard";
 
 const meta = {
   component: MetricsKpiCard,
-  title: "UI/Metrics/KpiCard",
+  title: "Components/Metrics/KpiCard",
 };
 
 export default meta;
