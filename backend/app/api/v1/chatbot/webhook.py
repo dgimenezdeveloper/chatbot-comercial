@@ -1,8 +1,13 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Response, status, Depends
+from sqlalchemy.orm import Session
+
 from app.core.settings import settings
+from app.db.database import get_db
+from app.db.models.sessions import ChatSession
+from app.db.models.feedback import Feedback
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import get_user_state, set_user_state, clear_user_state
 from app.services.event_logger import log_event
@@ -13,9 +18,9 @@ router = APIRouter()
 # =============================================================================
 # CONSTANTES DE CONFIGURACIÓN (ÁRBOL DE NAVEGACIÓN ESTÁTICO)
 # =============================================================================
-# TODO: Resolver business_id desde el phone_number_id del webhook de Meta.
-# Mientras tanto se usa un valor fijo para desarrollo.
+# MOCK_BUSINESS_ID se usa ahora solo como valor por defecto para sesiones nuevas.
 MOCK_BUSINESS_ID = 1
+
 BOTONES_PRINCIPALES = [
     {"id": "btn_turnos", "title": "📅 Turnos"},
     {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
@@ -67,7 +72,7 @@ SECCIONES_PRODUCTOS = [
 # MANEJADORES DE ESTADO (HANDLERS)
 # =============================================================================
 
-async def handle_welcome_flow(phone: str):
+async def handle_welcome_flow(phone: str, business_id: int):
     """Envia el mensaje de bienvenida y el menú de botones principal (Criterio 1)."""
     await clear_user_state(phone)
     initial_state = {"estado": "MENU_PRINCIPAL", "step": 1}
@@ -76,18 +81,21 @@ async def handle_welcome_flow(phone: str):
     # Evento: conversation_started
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="conversation_started",
         payload={"is_new_user": True, "channel": "whatsapp"},
     )
     
+    # Personalizamos el saludo según el tenant para la demo
+    nombre_negocio = "Peluquería Estilo" if business_id == 1 else "Barbería Innova"
+    
     await send_interactive_buttons(
         phone=phone,
-        body_text="¡Hola! Bienvenido a la Peluquería Estilo. ¿En qué podemos ayudarte hoy?",
+        body_text=f"¡Hola! Bienvenido a {nombre_negocio}. ¿En qué podemos ayudarte hoy?",
         buttons=BOTONES_PRINCIPALES
     )
 
-async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
+async def handle_text_fallback(phone: str, user_text: str, user_state: dict, business_id: int):
     """
     Manejador de Fallback para capturar texto libre no transaccional (Criterio 3).
     Prepara la interfaz para la posterior conexión con LLM y servidores MCP.
@@ -100,7 +108,7 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
     # Evento: fallback_triggered
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="fallback_triggered",
         payload={
             "message_original": user_text,
@@ -116,7 +124,7 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
         # Evento: escalation_to_human
         log_event(
             session_id=phone,
-            business_id=MOCK_BUSINESS_ID,
+            business_id=business_id,
             event_type="escalation_to_human",
             payload={
                 "reason": "fallback_exceeded",
@@ -137,15 +145,17 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict):
     )
     await send_message(phone=phone, text=fallback_message)
 
-async def handle_main_menu_selection(phone: str, button_id: str, user_state: dict):
+async def handle_main_menu_selection(phone: str, button_id: str, user_state: dict, business_id: int):
     """Procesa las interacciones del Menú Principal."""
     # Evento: menu_option_selected
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="menu_option_selected",
         payload={"option_name": button_id},
     )
+
+    nombre_negocio = "Peluquería Estilo" if business_id == 1 else "Barbería Innova"
 
     if button_id == "btn_turnos":
         user_state["estado"] = "MENU_TURNOS"
@@ -169,7 +179,7 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             button_label="Ver Productos 🛍️",
             sections=SECCIONES_PRODUCTOS,
             header_text="Productos de Venta",
-            footer_text="Peluquería Estilo"
+            footer_text=nombre_negocio
         )
         
     elif button_id == "btn_faq":
@@ -179,11 +189,13 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
         
         await send_message(
             phone=phone,
-            text="Escribe tu consulta sobre la peluquería (Ej: horarios, dirección, métodos de pago)."
+            text="Escribe tu consulta sobre el local (Ej: horarios, dirección, métodos de pago)."
         )
 
-async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: dict):
+async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: dict, business_id: int):
     """Procesa el árbol transaccional de la agenda de turnos."""
+    nombre_negocio = "Peluquería Estilo" if business_id == 1 else "Barbería Innova"
+
     if button_id == "btn_turno_reservar":
         user_state["estado"] = "RESERVANDO_TURNO"
         user_state["step"] += 1
@@ -195,7 +207,7 @@ async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: d
             button_label="Ver Servicios 💇‍♀️",
             sections=SECCIONES_SERVICIOS,
             header_text="Reserva de Turnos",
-            footer_text="Peluquería Estilo"
+            footer_text=nombre_negocio
         )
     elif button_id in ["btn_turno_ver", "btn_turno_cancelar"]:
         action_title = "Ver Turno" if button_id == "btn_turno_ver" else "Cancelar Turno"
@@ -206,13 +218,13 @@ async def handle_turnos_menu_selection(phone: str, button_id: str, user_state: d
         # Evento: conversation_closed
         log_event(
             session_id=phone,
-            business_id=MOCK_BUSINESS_ID,
+            business_id=business_id,
             event_type="conversation_closed",
             payload={"resultado_final": "turno_consulta", "n_fallbacks": user_state.get("fallback_count", 0)},
         )
         await clear_user_state(phone)
 
-async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state: dict):
+async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state: dict, business_id: int):
     """Maneja la confirmación de la reserva de productos físicos."""
     if button_id == "btn_prod_confirmar":
         await send_message(
@@ -222,15 +234,15 @@ async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state:
         # Evento: conversation_closed
         log_event(
             session_id=phone,
-            business_id=MOCK_BUSINESS_ID,
+            business_id=business_id,
             event_type="conversation_closed",
             payload={"resultado_final": "producto_comprado", "n_fallbacks": user_state.get("fallback_count", 0)},
         )
         await clear_user_state(phone)
     elif button_id == "btn_prod_volver":
-        await handle_welcome_flow(phone)
+        await handle_welcome_flow(phone, business_id)
 
-async def handle_date_selection(phone: str, button_title: str, user_state: dict):
+async def handle_date_selection(phone: str, button_title: str, user_state: dict, business_id: int):
     """Guarda la fecha seleccionada por botón y solicita el horario."""
     user_state["estado"] = "ELIGE_HORARIO"
     user_state["step"] += 1
@@ -248,7 +260,7 @@ async def handle_date_selection(phone: str, button_title: str, user_state: dict)
         buttons=botones_horarios
     )
 
-async def handle_time_selection(phone: str, button_title: str, user_state: dict):
+async def handle_time_selection(phone: str, button_title: str, user_state: dict, business_id: int):
     """Guarda la hora seleccionada por botón y solicita el nombre por teclado."""
     user_state["estado"] = "ESPERANDO_NOMBRE"
     user_state["step"] += 1
@@ -260,7 +272,7 @@ async def handle_time_selection(phone: str, button_title: str, user_state: dict)
         text=f"Elegiste las *{button_title}*.\n\nPara finalizar el registro, por favor **escribe tu Nombre y Apellido** por teclado:"
     )
 
-async def handle_appointment_confirmation(phone: str, user_text: str, user_state: dict):
+async def handle_appointment_confirmation(phone: str, user_text: str, user_state: dict, business_id: int):
     """Confirma el agendamiento del turno con los parámetros consolidados."""
     fecha = user_state.get("fecha_seleccionada", "Hoy")
     hora = user_state.get("hora_seleccionada", "10:00 hs")
@@ -269,14 +281,14 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
     # Evento: appointment_created
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="appointment_created",
         payload={"via_bot": True, "servicio": servicio, "fecha": fecha, "hora": hora},
     )
     # Evento: reminder_sent (placeholder — se registra intención de recordatorio futuro)
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="reminder_sent",
         payload={"servicio": servicio, "fecha": fecha, "hora": hora},
     )
@@ -293,19 +305,19 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
     # Evento: conversation_closed
     log_event(
         session_id=phone,
-        business_id=MOCK_BUSINESS_ID,
+        business_id=business_id,
         event_type="conversation_closed",
         payload={"resultado_final": "turno_creado", "n_fallbacks": user_state.get("fallback_count", 0)},
     )
     await clear_user_state(phone)
 
-async def handle_list_selection(phone: str, selected_id: str, row_title: str, user_state: dict):
+async def handle_list_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int):
     """Maneja las selecciones efectuadas en los menús de tipo lista desplegable."""
     if selected_id.startswith("srv_"):
         # Evento: service_selected
         log_event(
             session_id=phone,
-            business_id=MOCK_BUSINESS_ID,
+            business_id=business_id,
             event_type="service_selected",
             payload={"service_id": selected_id, "service_name": row_title},
         )
@@ -361,11 +373,6 @@ async def verify_webhook(
     return Response(content="Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
 
-""" def clean_phone_number(phone: str) -> str:
-    if phone.startswith("549"):
-        return "54" + phone[3:]
-    return phone """
-
 def clean_phone_number(phone: str) -> str:
     # Traduce del formato internacional al formato con 15 verificado en tu Sandbox
     if phone.startswith("54911"):
@@ -374,7 +381,7 @@ def clean_phone_number(phone: str) -> str:
 
 # 2. Endpoint POST: Recepción y Enrutamiento asíncrono de Eventos
 @router.post("/webhook")
-async def receive_webhook(payload: dict):
+async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
     logger.info(f"Payload del Webhook recibido: {payload}")
     
     try:
@@ -388,10 +395,7 @@ async def receive_webhook(payload: dict):
             phone_number = message.get("from")
             message_type = message.get("type")
             
-            # Sanitización de número de teléfono
-            # Saneamiento del número telefónico de origen
             # --- SANITIZACIÓN DE TELÉFONO ANTES DE INTERACTUAR CON EL ESTADO ---
-            # TODO: Remover este bloque al pasar a Producción con número real.
             if settings.APP_ENV == "development" and phone_number.startswith("549"):
                 area_code = phone_number[3:5] 
                 local_number = phone_number[5:]
@@ -400,6 +404,24 @@ async def receive_webhook(payload: dict):
             else:
                 phone_number = clean_phone_number(phone_number)
             
+            # --- GESTIÓN DE SESIÓN EN POSTGRESQL (TAREA 5.1 & TAREA 3) ---
+            # Buscamos la sesión para saber a qué tenant (business_id) pertenece este chat
+            db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
+            if not db_session:
+                # Si no existe, la creamos automáticamente asignándola al Inquilino 1 por defecto
+                db_session = ChatSession(
+                    session_id=phone_number,
+                    business_id=MOCK_BUSINESS_ID,
+                    user_phone=phone_number,
+                    status="active"
+                )
+                db.add(db_session)
+                db.commit()
+                db.refresh(db_session)
+                logger.info(f"Nueva sesión creada en DB para {phone_number} (Business ID: {db_session.business_id})")
+
+            current_business_id = db_session.business_id
+
             # Consultar o inicializar estado conversacional de Redis
             user_state = await get_user_state(phone_number)
             current_step = user_state.get("estado") if user_state else "NUEVO"
@@ -409,13 +431,28 @@ async def receive_webhook(payload: dict):
                 user_text = message.get("text", {}).get("body", "").strip()
                 logger.info(f"Mensaje de texto de {phone_number}: '{user_text}'")
                 
+                # --- TAREA 3: COMANDO SECRETO PARA DEMO EN VIVO (MULTI-TENANT) ---
+                if user_text.lower() == "/reset_demo estetica":
+                    db_session.business_id = 1
+                    db.commit()
+                    await clear_user_state(phone_number)
+                    await send_message(phone_number, "✅ Demo cambiada con éxito. Ahora estás interactuando con la Peluquería (ID 1).")
+                    return {"status": "success"}
+                
+                elif user_text.lower() == "/reset_demo barberia":
+                    db_session.business_id = 2
+                    db.commit()
+                    await clear_user_state(phone_number)
+                    await send_message(phone_number, "✅ Demo cambiada con éxito. Ahora estás interactuando con la Barbería (ID 2).")
+                    return {"status": "success"}
+
                 # Comandos de reinicio explícito o inicialización por defecto (Criterio 1)
                 if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar", "salir"] or current_step == "NUEVO":
-                    await handle_welcome_flow(phone_number)
+                    await handle_welcome_flow(phone_number, current_business_id)
                 
                 # Captura del nombre del usuario (Fin del árbol transaccional)
                 elif current_step == "ESPERANDO_NOMBRE":
-                    await handle_appointment_confirmation(phone_number, user_text, user_state)
+                    await handle_appointment_confirmation(phone_number, user_text, user_state, current_business_id)
 
                 # Respuesta a recordatorio de turno (SI / NO / CANCELAR / CONFIRMO / CANCELO / CAMBIO)
                 elif user_text.upper() in ["SI", "NO", "CANCELAR", "CONFIRMO", "CANCELO", "CAMBIO"]:
@@ -427,7 +464,7 @@ async def receive_webhook(payload: dict):
                     response_type = response_map.get(user_text.upper(), "desconocido")
                     log_event(
                         session_id=phone_number,
-                        business_id=MOCK_BUSINESS_ID,
+                        business_id=current_business_id,
                         event_type="reminder_response",
                         payload={"response_type": response_type, "raw_text": user_text},
                     )
@@ -435,7 +472,7 @@ async def receive_webhook(payload: dict):
                         phone=phone_number,
                         text="¡Gracias por tu respuesta! La hemos registrado.",
                     )
-                    await handle_welcome_flow(phone_number)
+                    await handle_welcome_flow(phone_number, current_business_id)
 
                 # Puntaje de satisfacción (CSAT): número 1-5 como mensaje independiente
                 elif user_text.strip().isdigit() and 1 <= int(user_text.strip()) <= 5:
@@ -447,44 +484,37 @@ async def receive_webhook(payload: dict):
                     # Escribir en tabla event (trazabilidad existente)
                     log_event(
                         session_id=phone_number,
-                        business_id=MOCK_BUSINESS_ID,
+                        business_id=current_business_id,
                         event_type="csat_submitted",
                         payload={"score": score, "outcome": outcome},
                     )
 
-                    # Escribir en tabla feedback (fuente canónica de métricas — FR-E2)
-                    from app.db.database import SessionLocal
-                    from app.db.models.feedback import Feedback
-                    from datetime import timezone
-
-                    db_fb = SessionLocal()
+                    # Escribir en tabla feedback (fuente canónica de métricas) usando la misma sesión DB
                     try:
                         fb = Feedback(
-                            business_id=MOCK_BUSINESS_ID,
+                            business_id=current_business_id,
                             session_id=phone_number,
                             score=score,
                             outcome=outcome,
                             user_phone=phone_number,
                             submitted_at=datetime.now(timezone.utc),
                         )
-                        db_fb.add(fb)
-                        db_fb.commit()
+                        db.add(fb)
+                        db.commit()
                         logger.info(f"CSAT guardado en feedback: score={score}, outcome={outcome}")
                     except Exception:
-                        db_fb.rollback()
+                        db.rollback()
                         logger.exception("Error guardando CSAT en tabla feedback")
-                    finally:
-                        db_fb.close()
 
                     await send_message(
                         phone=phone_number,
                         text=f"¡Gracias por tu calificación de {score} estrellas! ⭐",
                     )
-                    await handle_welcome_flow(phone_number)
+                    await handle_welcome_flow(phone_number, current_business_id)
 
                 # Enrutamiento al Fallback Híbrido para textos no estructurados (Criterio 3)
                 else:
-                    await handle_text_fallback(phone_number, user_text, user_state)
+                    await handle_text_fallback(phone_number, user_text, user_state, current_business_id)
                     
             # --- CASO B: RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS) ---
             elif message_type == "interactive":
@@ -499,31 +529,31 @@ async def receive_webhook(payload: dict):
                     
                     # Enrutamiento basado en la máquina de estados (Criterio 4)
                     if current_step == "MENU_PRINCIPAL":
-                        await handle_main_menu_selection(phone_number, selected_id, user_state)
+                        await handle_main_menu_selection(phone_number, selected_id, user_state, current_business_id)
                         
                     elif current_step == "MENU_TURNOS":
-                        await handle_turnos_menu_selection(phone_number, selected_id, user_state)
+                        await handle_turnos_menu_selection(phone_number, selected_id, user_state, current_business_id)
                         
                     elif current_step == "CONFIRMA_PRODUCTO":
-                        await handle_catalogo_menu_selection(phone_number, selected_id, user_state)
+                        await handle_catalogo_menu_selection(phone_number, selected_id, user_state, current_business_id)
                         
                     elif current_step == "ELIGE_FECHA" and selected_id.startswith("btn_fecha_"):
-                        await handle_date_selection(phone_number, button_title, user_state)
+                        await handle_date_selection(phone_number, button_title, user_state, current_business_id)
                         
                     elif current_step == "ELIGE_HORARIO" and selected_id.startswith("btn_hora_"):
-                        await handle_time_selection(phone_number, button_title, user_state)
+                        await handle_time_selection(phone_number, button_title, user_state, current_business_id)
                         
                     else:
                         # Fallback de seguridad ante estados desincronizados: re-enviar bienvenida
-                        await handle_welcome_flow(phone_number)
+                        await handle_welcome_flow(phone_number, current_business_id)
                         
                 elif interactive_type == "list_reply":
                     reply = interactive_data.get("list_reply", {})
                     selected_id = reply.get("id")
-                    row_title = reply.get("title", "")
+                    row_title = reply.get("title", "")  
                     logger.info(f"Opción de lista seleccionada por {phone_number}: ID={selected_id}, Título='{row_title}'")
                     
-                    await handle_list_selection(phone_number, selected_id, row_title, user_state)
+                    await handle_list_selection(phone_number, selected_id, row_title, user_state, current_business_id)
                     
     except Exception as e:
         logger.error(f"Error procesando el webhook entrante: {str(e)}")
