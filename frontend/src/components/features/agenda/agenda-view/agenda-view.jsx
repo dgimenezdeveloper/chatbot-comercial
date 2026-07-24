@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 import AgendaWeekGrid, {
   AgendaLegend,
@@ -38,7 +39,7 @@ function ViewModeButton({ active, label, onClick }) {
       onClick={onClick}
       className={cn(
         "min-w-16",
-        !active && "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+        !active && "border-border bg-card text-foreground hover:bg-muted",
       )}
     >
       {label}
@@ -118,21 +119,16 @@ export default function AgendaView({
 
   return (
     <section className="flex flex-1 flex-col">
-      <header className="border-b border-slate-200 pb-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <CalendarDays className="size-6 text-slate-800" />
-            <h1 className="text-2xl font-bold tracking-wide text-slate-950">
-              AGENDA SEMANAL
-            </h1>
-          </div>
-
+      <PageHeader
+        icon={<CalendarDays className="size-5" />}
+        title="Agenda Semanal"
+        action={
           <Button type="button" onClick={onNewAppointment} className="h-10 px-4">
             <Plus data-icon="inline-start" />
             Nuevo turno
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
@@ -146,7 +142,7 @@ export default function AgendaView({
             <ChevronLeft />
           </Button>
 
-          <span className="min-w-44 text-center text-sm font-medium text-slate-700">
+          <span className="min-w-44 text-center text-sm font-medium text-foreground">
             {rangeLabel}
           </span>
 
@@ -187,7 +183,7 @@ export default function AgendaView({
 
       <div className="mt-6">
         {viewMode === VIEW_MODES.MONTH ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
+          <div className="rounded-xl border border-border bg-card px-6 py-16 text-center text-muted-foreground">
             Vista mensual disponible próximamente.
           </div>
         ) : (

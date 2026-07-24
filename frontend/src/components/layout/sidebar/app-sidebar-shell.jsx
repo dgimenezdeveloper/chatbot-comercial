@@ -7,21 +7,20 @@ export function AppSidebarShell({ children, footer, className }) {
   return (
     <aside
       className={cn(
-        "flex h-screen w-sidebar shrink-0 flex-col border-r bg-sidebar",
+        "flex h-full w-sidebar shrink-0 flex-col",
         className,
       )}
     >
-      <div className="px-10 py-10">
-        <div className="flex h-24 w-full items-center justify-center">
-          <LogoPymio className="h-full w-full" aria-label="PYMIO" />
-        </div>
+      {/* Logo area */}
+      <div className="flex items-center justify-center px-6 py-6">
+        <LogoPymio className="h-24 w-auto" aria-label="PYMIO" />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-10 py-10">
+      <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-4">
         {children}
       </div>
 
-      <div className="space-y-3 border-t p-4">
+      <div className="space-y-3 border-t px-4 pt-6 pb-8">
         {footer}
         <SidebarLogout />
       </div>

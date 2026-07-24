@@ -1,10 +1,19 @@
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { SidebarUserFooter } from "@/components/dashboard/SidebarUserFooter";
+import { DashboardMobileBar } from "@/components/dashboard/DashboardMobileBar";
+import AppShell from "@/components/layout/AppShell";
 
-export default function DashboardLayout({ children }) {
+export default async function DashboardLayout({ children }) {
+  // Build the user footer once here (Server Component) and pass it down
+  // to the client Sidebar via props — avoids calling auth() in a Client Component.
+  const userFooter = <SidebarUserFooter />;
+
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="min-h-screen flex-1 p-6">{children}</main>
-    </div>
+    <AppShell
+      sidebar={<Sidebar userFooter={userFooter} />}
+      topBar={<DashboardMobileBar userFooter={userFooter} />}
+    >
+      {children}
+    </AppShell>
   );
 }
