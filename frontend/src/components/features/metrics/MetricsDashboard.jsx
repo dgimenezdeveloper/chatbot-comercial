@@ -35,8 +35,6 @@ import { useMetrics } from "@/hooks/useMetrics";
 import { useMetricsFilter } from "@/hooks/useMetricsFilter";
 import { useMetricsData } from "@/hooks/useMetricsData";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function Skeleton({ className }) {
   return <div className={cn("animate-pulse rounded-lg bg-muted", className)} />;
 }
@@ -71,21 +69,10 @@ function PeriodFilter({ filters, setFilters, isStale, onRefetch }) {
   );
 }
 
-// ─── Main client component ────────────────────────────────────────────────────
-
-/**
- * MetricsDashboard — Client Component.
- *
- * Receives `accessToken` from the parent Server Component (page.jsx),
- * which reads it from the session via auth(). This avoids needing
- * SessionProvider and keeps the auth pattern consistent with the rest of the app.
- *
- * @param {{ accessToken?: string }} props
- */
-export function MetricsDashboard({ accessToken }) {
+export function MetricsDashboard({ accessToken, businessId = 1 }) {
   const { filters, setFilters } = useMetricsFilter({
     days: 30,
-    businessId: 1,
+    businessId: businessId,  // Leído desde la sesión del usuario
     includeExtended: true,
   });
 
@@ -106,7 +93,6 @@ export function MetricsDashboard({ accessToken }) {
 
   const handleRefetch = useCallback(() => refetch(), [refetch]);
 
-  // ── Error state ─────────────────────────────────────────────────────────────
   if (error && !data) {
     return (
       <DashboardPageLayout>
@@ -145,9 +131,9 @@ export function MetricsDashboard({ accessToken }) {
 
       <div className="space-y-8">
         {/* KPI Cards */}
-        <section className="rounded-2xl  p-6 shadow-sm">
+        <section className="rounded-2xl p-6 shadow-sm">
           <div className="mb-4">
-            <h2 className="text-base font-semibold ">
+            <h2 className="text-base font-semibold">
               Indicadores Clave de Rendimiento
             </h2>
             <p className="mt-0.5 text-sm text-primary-foreground/70">

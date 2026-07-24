@@ -1,3 +1,4 @@
+import { auth } from "@/auth";
 import { Plus, LayoutDashboard } from "lucide-react";
 
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
@@ -18,8 +19,6 @@ import {
 } from "@/lib/data-mock/mock-dashboard";
 import { cn } from "@/lib/utils";
 
-// ─── Status config ────────────────────────────────────────────────────────────
-
 const STATUS_CONFIG = {
   confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30"              },
   pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40"   },
@@ -27,11 +26,6 @@ const STATUS_CONFIG = {
   unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border"              },
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-/**
- * StatCard — one of the four metric cards at the top.
- */
 function StatCard({ value, label }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-card px-6 py-5 text-center">
@@ -41,10 +35,6 @@ function StatCard({ value, label }) {
   );
 }
 
-/**
- * StatusBadge — semantic status pill for appointment states.
- * Uses success/warning/destructive/muted tokens from the theme.
- */
 function StatusBadge({ status }) {
   const config = STATUS_CONFIG[status] ?? {
     label: status,
@@ -60,50 +50,59 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+export default async function DashboardPage() {
+  const session = await auth();
+  const businessId = session?.user?.business_id ?? 1;
 
-export default function DashboardPage() {
-  // Format today's date in Spanish
-  const today = new Date().toLocaleDateString("es-AR", {
-    weekday: "long",
-    day:     "numeric",
-    month:   "long",
-    year:    "numeric",
-  });
-  // Capitalize first letter
-  const todayLabel = today.charAt(0).toUpperCase() + today.slice(1);
+  // Si es Inquilino 1 (Peluquería), mostramos el dataset rico de prueba.
+  // Si es Inquilino 2 (Barbería nuevo), se muestra vacía como corresponde a un nuevo cliente SaaS.
+  const isTenantRico = businessId === 1;
+
+  const stats = isTenantRico ? MOCK_STATS : {
+    todayAppointments: 0,
+    depositsCobrados: 0,
+    botConsultas: 0,
+    newClients: 0
+  };
+
+  const todayAppointments = isTenantRico ? MOCK_TODAY_APPOINTMENTS : [];
+  
+  const weeklySummary = isTenantRico ? MOCK_WEEKLY_SUMMARY : [
+    { day: "Lunes", count: 0 },
+    { day: "Martes", count: 0 },
+    { day: "Miércoles", count: 0 },
+    { day: "Jueves", count: 0 },
+    { day: "Viernes", count: 0 },
+    { day: "Sábado", count: 0 }
+  ];
 
   return (
     <DashboardPageLayout>
-      {/* ── Header ────────────────────────────────────────────────────────── */}
       <PageHeader
         icon={<LayoutDashboard className="size-5" />}
-        title="Panel de Control — Administrador"
+        title={`Panel de Control — ${session?.user?.name || "Administrador"}`}
       />
 
-      {/* ── Stats row ─────────────────────────────────────────────────────── */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          value={MOCK_STATS.todayAppointments}
+          value={stats.todayAppointments}
           label="Turnos Hoy"
         />
         <StatCard
-          value={`$${MOCK_STATS.depositsCobrados.toLocaleString("es-AR")}`}
+          value={`$${stats.depositsCobrados.toLocaleString("es-AR")}`}
           label="Señas cobradas"
         />
         <StatCard
-          value={MOCK_STATS.botConsultas}
+          value={stats.botConsultas}
           label="Consultas bot"
         />
         <StatCard
-          value={MOCK_STATS.newClients}
+          value={stats.newClients}
           label="Clientes nuevos"
         />
       </div>
 
-      {/* ── Today's appointments ──────────────────────────────────────────── */}
       <section className="mb-8">
-        {/* Section header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">
             Turnos de Hoy
@@ -136,38 +135,44 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_TODAY_APPOINTMENTS.map((appt) => (
-                <TableRow key={appt.id} className="border-border hover:bg-muted/30">
-                  <TableCell className="px-5 py-4 font-medium text-foreground">
-                    {appt.time}
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-foreground">
-                    {appt.client}
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-muted-foreground">
-                    {appt.service}
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <StatusBadge status={appt.status} />
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-right">
-                    {/* Placeholder for future action buttons */}
+              {todayAppointments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
+                    No hay turnos agendados para hoy en este comercio.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                todayAppointments.map((appt) => (
+                  <TableRow key={appt.id} className="border-border hover:bg-muted/30">
+                    <TableCell className="px-5 py-4 font-medium text-foreground">
+                      {appt.time}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-foreground">
+                      {appt.client}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
+                      {appt.service}
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
+                      <StatusBadge status={appt.status} />
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-right">
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
       </section>
 
-      {/* ── Weekly summary ────────────────────────────────────────────────── */}
       <section>
         <div className="overflow-hidden rounded-xl border border-border">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4 text-sm">
             <span className="font-bold uppercase tracking-wide text-foreground">
               Esta semana:
             </span>
-            {MOCK_WEEKLY_SUMMARY.map((entry) => (
+            {weeklySummary.map((entry) => (
               <span key={entry.day} className="flex items-baseline gap-1.5">
                 <span className="text-muted-foreground">{entry.day}</span>
                 <span className="font-bold text-foreground">{entry.count}</span>
