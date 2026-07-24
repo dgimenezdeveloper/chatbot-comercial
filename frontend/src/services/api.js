@@ -32,7 +32,7 @@ export async function fetchMetrics({
   segmentBy,
   accessToken,
 } = {}) {
-  const url = new URL(`${BASE_URL}/admin/metrics`);
+  const url = new URL(`${BASE_URL}/admin/metrics/`);
 
   url.searchParams.set("days", days);
   url.searchParams.set("business_id", businessId);
