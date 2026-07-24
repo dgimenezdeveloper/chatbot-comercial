@@ -14,7 +14,7 @@ from app.db.models.service import Service
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import get_user_state, set_user_state, clear_user_state
 from app.services.event_logger import log_event
-from app.services.negocio import get_active_services, get_available_slots, get_business_timezone
+from app.services.negocio import get_active_services, get_available_slots, get_business_timezone, get_or_create_user
 from app.services.catalog import get_products
 from app.services.calendar import create_appointment, get_appointments_by_phone, cancel_appointment
 from app.services.faq import search_faqs, get_faqs
