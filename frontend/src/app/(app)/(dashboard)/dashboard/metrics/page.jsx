@@ -1,16 +1,11 @@
-import { auth } from "@/auth";
 import { MetricsDashboard } from "@/components/features/metrics/MetricsDashboard";
 
 /**
- * Server Component — reads the session and passes the backend access token
- * to the MetricsDashboard Client Component.
+ * Metrics page — renders the MetricsDashboard client component.
  *
- * This avoids needing SessionProvider while keeping auth consistent
- * with the rest of the app (auth() server-side pattern).
+ * Auth is handled automatically by the Axios interceptor (getSession),
+ * so no need to pass accessToken as prop anymore.
  */
-export default async function MetricsPage() {
-  const session = await auth();
-  const accessToken = session?.backendAccessToken ?? null;
-
-  return <MetricsDashboard accessToken={accessToken} />;
+export default function MetricsPage() {
+  return <MetricsDashboard />;
 }

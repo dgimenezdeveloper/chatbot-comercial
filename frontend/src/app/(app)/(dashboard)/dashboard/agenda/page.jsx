@@ -2,6 +2,7 @@
 
 import AgendaView from "@/components/features/agenda/agenda-view/agenda-view";
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
+import { ErrorState } from "@/components/ui/error-state/error-state";
 import { useTurnos } from "@/hooks/useTurnos";
 import { Loader2 } from "lucide-react";
 
@@ -35,7 +36,7 @@ function toAgendaAppointment(turno) {
 }
 
 export default function AgendaPage() {
-  const { turnos, isLoading, isError, error } = useTurnos();
+  const { turnos, isLoading, isError, error, refetch } = useTurnos();
 
   if (isLoading) {
     return (
@@ -51,11 +52,10 @@ export default function AgendaPage() {
   if (isError) {
     return (
       <DashboardPageLayout>
-        <div className="flex flex-1 items-center justify-center py-20">
-          <p className="text-sm text-destructive">
-            Error al cargar turnos: {error?.message || "Error desconocido"}
-          </p>
-        </div>
+        <ErrorState
+          message={error?.message}
+          onRetry={refetch}
+        />
       </DashboardPageLayout>
     );
   }

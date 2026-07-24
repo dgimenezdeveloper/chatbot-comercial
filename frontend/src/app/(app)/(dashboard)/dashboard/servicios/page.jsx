@@ -10,6 +10,7 @@ export default function ServiciosPage() {
     isLoading,
     isError,
     error,
+    refetch,
     deleteService,
   } = useServicios();
 
@@ -20,6 +21,7 @@ export default function ServiciosPage() {
         isLoading={isLoading}
         isError={isError}
         error={error}
+        onRetry={refetch}
         onDeleteService={deleteService}
       />
     </DashboardPageLayout>

@@ -6,6 +6,7 @@ import { Loader2, Pencil, Plus, Scissors, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge/badge";
 import { Button } from "@/components/ui/button/button";
+import { ErrorState } from "@/components/ui/error-state/error-state";
 import { Switch } from "@/components/ui/switch/switch";
 import {
   Table,
@@ -46,6 +47,7 @@ export default function ServicesView({
   isLoading,
   isError,
   error,
+  onRetry,
   onAddService,
   onEditService,
   onDeleteService,
@@ -89,10 +91,8 @@ export default function ServicesView({
   // Error state
   if (isError) {
     return (
-      <section className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
-        <p className="text-sm text-destructive">
-          Error al cargar servicios: {error?.message || "Error desconocido"}
-        </p>
+      <section className="flex flex-1 flex-col">
+        <ErrorState message={error?.message} onRetry={onRetry} />
       </section>
     );
   }
