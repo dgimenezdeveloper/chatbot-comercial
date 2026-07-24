@@ -18,17 +18,22 @@ app = FastAPI(
     description="API para panel de administración y chatbot de WhatsApp, protegida con Google OAuth2 y JWT.",
     version="0.1.0",
 )
-# Auto-crea todas las tablas de SQLAlchemy en la base de datos si no existen al iniciar
+
 Base.metadata.create_all(bind=engine)
 
-# Configuración de CORS
-# Permite que la app de Next.js (puerto 3000) pueda consumir la API de FastAPI (puerto 8000)
+# Configuración de CORS habilitando el frontend de Azure y localhost
+ORIGINS = [
+    "http://localhost:3000",
+    "https://pymebot-chat.azurewebsites.net",
+    "https://pymebot.azurewebsites.net",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Cambiar a URL de producción en el futuro
+    allow_origins=ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos los verbos HTTP (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Permite todas las cabeceras (incluyendo Authorization y Content-Type)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Rutas Públicas (Auth y Webhooks)
