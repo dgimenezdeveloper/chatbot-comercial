@@ -1,4 +1,5 @@
 import logging
+import zoneinfo
 from datetime import datetime, date, timedelta, timezone
 
 from fastapi import APIRouter, Query, Response, status, Depends
@@ -12,8 +13,9 @@ from app.db.models.feedback import Feedback
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import get_user_state, set_user_state, clear_user_state
 from app.services.event_logger import log_event
-from app.services.negocio import get_active_services, get_available_slots
+from app.services.negocio import get_active_services, get_available_slots, get_business_timezone
 from app.services.catalog import get_products
+from app.services.calendar import create_appointment
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,14 +44,12 @@ BOTONES_TURNOS = [
 
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     """Actualiza el business_id de la sesión en PostgreSQL y limpia el estado en Redis."""
-    # Generar variantes de teléfono para Argentina (54911... y 541115...)
     variants = {phone_number}
     if phone_number.startswith("541115"):
         variants.add("54911" + phone_number[6:])
     elif phone_number.startswith("54911"):
         variants.add("541115" + phone_number[5:])
     
-    # Buscar todas las sesiones que coincidan con cualquier variante
     sessions = db.query(ChatSession).filter(
         or_(
             ChatSession.session_id.in_(variants),
@@ -72,11 +72,9 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
         db.add(new_s)
         db.commit()
 
-    # Limpiar estado en Redis para todas las variantes
     for v in variants:
         await clear_user_state(v)
 
-    # Responder por WhatsApp
     await send_message(
         phone=phone_number,
         text=f"✅ Demo cambiada con éxito. Ahora estás interactuando con la {business_name} (ID {target_business_id})."
@@ -357,30 +355,69 @@ async def handle_time_selection(phone: str, button_title: str, user_state: dict,
 
 
 async def handle_appointment_confirmation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
-    """Confirma el agendamiento del turno con los parámetros consolidados."""
-    fecha = user_state.get("fecha_seleccionada", "Hoy")
-    hora = user_state.get("hora_seleccionada", "10:00 hs")
-    servicio = user_state.get("servicio_seleccionado", "Servicio General")
+    """Confirma el agendamiento del turno con los parámetros consolidados y lo guarda en DB."""
+    fecha_label = user_state.get("fecha_seleccionada", "Hoy")
+    fecha_iso = user_state.get("fecha_iso", date.today().isoformat())
+    hora_label = user_state.get("hora_seleccionada", "10:00 hs")
+    servicio_nombre = user_state.get("servicio_seleccionado", "Servicio General")
+    servicio_id = user_state.get("servicio_id")
 
+    # Fallback de seguridad si se perdió el ID del servicio
+    if not servicio_id:
+        active_svcs = get_active_services(db, business_id)
+        servicio_id = active_svcs[0].id if active_svcs else 1
+
+    # 1. Convertir fecha y hora a datetime timezone-aware
+    time_part = hora_label.replace(" hs", "").strip()
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
+    
+    dt_str = f"{fecha_iso} {time_part}"
+    scheduled_date = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+
+    # 2. Guardar el turno real en PostgreSQL
+    appt_data = {
+        "business_id": business_id,
+        "user_phone": phone,
+        "user_name": user_text[:200],  # Truncar por seguridad
+        "service_id": servicio_id,
+        "scheduled_date": scheduled_date,
+        "status": "confirmed",
+        "created_via": "chatbot",
+        "session_id": phone
+    }
+    
+    try:
+        appointment = create_appointment(db, appt_data)
+        appt_id = appointment.id
+        logger.info(f"Turno guardado en DB exitosamente: ID {appt_id}")
+    except Exception as e:
+        logger.error(f"Error al guardar el turno en DB: {e}")
+        await send_message(phone, "Hubo un error interno al guardar tu turno. Por favor, intenta nuevamente más tarde.")
+        await clear_user_state(phone)
+        return
+
+    # 3. Registrar eventos analíticos con el ID real
     log_event(
         session_id=phone,
         business_id=business_id,
         event_type="appointment_created",
-        payload={"via_bot": True, "servicio": servicio, "fecha": fecha, "hora": hora},
+        payload={"appointment_id": appt_id, "via_bot": True, "servicio": servicio_nombre, "fecha": fecha_iso, "hora": time_part},
     )
     log_event(
         session_id=phone,
         business_id=business_id,
         event_type="reminder_sent",
-        payload={"servicio": servicio, "fecha": fecha, "hora": hora},
+        payload={"appointment_id": appt_id, "servicio": servicio_nombre, "fecha": fecha_iso, "hora": time_part},
     )
     
+    # 4. Enviar confirmación al cliente
     confirmacion_text = (
         f"🎉 *¡Turno Agendado con Éxito!*\n\n"
         f"👤 *Cliente:* {user_text}\n"
-        f"💇‍♀️ *Servicio:* {servicio}\n"
-        f"📅 *Día:* {fecha}\n"
-        f"⏰ *Hora:* {hora}\n\n"
+        f"💇‍♀️ *Servicio:* {servicio_nombre}\n"
+        f"📅 *Día:* {fecha_label}\n"
+        f"⏰ *Hora:* {hora_label}\n\n"
         f"Te enviaremos un recordatorio antes de tu cita. ¡Muchas gracias por elegirnos! 💇‍♀️✨"
     )
     await send_message(phone=phone, text=confirmacion_text)
@@ -400,7 +437,7 @@ async def handle_list_selection(phone: str, selected_id: str, row_title: str, us
         try:
             svc_db_id = int(selected_id.replace("srv_", ""))
         except ValueError:
-            svc_db_id = None
+            svc_db_id = 1
 
         log_event(
             session_id=phone,
