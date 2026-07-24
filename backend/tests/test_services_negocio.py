@@ -1,7 +1,8 @@
 """Tests para negocio service — orquestación del chatbot."""
 
 from datetime import date, datetime
-from unittest.mock import MagicMock
+import zoneinfo
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -93,65 +94,67 @@ class TestGetActiveServices:
 
 
 class TestGetAvailableSlots:
-    def test_returns_slots_for_service_with_no_occupancy(self, mock_db):
+    @patch("app.services.negocio.get_freebusy", return_value=[])
+    def test_returns_slots_for_service_with_no_occupancy(self, mock_gcal, mock_db):
         """Sin turnos ocupados, debe devolver todos los slots del día."""
         service = MagicMock(id=1, duration_minutes=60)
-        # Primer call: service query
-        # Segundo call: occupied query
+        business = MagicMock(id=1, timezone="America/Argentina/Buenos_Aires", google_calendar_id=None)
         mock_db.query.return_value.filter.return_value.first.side_effect = [
             service,  # get service
+            business, # get business
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = []  # no occupied
+        mock_db.query.return_value.filter.return_value.all.return_value = []
 
         target = date(2026, 1, 15)
         slots = get_available_slots(mock_db, service_id=1, business_id=1, target_date=target)
-        # 9am to 8pm, 60min slots → 11 slots
         assert len(slots) == 11
         assert slots[0].hour == 9
         assert slots[-1].hour == 19
 
-    def test_returns_empty_when_service_not_found(self, mock_db):
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+    @patch("app.services.negocio.get_freebusy", return_value=[])
+    def test_returns_empty_when_service_not_found(self, mock_gcal, mock_db):
+        mock_db.query.return_value.filter.return_value.first.side_effect = [None, None]
 
         slots = get_available_slots(mock_db, service_id=999, business_id=1, target_date=date(2026, 1, 15))
         assert slots == []
 
-    def test_excludes_occupied_slots(self, mock_db):
+    @patch("app.services.negocio.get_freebusy", return_value=[])
+    def test_excludes_occupied_slots(self, mock_gcal, mock_db):
         """Slots ocupados deben ser excluidos."""
         service = MagicMock(id=1, duration_minutes=30)
+        business = MagicMock(id=1, timezone="America/Argentina/Buenos_Aires", google_calendar_id=None)
         target = date(2026, 1, 15)
 
-        # Ocupar el slot de 9:00
-        occupied_time = datetime(2026, 1, 15, 9, 0)
-        mock_db.query.return_value.filter.return_value.first.return_value = service
+        tz = zoneinfo.ZoneInfo("America/Argentina/Buenos_Aires")
+        occupied_time = datetime(2026, 1, 15, 9, 0, tzinfo=tz)
+        mock_db.query.return_value.filter.return_value.first.side_effect = [service, business]
         mock_db.query.return_value.filter.return_value.all.return_value = [(occupied_time,)]
 
         slots = get_available_slots(mock_db, service_id=1, business_id=1, target_date=target)
-        # 30-min slots from 9am to 8pm = 22 slots, minus 1 occupied = 21
         assert len(slots) == 21
-        # 9:00 should not be in slots
         assert occupied_time not in slots
 
-    def test_respects_duration_for_slots(self, mock_db):
+    @patch("app.services.negocio.get_freebusy", return_value=[])
+    def test_respects_duration_for_slots(self, mock_gcal, mock_db):
         """Slots se calculan según la duración del servicio."""
         service = MagicMock(id=1, duration_minutes=90)
-        mock_db.query.return_value.filter.return_value.first.return_value = service
+        business = MagicMock(id=1, timezone="America/Argentina/Buenos_Aires", google_calendar_id=None)
+        mock_db.query.return_value.filter.return_value.first.side_effect = [service, business]
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
         target = date(2026, 1, 15)
         slots = get_available_slots(mock_db, service_id=1, business_id=1, target_date=target)
-        # 9am-8pm in 90-min blocks: 9:00, 10:30, 12:00, 13:30, 15:00, 16:30, 18:00 = 7 slots
         assert len(slots) == 7
 
-    def test_uses_notin_for_cancelled(self):
+    @patch("app.services.negocio.get_freebusy", return_value=[])
+    def test_uses_notin_for_cancelled(self, mock_gcal, mock_db):
         """W7: usa .notin_() en lugar de ~.in_() para cancelled."""
         service = MagicMock(id=1, duration_minutes=60)
-        mock_db.query.return_value.filter.return_value.first.return_value = service
+        business = MagicMock(id=1, timezone="America/Argentina/Buenos_Aires", google_calendar_id=None)
+        mock_db.query.return_value.filter.return_value.first.side_effect = [service, business]
         mock_db.query.return_value.filter.return_value.all.return_value = []
 
         get_available_slots(mock_db, service_id=1, business_id=1, target_date=date(2026, 1, 15))
-        # Verificar que se usó filter (notin se aplica dentro de la query)
-        # No podemos verificarlo directamente con el mock, pero el test no debe fallar
 
 
 class TestGetBusinessTimezone:
