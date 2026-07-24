@@ -3,13 +3,15 @@ import ClientsView from "@/components/features/clients/clients-view/clients-view
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 
 async function fetchClients(token) {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://pymebot.azurewebsites.net/api/v1";
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${baseUrl}/admin/clientes`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       cache: "no-store",
     });
 

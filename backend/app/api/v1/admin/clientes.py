@@ -18,7 +18,7 @@ async def listar_clientes(
 ):
     business_id = current_user.get("business_id", 1)
     
-    # Consultar usuarios pertenecientes al comercio
+    # Consultar usuarios pertenecientes al comercio (clientes guest y registrados)
     users = db.query(User).filter(User.business_id == business_id).all()
     
     resultado = []

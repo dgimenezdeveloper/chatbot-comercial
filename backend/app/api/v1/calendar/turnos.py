@@ -33,7 +33,7 @@ async def listar_turnos(
         svc_name = service.name if service else "Servicio General"
         duration = service.duration_minutes if service else 30
         
-        # Garantizar conversion UTC a Local
+        # Garantizar conversión UTC a Local
         utc_dt = t.scheduled_date if t.scheduled_date.tzinfo else t.scheduled_date.replace(tzinfo=timezone.utc)
         local_dt = utc_dt.astimezone(tz)
         end_dt = local_dt + timedelta(minutes=duration)
