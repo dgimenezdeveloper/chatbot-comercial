@@ -81,7 +81,7 @@ class Appointment(Base):
         comment="Fecha original del turno cancelado",
     )
 
-    # Canal de creación
+    # Canal de creación y Google Calendar
     created_via = Column(
         Enum("web", "chatbot", "api", name="creation_channel"),
         default="chatbot",
@@ -90,6 +90,10 @@ class Appointment(Base):
     session_id = Column(
         String(100), nullable=True,
         comment="ID de sesión de WhatsApp asociada",
+    )
+    google_event_id = Column(
+        String(255), nullable=True,
+        comment="ID del evento en Google Calendar",
     )
 
     # Trazabilidad WhatsApp

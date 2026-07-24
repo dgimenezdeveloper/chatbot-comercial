@@ -47,7 +47,7 @@ class Business(Base):
         comment="Verify token para el webhook de Meta",
     )
 
-    # Configuración regional
+    # Configuración regional y Calendario
     timezone = Column(
         String(50), default="America/Argentina/Buenos_Aires",
         comment="Timezone del negocio",
@@ -55,6 +55,10 @@ class Business(Base):
     currency = Column(
         String(3), default="ARS",
         comment="Código de moneda para precios",
+    )
+    google_calendar_id = Column(
+        String(255), nullable=True,
+        comment="ID del calendario secundario de Google",
     )
 
     # Métodos de pago habilitados
