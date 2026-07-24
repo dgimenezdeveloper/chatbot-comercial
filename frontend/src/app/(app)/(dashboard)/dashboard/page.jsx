@@ -15,7 +15,7 @@ import {
   MOCK_STATS,
   MOCK_TODAY_APPOINTMENTS,
   MOCK_WEEKLY_SUMMARY,
-} from "@/lib/data/mock-dashboard";
+} from "@/lib/data-mock/mock-dashboard";
 import { cn } from "@/lib/utils";
 
 // ─── Status config ────────────────────────────────────────────────────────────

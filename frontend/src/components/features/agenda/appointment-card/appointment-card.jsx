@@ -1,4 +1,4 @@
-import { APPOINTMENT_STATUS } from "@/lib/data/mock-appointments";
+import { APPOINTMENT_STATUS } from "@/lib/data-mock/mock-appointments";
 import { cn } from "@/lib/utils";
 
 const toneStyles = {
