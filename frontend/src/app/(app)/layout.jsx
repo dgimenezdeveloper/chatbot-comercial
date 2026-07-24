@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import ThemeProvider from "@/components/layout/ThemeProvider";
+import QueryProvider from "@/components/providers/QueryProvider";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -19,7 +20,7 @@ export default function AppLayout({ children }) {
       {/* Applies theme-app class to <html> so CSS vars override :root fallbacks */}
       <ThemeProvider theme="theme-app" />
       <div className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+        <QueryProvider>{children}</QueryProvider>
       </div>
     </>
   );

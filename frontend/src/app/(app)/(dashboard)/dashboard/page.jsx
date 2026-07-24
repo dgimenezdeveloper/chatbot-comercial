@@ -1,4 +1,6 @@
-import { Plus, LayoutDashboard } from "lucide-react";
+"use client";
+
+import { Loader2, Plus, LayoutDashboard } from "lucide-react";
 
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -11,43 +13,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table/table";
-import {
-  MOCK_STATS,
-  MOCK_TODAY_APPOINTMENTS,
-  MOCK_WEEKLY_SUMMARY,
-} from "@/lib/data-mock/mock-dashboard";
+import { useTurnos } from "@/hooks/useTurnos";
 import { cn } from "@/lib/utils";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30"              },
-  pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40"   },
-  expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30"  },
-  unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border"              },
+  confirmado:      { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
+  confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
+  pendiente:       { label: "Pendiente",         className: "bg-warning/15 text-warning-foreground border border-warning/40" },
+  pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40" },
+  cancelado:       { label: "Cancelado",         className: "bg-destructive/10 text-destructive border border-destructive/30" },
+  expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30" },
+  unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border" },
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/**
- * StatCard — one of the four metric cards at the top.
- */
-function StatCard({ value, label }) {
+function StatCard({ value, label, isLoading }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-card px-6 py-5 text-center">
-      <span className="text-3xl font-bold text-foreground">{value}</span>
+      {isLoading ? (
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      ) : (
+        <span className="text-3xl font-bold text-foreground">{value}</span>
+      )}
       <span className="text-sm text-muted-foreground">{label}</span>
     </div>
   );
 }
 
-/**
- * StatusBadge — semantic status pill for appointment states.
- * Uses success/warning/destructive/muted tokens from the theme.
- */
 function StatusBadge({ status }) {
   const config = STATUS_CONFIG[status] ?? {
-    label: status,
+    label: status || "—",
     className: "bg-muted text-muted-foreground border border-border",
   };
   return (
@@ -63,15 +61,7 @@ function StatusBadge({ status }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  // Format today's date in Spanish
-  const today = new Date().toLocaleDateString("es-AR", {
-    weekday: "long",
-    day:     "numeric",
-    month:   "long",
-    year:    "numeric",
-  });
-  // Capitalize first letter
-  const todayLabel = today.charAt(0).toUpperCase() + today.slice(1);
+  const { turnos, todayTurnos, isLoading } = useTurnos();
 
   return (
     <DashboardPageLayout>
@@ -84,26 +74,29 @@ export default function DashboardPage() {
       {/* ── Stats row ─────────────────────────────────────────────────────── */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          value={MOCK_STATS.todayAppointments}
+          value={todayTurnos.length}
           label="Turnos Hoy"
+          isLoading={isLoading}
         />
         <StatCard
-          value={`$${MOCK_STATS.depositsCobrados.toLocaleString("es-AR")}`}
+          value={`$${(0).toLocaleString("es-AR")}`}
           label="Señas cobradas"
+          isLoading={isLoading}
         />
         <StatCard
-          value={MOCK_STATS.botConsultas}
-          label="Consultas bot"
+          value={turnos.length}
+          label="Turnos totales"
+          isLoading={isLoading}
         />
         <StatCard
-          value={MOCK_STATS.newClients}
-          label="Clientes nuevos"
+          value={todayTurnos.filter((t) => t.status === "confirmado").length}
+          label="Confirmados hoy"
+          isLoading={isLoading}
         />
       </div>
 
       {/* ── Today's appointments ──────────────────────────────────────────── */}
       <section className="mb-8">
-        {/* Section header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">
             Turnos de Hoy
@@ -136,43 +129,67 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {MOCK_TODAY_APPOINTMENTS.map((appt) => (
-                <TableRow key={appt.id} className="border-border hover:bg-muted/30">
-                  <TableCell className="px-5 py-4 font-medium text-foreground">
-                    {appt.time}
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-foreground">
-                    {appt.client}
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-muted-foreground">
-                    {appt.service}
-                  </TableCell>
-                  <TableCell className="px-5 py-4">
-                    <StatusBadge status={appt.status} />
-                  </TableCell>
-                  <TableCell className="px-5 py-4 text-right">
-                    {/* Placeholder for future action buttons */}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="px-5 py-10 text-center">
+                    <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : todayTurnos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="px-5 py-10 text-center text-muted-foreground">
+                    No hay turnos programados para hoy.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                todayTurnos.map((turno) => (
+                  <TableRow key={turno.id} className="border-border hover:bg-muted/30">
+                    <TableCell className="px-5 py-4 font-medium text-foreground">
+                      {turno.time}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-foreground">
+                      {turno.clientName}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-muted-foreground">
+                      {turno.serviceName}
+                    </TableCell>
+                    <TableCell className="px-5 py-4">
+                      <StatusBadge status={turno.status} />
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-right">
+                      {/* Future: action buttons */}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
       </section>
 
-      {/* ── Weekly summary ────────────────────────────────────────────────── */}
+      {/* ── All turnos summary ────────────────────────────────────────────── */}
       <section>
         <div className="overflow-hidden rounded-xl border border-border">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4 text-sm">
             <span className="font-bold uppercase tracking-wide text-foreground">
-              Esta semana:
+              Resumen:
             </span>
-            {MOCK_WEEKLY_SUMMARY.map((entry) => (
-              <span key={entry.day} className="flex items-baseline gap-1.5">
-                <span className="text-muted-foreground">{entry.day}</span>
-                <span className="font-bold text-foreground">{entry.count}</span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-bold text-foreground">{isLoading ? "..." : turnos.length}</span>
+            </span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Confirmados</span>
+              <span className="font-bold text-foreground">
+                {isLoading ? "..." : turnos.filter((t) => t.status === "confirmado").length}
               </span>
-            ))}
+            </span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Pendientes</span>
+              <span className="font-bold text-foreground">
+                {isLoading ? "..." : turnos.filter((t) => t.status === "pendiente").length}
+              </span>
+            </span>
           </div>
         </div>
       </section>

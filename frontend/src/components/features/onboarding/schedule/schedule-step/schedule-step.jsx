@@ -60,6 +60,14 @@ function formatTimeLabel(time) {
 }
 
 /**
+ * Items array for base-ui Select (value/label pairs).
+ */
+const TIME_ITEMS = TIME_OPTIONS.map((time) => ({
+  value: time,
+  label: formatTimeLabel(time),
+}));
+
+/**
  * Segundo paso del onboarding.
  
  */
@@ -69,6 +77,7 @@ export default function ScheduleStep({
   onFieldChange,
   onBack,
   onContinue,
+  isSubmitting = false,
 }) {
   return (
     <section className="flex flex-1 flex-col">
@@ -115,6 +124,7 @@ export default function ScheduleStep({
                 onValueChange={(value) =>
                   onFieldChange("open", value)
                 }
+                items={TIME_ITEMS}
               >
                 <SelectTrigger
                   id="opening-time"
@@ -150,6 +160,7 @@ export default function ScheduleStep({
                 onValueChange={(value) =>
                   onFieldChange("close", value)
                 }
+                items={TIME_ITEMS}
               >
                 <SelectTrigger
                   id="closing-time"
@@ -208,9 +219,9 @@ export default function ScheduleStep({
           Volver
         </Button>
 
-        <Button type="button" onClick={onContinue} size="lg" className="min-w-52">
-          Guardar y continuar
-          <span aria-hidden="true">→</span>
+        <Button type="button" onClick={onContinue} size="lg" className="min-w-52" disabled={isSubmitting}>
+          {isSubmitting ? "Guardando..." : "Guardar y continuar"}
+          {!isSubmitting && <span aria-hidden="true">→</span>}
         </Button>
       </footer>
     </section>

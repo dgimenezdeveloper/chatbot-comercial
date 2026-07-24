@@ -6,21 +6,22 @@
  * @module services/api
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 /**
  * Obtiene métricas del chatbot para un negocio.
  *
  * @param {Object} params
- * @param {number} [params.days=30] 
+ * @param {number} [params.days=30]
  * @param {number} [params.businessId=1]  
- * @param {boolean} [params.includeExtended=false] 
- * @param {string} [params.startDate] 
- * @param {string} [params.endDate] 
- * @param {string} [params.segmentBy] 
- * @param {string} [params.accessToken] 
- * @returns {Promise<Object>} 
- * @throws {Error} 
+ * @param {boolean} [params.includeExtended=false]
+ * @param {string} [params.startDate]
+ * @param {string} [params.endDate]
+ * @param {string} [params.segmentBy]
+ * @param {string} [params.accessToken]
+ * @returns {Promise<Object>}
+ * @throws {Error}
  */
 export async function fetchMetrics({
   days = 30,
