@@ -18,10 +18,8 @@ export function StaleBadge({ isStale, onRefresh, className }) {
       onClick={onRefresh}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
-        "bg-amber-100 text-amber-800 border border-amber-300",
-        "dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700",
-        "hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors",
-        "cursor-pointer",
+        "bg-[hsl(var(--cta)/0.15)] text-[hsl(var(--cta))] border border-[hsl(var(--cta)/0.4)]",
+        "hover:bg-[hsl(var(--cta)/0.25)] transition-colors cursor-pointer",
         className
       )}
       title="Click para actualizar los datos"

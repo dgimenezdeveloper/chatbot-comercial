@@ -2,19 +2,22 @@ import { auth } from "@/auth";
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isDashboardRoute = req.nextUrl.pathname.startsWith("/dashboard");
-  const isAuthRoute = req.nextUrl.pathname.startsWith("/login");
+  const { pathname } = req.nextUrl;
 
-  if (isDashboardRoute && !isLoggedIn) {
+  const isProtectedRoute =
+    pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");
+  const isAuthRoute = pathname.startsWith("/login");
+
+  if (isProtectedRoute && !isLoggedIn) {
     return Response.redirect(new URL("/login", req.nextUrl));
   }
 
+  // Redirect already-authenticated users away from login
   if (isAuthRoute && isLoggedIn) {
     return Response.redirect(new URL("/dashboard", req.nextUrl));
   }
 });
 
-// Ignore all requests that are not for the dashboard or login routes
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

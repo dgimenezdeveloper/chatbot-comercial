@@ -13,7 +13,22 @@ import {
 } from "recharts";
 import { EmptyState } from "@/components/ui/empty-state/empty-state";
 
-const DEFAULT_FILL = "#6366f1";
+// CSS custom property values for Recharts inline styles (can't use Tailwind classes there)
+const CHART_COLORS = {
+  grid:    "hsl(var(--border))",
+  axis:    "hsl(var(--muted-foreground))",
+  axisLine:"hsl(var(--border))",
+  tooltip: {
+    background:   "hsl(var(--card))",
+    border:       "1px solid hsl(var(--border))",
+    borderRadius: "8px",
+    fontSize:     "13px",
+    color:        "hsl(var(--foreground))",
+  },
+  legend: { fontSize: "13px" },
+};
+
+const DEFAULT_FILL = "hsl(var(--primary))";
 
 /**
  * Gráfico de barras configurable con soporte para drill-down y comparativas.
@@ -54,65 +69,61 @@ export function MetricsBarChart({
     );
   }
 
-  const isHorizontal = layout === "horizontal";
+  // Recharts naming is counterintuitive:
+  //   layout="horizontal" (default) → bars grow vertically (categories on X)
+  //   layout="vertical"             → bars grow horizontally (categories on Y)
+  // Our prop `layout` uses intuitive naming:
+  //   "vertical"   → bars grow upward (default)
+  //   "horizontal" → bars grow sideways
+  const rechartsLayout = layout === "horizontal" ? "vertical" : "horizontal";
+  const isHorizontalBars = layout === "horizontal";
 
   return (
     <div className={className} style={{ width: "100%", height: height || 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={mergedData}
-          layout={isHorizontal ? "horizontal" : "vertical"}
+          layout={rechartsLayout}
           margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          {isHorizontal ? (
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+          {isHorizontalBars ? (
             <>
               <YAxis
                 type="category"
                 dataKey={xKey}
-                tick={{ fontSize: 12, fill: "#475569" }}
+                tick={{ fontSize: 12, fill: CHART_COLORS.axis }}
                 width={120}
-                axisLine={{ stroke: "#cbd5e1" }}
-                tickLine={{ stroke: "#cbd5e1" }}
+                axisLine={{ stroke: CHART_COLORS.axisLine }}
+                tickLine={{ stroke: CHART_COLORS.axisLine }}
               />
               <XAxis
                 type="number"
-                tick={{ fontSize: 12, fill: "#475569" }}
-                axisLine={{ stroke: "#cbd5e1" }}
-                tickLine={{ stroke: "#cbd5e1" }}
+                tick={{ fontSize: 12, fill: CHART_COLORS.axis }}
+                axisLine={{ stroke: CHART_COLORS.axisLine }}
+                tickLine={{ stroke: CHART_COLORS.axisLine }}
               />
             </>
           ) : (
             <>
               <XAxis
                 dataKey={xKey}
-                tick={{ fontSize: 12, fill: "#475569" }}
-                axisLine={{ stroke: "#cbd5e1" }}
-                tickLine={{ stroke: "#cbd5e1" }}
+                tick={{ fontSize: 12, fill: CHART_COLORS.axis }}
+                axisLine={{ stroke: CHART_COLORS.axisLine }}
+                tickLine={{ stroke: CHART_COLORS.axisLine }}
               />
               <YAxis
-                tick={{ fontSize: 12, fill: "#475569" }}
-                axisLine={{ stroke: "#cbd5e1" }}
-                tickLine={{ stroke: "#cbd5e1" }}
+                tick={{ fontSize: 12, fill: CHART_COLORS.axis }}
+                axisLine={{ stroke: CHART_COLORS.axisLine }}
+                tickLine={{ stroke: CHART_COLORS.axisLine }}
               />
             </>
           )}
           {showTooltip && (
-            <Tooltip
-              contentStyle={{
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                fontSize: "13px",
-                color: "#1e293b",
-              }}
-            />
+            <Tooltip contentStyle={CHART_COLORS.tooltip} />
           )}
           {showLegend && (
-            <Legend
-              wrapperStyle={{ fontSize: "13px", color: "#475569" }}
-            />
+            <Legend wrapperStyle={CHART_COLORS.legend} />
           )}
 
           {bars.map((bar) => (

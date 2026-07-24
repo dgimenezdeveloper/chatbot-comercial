@@ -60,32 +60,47 @@ frontend/
 ├── public/                  # Archivos estáticos (favicon, imágenes, logos)
 ├── src/
 │   ├── app/                 # Enrutador principal (Next.js App Router)
-│   │   ├── (marketing)/     # Grupo de rutas: Landing page y pre-venta (Públicas)
-│   │   ├── (auth)/          # Grupo de rutas: Login y Registro (Públicas)
-│   │   └── (dashboard)/     # Grupo de rutas: Onboarding y Panel de control (Privadas)
+│   │   ├── (landingpage)/   # Grupo de rutas: Landing page pública. Tema: theme-landing
+│   │   ├── (app)/           # Grupo de rutas privadas. Tema compartido: theme-app
+│   │   │   ├── (auth)/      # Login (dentro de app para compartir el tema)
+│   │   │   ├── (dashboard)/ # Panel de control principal
+│   │   │   └── (onboarding)/# Flujo de configuración inicial del comercio
+│   │   └── api/             # Route handlers de Next.js (ej. NextAuth callbacks)
 │   ├── components/
 │   │   ├── ui/              # Componentes primitivos (Shadcn/UI base)
-│   │   ├── layout/          # Estructuras globales (Sidebar, Navbar, Footers)
-│   │   └── features/        # Componentes complejos (ej. AppointmentsTable, SetupForm)
-│   ├── hooks/               # Custom React hooks (ej. useAppointments)
-│   ├── lib/                 # Configuración de librerías (Axios instance, Tailwind utils)
+│   │   ├── layout/          # Estructuras globales (Sidebar, Navbar, Footer)
+│   │   ├── features/        # Componentes de dominio (ej. AppointmentsTable, OnboardingForm)
+│   │   └── icons/           # Iconos SVG como componentes React
+│   ├── hooks/               # Custom React hooks (ej. use-appointments.js)
+│   ├── lib/                 # Utilidades compartidas (cn, axios instance, etc.)
 │   └── services/            # Funciones de fetching que interactúan con la API
+├── .storybook/              # Configuración de Storybook (usa @storybook/nextjs-vite)
 ├── .env.example             # Plantilla segura de variables de entorno
 ├── jsconfig.json            # Configuración de path aliases (@/*)
 └── package.json             # Manejo de dependencias y scripts
 ```
 
+### Sistema de Temas
+
+La aplicación tiene dos secciones visuales completamente distintas, cada una con su propio tema CSS:
+
+| Tema | Grupo de rutas | Fuentes |
+| :--- | :--- | :--- |
+| `theme-landing` | `(landingpage)` | Inter + Montserrat |
+| `theme-app` | `(app)` — dashboard, onboarding, auth | Geist Sans |
+
+Los temas se aplican en el elemento `<html>` desde cada layout de grupo usando el componente `ThemeProvider` (`src/components/layout/ThemeProvider.jsx`). Esto garantiza que las custom properties CSS de shadcn/ui se resuelvan correctamente en toda la jerarquía del DOM, sobreescribiendo los valores fallback de `:root`.
+
 ## 🗺️ Mapa de Rutas (Navegación)
 
 La aplicación utiliza el sistema de enrutamiento basado en el sistema de archivos de Next.js (App Router). A continuación se detallan las rutas principales accesibles para el usuario:
 
-| Ruta          | Vista / Componente | Grupo de Ruta | Nivel de Acceso         |
-| :------------ | :----------------- | :------------ | :---------------------- |
-| `/`           | Landing Page       | `(marketing)` | Público                 |
-| `/login`      | Login Page         | `(auth)`      | Público                 |
-| `/register`   | Register Page      | `(auth)`      | Público                 |
-| `/onboarding` | Onboarding Page    | `(dashboard)` | Privado (Requiere Auth) |
-| `/dashboard`  | Dashboard Page     | `(dashboard)` | Privado (Requiere Auth) |
+| Ruta          | Vista / Componente | Grupo de Ruta        | Nivel de Acceso         |
+| :------------ | :----------------- | :------------------- | :---------------------- |
+| `/`           | Landing Page       | `(landingpage)`      | Público                 |
+| `/login`      | Login Page         | `(app)/(auth)`       | Público                 |
+| `/onboarding` | Onboarding Page    | `(app)/(onboarding)` | Privado (Requiere Auth) |
+| `/dashboard`  | Dashboard Page     | `(app)/(dashboard)`  | Privado (Requiere Auth) |
 
 ## 🔐 Variables de Entorno (`.env.example`)
 

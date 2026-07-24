@@ -73,12 +73,12 @@ export default function ScheduleStep({
   return (
     <section className="flex flex-1 flex-col">
       {/* Encabezado */}
-      <header className="border-b border-slate-200 pb-6">
-        <h1 className="text-2xl font-bold text-slate-900">
+      <header className="border-b border-border pb-6">
+        <h1 className="text-2xl font-bold text-foreground">
           Configurá tus horarios de atención
         </h1>
 
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Definí en qué días y horarios atendés clientes. Podés
           modificarlos después.
         </p>
@@ -105,7 +105,7 @@ export default function ScheduleStep({
             <div>
               <Label
                 htmlFor="opening-time"
-                className="font-semibold text-slate-900"
+                className="font-semibold text-foreground"
               >
                 Horario de apertura
               </Label>
@@ -140,7 +140,7 @@ export default function ScheduleStep({
             <div>
               <Label
                 htmlFor="closing-time"
-                className="font-semibold text-slate-900"
+                className="font-semibold text-foreground"
               >
                 Horario de cierre
               </Label>
@@ -188,12 +188,12 @@ export default function ScheduleStep({
             <div>
               <Label
                 htmlFor="lunch-break"
-                className="cursor-pointer font-normal text-slate-600"
+                className="cursor-pointer font-normal text-muted-foreground"
               >
                 Habilitar pausa del mediodía
               </Label>
 
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Ejemplo: de 13:00 a 14:00.
               </p>
             </div>
@@ -202,21 +202,15 @@ export default function ScheduleStep({
       </div>
 
       {/* Acciones inferiores */}
-      <footer className="flex items-center justify-between border-t border-slate-200 pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-        >
+      <footer className="flex items-center justify-between border-t border-border pt-6">
+        <Button type="button" variant="outline" onClick={onBack}>
+          <span aria-hidden="true">←</span>
           Volver
         </Button>
 
-        <Button
-          type="button"
-          onClick={onContinue}
-          className="min-w-52"
-        >
+        <Button type="button" onClick={onContinue} size="lg" className="min-w-52">
           Guardar y continuar
+          <span aria-hidden="true">→</span>
         </Button>
       </footer>
     </section>

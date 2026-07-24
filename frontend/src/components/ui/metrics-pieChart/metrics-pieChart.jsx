@@ -88,12 +88,22 @@ export function MetricsPieChart({
             onClick={onSliceClick}
             style={onSliceClick ? { cursor: "pointer" } : undefined}
           />
-          {showTooltip && <Tooltip />}
+          {showTooltip && (
+            <Tooltip
+              contentStyle={{
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "8px",
+                fontSize: "13px",
+                color: "hsl(var(--foreground))",
+              }}
+            />
+          )}
           {showLegend && (
             <Legend
-              wrapperStyle={{ paddingTop: "16px", color: "#475569" }}
+              wrapperStyle={{ paddingTop: "16px" }}
               formatter={(value) => (
-                <span style={{ color: "#334155", fontSize: "13px" }}>
+                <span style={{ color: "hsl(var(--foreground))", fontSize: "13px" }}>
                   {value}
                 </span>
               )}

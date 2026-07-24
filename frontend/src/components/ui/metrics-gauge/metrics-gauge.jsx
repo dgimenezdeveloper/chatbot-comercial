@@ -3,11 +3,21 @@
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state/empty-state";
 
-const STATUS_COLORS = {
-  ok: "#22c55e",
-  warning: "#eab308",
-  critical: "#ef4444",
-};
+// Colors resolved at runtime from CSS custom properties so they follow the theme.
+// Fallback hex values are used only if CSS vars aren't available (e.g. SSR).
+function getStatusColor(status) {
+  if (typeof window === "undefined") {
+    // SSR fallbacks — match the token values defined in globals.css
+    return { ok: "hsl(142 71% 45%)", warning: "hsl(38 92% 50%)", critical: "hsl(0 84% 60%)" }[status] || "hsl(142 71% 45%)";
+  }
+  const style = getComputedStyle(document.documentElement);
+  const map = {
+    ok:       `hsl(${style.getPropertyValue("--success").trim()})`,
+    warning:  `hsl(${style.getPropertyValue("--warning").trim()})`,
+    critical: `hsl(${style.getPropertyValue("--destructive").trim()})`,
+  };
+  return map[status] || map.ok;
+}
 
 /**
  * Gauge semicircular implementado con SVG puro.
@@ -31,7 +41,7 @@ export function MetricsGauge({
   }
 
   const clamped = Math.min(100, Math.max(0, value));
-  const color = STATUS_COLORS[status] || STATUS_COLORS.ok;
+  const color = getStatusColor(status);
 
   
   const size = height * 0.8;
@@ -55,7 +65,7 @@ export function MetricsGauge({
         <path
           d={describeArc(size / 2, size * 0.6, radius, 180, 0)}
           fill="none"
-          stroke="#e2e8f0"
+          stroke="hsl(var(--border))"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
@@ -73,11 +83,11 @@ export function MetricsGauge({
 
       
       <div className="absolute flex flex-col items-center justify-center" style={{ bottom: "8%" }}>
-        <span className="text-2xl font-bold text-slate-800 dark:text-slate-100" style={{ color }}>
+        <span className="text-2xl font-bold text-foreground" style={{ color }}>
           {clamped}%
         </span>
         {label && (
-          <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          <span className="mt-1 text-xs text-muted-foreground">
             {label}
           </span>
         )}

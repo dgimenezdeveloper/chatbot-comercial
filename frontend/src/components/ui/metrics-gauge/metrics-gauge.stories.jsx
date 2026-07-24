@@ -2,7 +2,7 @@ import { MetricsGauge } from "./metrics-gauge";
 
 const meta = {
   component: MetricsGauge,
-  title: "UI/Metrics/Gauge",
+  title: "Components/Metrics/Gauge",
 };
 
 export default meta;

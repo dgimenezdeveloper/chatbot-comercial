@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button/button";
+import StoreIcon from "@/components/icons/dashboard/store";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -76,7 +77,7 @@ export default function LogoUpload({
   const displayedError = localError || error;
 
   return (
-    <div className="w-full max-w-[120px]">
+    <div className="w-full max-w-30">
       <p className="mb-3 text-sm font-medium text-slate-950">
         Foto de perfil
       </p>
@@ -104,27 +105,7 @@ export default function LogoUpload({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center p-5">
-            {/*
-              Reemplazar este bloque por el SVG de Figma
-            */}
-            <div
-              className="
-                flex
-                h-16
-                w-16
-                items-center
-                justify-center
-                rounded-xl
-                bg-blue-50
-                text-center
-                text-xs
-                font-semibold
-                text-blue-600
-              "
-              aria-hidden="true"
-            >
-              LOGO
-            </div>
+            <StoreIcon className="w-full" />
           </div>
         )}
       </div>

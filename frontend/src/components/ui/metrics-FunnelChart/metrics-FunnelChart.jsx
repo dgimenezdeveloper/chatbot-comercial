@@ -15,21 +15,21 @@ import { EmptyState } from "@/components/ui/empty-state/empty-state";
 /**
  * Custom Tooltip para el funnel de conversión.
  */
-function FunnelTooltip({ active, payload, label }) {
+function FunnelTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0].payload;
   return (
-    <div className="rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 p-3 shadow-md text-sm">
-      <p className="font-semibold text-foreground dark:text-gray-100">{data.label}</p>
-      <p className="text-muted-foreground dark:text-gray-300">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-md text-sm">
+      <p className="font-semibold text-foreground">{data.label}</p>
+      <p className="text-muted-foreground">
         Usuarios: <strong>{data.value}</strong>
       </p>
       {data.dropPct != null && (
-        <p className="text-red-500 dark:text-red-400">
+        <p className="text-destructive">
           -{data.dropPct}% vs paso anterior
         </p>
       )}
-      <p className="text-muted-foreground dark:text-gray-400 text-xs">
+      <p className="text-xs text-muted-foreground">
         {data.totalPct}% del inicio
       </p>
     </div>
@@ -94,14 +94,14 @@ export function MetricsFunnelChart({
           <CartesianGrid
             strokeDasharray="3 3"
             horizontal={false}
-            className="stroke-muted dark:stroke-gray-700"
+            stroke="hsl(var(--border))"
           />
           <XAxis type="number" hide />
           <YAxis
             type="category"
             dataKey="label"
             tick={{ fontSize: 13 }}
-            className="fill-foreground dark:fill-gray-300"
+            className="fill-foreground"
             width={140}
             axisLine={false}
             tickLine={false}
@@ -117,13 +117,9 @@ export function MetricsFunnelChart({
         </BarChart>
       </ResponsiveContainer>
 
-      
-      <div className="flex flex-wrap gap-4 justify-center mt-2">
+      <div className="mt-2 flex flex-wrap justify-center gap-4">
         {data.slice(1).map((step, i) => (
-          <span
-            key={`drop-${i}`}
-            className="text-xs text-red-500 dark:text-red-400 font-medium"
-          >
+          <span key={`drop-${i}`} className="text-xs font-medium text-destructive">
             {step.label.split(" (")[0]}: -{step.dropPct}%
           </span>
         ))}

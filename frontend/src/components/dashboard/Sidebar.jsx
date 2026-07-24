@@ -2,66 +2,68 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelIcon } from "@/components/icons/PanelIcon";
+
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
-import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
 import { ConfiguracionIcon } from "@/components/icons/ConfiguracionIcon";
 import { MetricasIcon } from "@/components/icons/MetricasIcon";
+import { PanelIcon } from "@/components/icons/PanelIcon";
+import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
+import { AppSidebarShell } from "@/components/layout/sidebar/app-sidebar-shell";
+import { cn } from "@/lib/utils";
 
 const menuItems = [
-  { label: "Panel", href: "/dashboard", icon: PanelIcon },
-  { label: "Agenda", href: "/dashboard/agenda", icon: AgendaIcon },
-  { label: "Clientes", href: "/dashboard/clientes", icon: ClientesIcon },
-  { label: "Métricas", href: "/dashboard/metrics", icon: MetricasIcon },
-  { label: "Servicios", href: "/dashboard/servicios", icon: ServiciosIcon },
+  { label: "Panel",         href: "/dashboard",               icon: PanelIcon,        exact: true },
+  { label: "Agenda",        href: "/dashboard/agenda",        icon: AgendaIcon        },
+  { label: "Clientes",      href: "/dashboard/clientes",      icon: ClientesIcon      },
+  { label: "Métricas",      href: "/dashboard/metrics",       icon: MetricasIcon      },
+  { label: "Servicios",     href: "/dashboard/servicios",     icon: ServiciosIcon     },
   { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
 ];
 
-export function Sidebar() {
+function isActiveRoute(pathname, href, exact = false) {
+  return exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Sidebar receives the pre-rendered `userFooter` as a prop so this Client
+ * Component doesn't need to call `auth()` directly (which requires a Server
+ * Component context). The footer is built in DashboardLayout as a Server
+ * Component and passed down.
+ *
+ * Props:
+ *   userFooter   — pre-rendered Server Component node
+ *   onNavigate   — optional callback fired when a nav link is clicked
+ *                  (used by MobileTopBar to close the Sheet)
+ */
+export function Sidebar({ userFooter, onNavigate }) {
   const pathname = usePathname();
 
-  const isActive = (href) => {
-    if (href === "/dashboard") {
-      return pathname === href;
-    }
-    return pathname.startsWith(href);
-  };
   return (
-    <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
-      {/* Logo / nombre del negocio */}
-      <div className="p-6 border-b border-gray-200">
-        <span className="text-xl font-bold text-gray-800">HairBot</span>
-      </div>
-
-      {/* Menú de navegación */}
-      <nav className="flex-1 p-4 space-y-1">
+    <AppSidebarShell footer={userFooter}>
+      <nav className="space-y-1">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const active = isActive(item.href);
-          
+          const active = isActiveRoute(pathname, item.href, item.exact);
+
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-blue-50 text-blue-600 font-medium"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              }`}
+                  ? "bg-nav-active text-nav-active-foreground"
+                  : "text-sidebar-foreground hover:bg-background hover:text-foreground",
+              )}
             >
-              <Icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{item.label}</span>
+              <Icon className="size-5" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-
-      {/* Bloque inferior */}
-      <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-400">Tu negocio</p>
-        <p className="text-sm font-medium text-gray-700">Salón de Belleza</p>
-      </div>
-    </aside>
+    </AppSidebarShell>
   );
 }

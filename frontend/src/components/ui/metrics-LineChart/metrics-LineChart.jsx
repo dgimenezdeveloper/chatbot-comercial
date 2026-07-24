@@ -35,6 +35,7 @@ export function MetricsLineChart({
   data,
   lines = [],
   xKey = "name",
+  height = 300,
   threshold,
   comparisonLines,
   showDots = true,
@@ -67,30 +68,32 @@ export function MetricsLineChart({
   }
 
   const DEFAULT_STROKE = "hsl(var(--primary))";
+
+  // Shared inline styles for Recharts (can't use Tailwind classes on Recharts props)
+  const TOOLTIP_STYLE = {
+    background:   "hsl(var(--card))",
+    border:       "1px solid hsl(var(--border))",
+    borderRadius: "8px",
+    fontSize:     "13px",
+    color:        "hsl(var(--foreground))",
+  };
+  const AXIS_TICK = { fontSize: 12, fill: "hsl(var(--muted-foreground))" };
+  const GRID_STROKE = "hsl(var(--border))";
+
   const ChartType = lines.some((l) => l.area) ? ComposedChart : LineChart;
 
   return (
-    <div className={cn("w-full h-full", className)}>
+    <div className={cn("w-full", className)} style={{ height: height || 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <ChartType
           data={mergedData}
           margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
         >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            className="stroke-muted dark:stroke-gray-700"
-          />
-          <XAxis
-            dataKey={xKey}
-            tick={{ fontSize: 12 }}
-            className="fill-foreground dark:fill-gray-300"
-          />
-          <YAxis
-            tick={{ fontSize: 12 }}
-            className="fill-foreground dark:fill-gray-300"
-          />
-          {showTooltip && <Tooltip />}
-          {showLegend && <Legend />}
+          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+          <XAxis dataKey={xKey} tick={AXIS_TICK} />
+          <YAxis tick={AXIS_TICK} />
+          {showTooltip && <Tooltip contentStyle={TOOLTIP_STYLE} />}
+          {showLegend && <Legend wrapperStyle={{ fontSize: "13px" }} />}
 
           {threshold && (
             <ReferenceLine
@@ -102,7 +105,7 @@ export function MetricsLineChart({
                   ? {
                       value: threshold.label,
                       position: "right",
-                      className: "fill-destructive dark:fill-red-400 text-xs",
+                      className: "fill-destructive text-xs",
                     }
                   : undefined
               }

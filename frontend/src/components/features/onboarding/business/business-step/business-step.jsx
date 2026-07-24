@@ -12,18 +12,15 @@ export default function BusinessStep({
   errors = {},
   onFieldChange,
   onSocialChange,
-  onBack,
   onContinue,
 }) {
   return (
     <section className="flex flex-1 flex-col">
       {/* Encabezado */}
-      <header className="border-b border-slate-200 pb-5">
-        <h1 className="text-2xl font-bold text-slate-950">
-          Tu Negocio
-        </h1>
+      <header className="border-b border-border pb-5">
+        <h1 className="text-2xl font-bold text-foreground">Tu Negocio</h1>
 
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Contanos más sobre tu negocio. Esta información será visible
           para tus clientes.
         </p>
@@ -49,7 +46,7 @@ export default function BusinessStep({
           />
 
           {/* Contacto y redes */}
-          <div className="border-slate-200 xl:border-l xl:pl-8">
+          <div className="border-border xl:border-l xl:pl-8">
             <div className="space-y-6">
               <ContactInfo
                 data={data}
@@ -67,22 +64,8 @@ export default function BusinessStep({
       </div>
 
       {/* Acciones */}
-      <footer className="flex items-center justify-between border-t border-slate-200 pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onBack}
-          className="min-w-28"
-        >
-          <span aria-hidden="true">←</span>
-          Volver
-        </Button>
-
-        <Button
-          type="button"
-          onClick={onContinue}
-          className="min-w-64"
-        >
+      <footer className="flex items-center justify-end border-t border-border pt-6">
+        <Button type="button" onClick={onContinue} size="lg" className="min-w-64">
           Guardar y continuar
           <span aria-hidden="true">→</span>
         </Button>
