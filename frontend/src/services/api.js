@@ -7,17 +7,20 @@
  */
 
 /**
- * Resuelve la URL base de forma inteligente.
- * En el navegador, utiliza una ruta relativa ("/api/v1") para que la petición 
- * viaje por el mismo dominio HTTPS de la página y sea reenviada internamente
- * por el proxy de Next.js (next.config.mjs), evitando errores de Mixed Content y CORS.
+ * Resuelve y sanitiza la URL base de la API.
  */
 const getBaseUrl = () => {
-  // Si estamos en el navegador, usamos la ruta relativa del proxy de Next.js
   if (typeof window !== "undefined") {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl) {
+      if (window.location.protocol === "https:" && envUrl.startsWith("http://") && !envUrl.includes("localhost")) {
+        return envUrl.replace("http://", "https://");
+      }
+      return envUrl;
+    }
     return "/api/v1";
   }
-  // En SSR (Server-Side Rendering) de Node.js, usa la URL interna o fallback
+
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 };
 
@@ -46,10 +49,21 @@ export async function fetchMetrics({
 } = {}) {
   const baseUrl = getBaseUrl();
 
-  // Construcción segura del objeto URL basada en el origen del navegador
+  // Construcción del objeto URL
   const url = baseUrl.startsWith("/")
     ? new URL(baseUrl + "/admin/metrics", typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
     : new URL(`${baseUrl}/admin/metrics`);
+
+  // 🛡️ GARANTÍA ABSOLUTA EN TIEMPO DE EJECUCIÓN (MEMORIA DEL NAVEGADOR):
+  // Si la página corre bajo HTTPS, forzamos el protocolo del objeto URL a "https:" antes de fetch().
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    url.protocol === "http:" &&
+    !url.hostname.includes("localhost")
+  ) {
+    url.protocol = "https:";
+  }
 
   url.searchParams.set("days", days);
   url.searchParams.set("business_id", businessId);
