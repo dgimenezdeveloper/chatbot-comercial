@@ -5,6 +5,7 @@ from app.api.v1.admin.metric_thresholds import router as metric_thresholds_route
 from app.api.v1.admin.reminder_log import router as reminder_log_router
 from app.api.v1.admin.health import router as health_router
 from app.api.v1.admin.business import router as business_router
+from app.api.v1.admin.clientes import router as clientes_router  
 
 router = APIRouter()
 router.include_router(negocio_router, prefix="/negocio")
@@ -13,3 +14,4 @@ router.include_router(metric_thresholds_router, prefix="/metric-thresholds")
 router.include_router(reminder_log_router, prefix="/reminder-log")
 router.include_router(health_router, prefix="/health")
 router.include_router(business_router, prefix="/business")
+router.include_router(clientes_router, prefix="/clientes") 

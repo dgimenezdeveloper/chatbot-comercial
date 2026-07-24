@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, timezone
 import zoneinfo
 
 from app.db.database import get_db
@@ -16,17 +16,12 @@ async def listar_turnos(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Retorna los turnos reales almacenados en PostgreSQL para el comercio del usuario autenticado.
-    """
     business_id = current_user.get("business_id", 1)
     
-    # Obtener timezone configurado del negocio
     biz = db.query(Business).filter(Business.id == business_id).first()
     tz_str = biz.timezone if biz and biz.timezone else "America/Argentina/Buenos_Aires"
     tz = zoneinfo.ZoneInfo(tz_str)
     
-    # Consultar turnos activos en DB
     turnos = db.query(Appointment).filter(
         Appointment.business_id == business_id,
         Appointment.status.in_(["scheduled", "confirmed", "completed"])
@@ -38,8 +33,9 @@ async def listar_turnos(
         svc_name = service.name if service else "Servicio General"
         duration = service.duration_minutes if service else 30
         
-        # Convertir la fecha UTC almacenada al Timezone del negocio
-        local_dt = t.scheduled_date.astimezone(tz) if t.scheduled_date.tzinfo else t.scheduled_date
+        # Garantizar conversion UTC a Local
+        utc_dt = t.scheduled_date if t.scheduled_date.tzinfo else t.scheduled_date.replace(tzinfo=timezone.utc)
+        local_dt = utc_dt.astimezone(tz)
         end_dt = local_dt + timedelta(minutes=duration)
         
         resultado.append({

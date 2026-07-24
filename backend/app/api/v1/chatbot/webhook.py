@@ -531,7 +531,7 @@ async def handle_time_selection(phone: str, button_title: str, user_state: dict,
 
 
 async def handle_appointment_confirmation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
-    """Confirma el agendamiento del turno con los parámetros consolidados y lo guarda en DB."""
+    """Confirma el agendamiento del turno, guarda/actualiza el Cliente y persiste en DB."""
     fecha_label = user_state.get("fecha_seleccionada", "Hoy")
     fecha_iso = user_state.get("fecha_iso", date.today().isoformat())
     hora_label = user_state.get("hora_seleccionada", "10:00 hs")
@@ -549,8 +549,16 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
     dt_str = f"{fecha_iso} {time_part}"
     scheduled_date = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=tz)
 
+    # 1. Guardar/Actualizar el Cliente en la tabla 'user' para el Dashboard de Clientes
+    user = get_or_create_user(db, phone, business_id, name=user_text.strip())
+    if user and user_text.strip() and user.name != user_text.strip():
+        user.name = user_text.strip()
+        db.commit()
+
+    # 2. Datos del Turno
     appt_data = {
         "business_id": business_id,
+        "user_id": user.id if user else None, # 👈 Vinculación directa con el Cliente
         "user_phone": phone,
         "user_name": user_text[:200],
         "service_id": servicio_id,
@@ -594,7 +602,6 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
         payload={"resultado_final": "turno_creado", "n_fallbacks": user_state.get("fallback_count", 0)},
     )
     await clear_user_state(phone)
-
 
 async def handle_list_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     """Maneja las selecciones efectuadas en los menús de tipo lista desplegable."""
