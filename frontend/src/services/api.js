@@ -7,25 +7,17 @@
  */
 
 /**
- * Resuelve y sanitiza la URL base de la API.
- * Garantiza que en entornos de producción con HTTPS no se realicen peticiones HTTP inseguras (evita Mixed Content).
+ * Resuelve la URL base de forma inteligente.
+ * En el navegador, utiliza una ruta relativa ("/api/v1") para que la petición 
+ * viaje por el mismo dominio HTTPS de la página y sea reenviada internamente
+ * por el proxy de Next.js (next.config.mjs), evitando errores de Mixed Content y CORS.
  */
 const getBaseUrl = () => {
+  // Si estamos en el navegador, usamos la ruta relativa del proxy de Next.js
   if (typeof window !== "undefined") {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    
-    if (envUrl) {
-      // Si la variable de entorno viene con "http://" en una página que corre en HTTPS,
-      // la corregimos automáticamente a "https://" en el cliente.
-      if (window.location.protocol === "https:" && envUrl.startsWith("http://") && !envUrl.includes("localhost")) {
-        return envUrl.replace("http://", "https://");
-      }
-      return envUrl;
-    }
-    // Fallback seguro: usar ruta relativa para aprovechar el proxy invisible de next.config.mjs
     return "/api/v1";
   }
-
+  // En SSR (Server-Side Rendering) de Node.js, usa la URL interna o fallback
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 };
 
@@ -54,20 +46,10 @@ export async function fetchMetrics({
 } = {}) {
   const baseUrl = getBaseUrl();
 
-  // Si baseUrl es relativa (ej: /api/v1), la combinamos de forma segura con el origen actual del navegador
+  // Construcción segura del objeto URL basada en el origen del navegador
   const url = baseUrl.startsWith("/")
     ? new URL(baseUrl + "/admin/metrics", typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
     : new URL(`${baseUrl}/admin/metrics`);
-
-  // Aseguramiento estricto de protocolo HTTPS en el navegador
-  if (
-    typeof window !== "undefined" &&
-    window.location.protocol === "https:" &&
-    url.protocol === "http:" &&
-    !url.hostname.includes("localhost")
-  ) {
-    url.protocol = "https:";
-  }
 
   url.searchParams.set("days", days);
   url.searchParams.set("business_id", businessId);
