@@ -1,10 +1,10 @@
 flowchart LR
     %% ============================
-    %% DIAGRAMA UNIFICADO V2.0
+    %% DIAGRAMA UNIFICADO V2.1
     %% chatbot-comercial - Full Stack Integration
     %% Stack: Next.js 16 + FastAPI 0.110 + WhatsApp Cloud API
-    %% Última actualización: 8 de julio 2026
-    %% Refleja PRs #48, #49, #50 (Google Auth + CI/CD + Landing Page)
+    %% Última actualización: 23 de julio 2026
+    %% Refleja PRs #48, #49, #50, #58 + chatbot-mvp-completion
     %% ============================
 
     subgraph ExternalWorld["External World"]
@@ -130,11 +130,11 @@ flowchart LR
     subgraph BE["Backend (FastAPI 0.110)"]
         subgraph "API Routers"
             Auth["/api/v1/auth/login.py<br/>Auth (JWT + Google OAuth2 ✓)"]
-            Catalog["/api/v1/catalog/<br/>productos.py + servicios.py"]
-            Calendar["/api/v1/calendar/turnos.py<br/>Calendar"]
-            FAQ["/api/v1/faq/router.py<br/>FAQ"]
+            CatalogRouter["/api/v1/catalog/<br/>productos.py + servicios.py"]
+            CalendarRouter["/api/v1/calendar/turnos.py<br/>Calendar"]
+            FAQRouter["/api/v1/faq/router.py<br/>FAQ"]
             ChatbotRouter["/api/v1/chatbot/<br/>chat.py + webhook.py"]
-            Admin["/api/v1/admin/negocio.py<br/>Admin"]
+            AdminEndpoints["/api/v1/admin/<br/>metrics.py + metric_thresholds.py<br/>reminder_log.py + health.py"]
         end
 
         Webhook["Webhook Entry<br/>GET verify + POST receive"]
@@ -142,13 +142,36 @@ flowchart LR
         subgraph "Core Services"
             WhatsAppService["services/whatsapp.py<br/>(WhatsApp Integration ✓)"]
             StateManager["services/state_manager.py<br/>(Redis State Manager ✓)"]
-            DB_Logic["app/db/database.py<br/>(Engine síncrono SQLAlchemy)<br/>app/db/models/ (VACÍO ❌)"]
+            CatalogService["services/catalog.py<br/>(CRUD servicios/productos)"]:::done
+            CalendarService["services/calendar.py<br/>(CRUD turnos)"]:::done
+            NegocioService["services/negocio.py<br/>(Orquestación chatbot)"]:::done
+            FAQService["services/faq.py<br/>(CRUD FAQs)"]:::done
+        end
+
+        subgraph "Analytics & Events"
+            EventLogger["services/event_logger.py<br/>(log_event fire-and-forget)"]:::done
+            MetricsQueries["services/metrics_queries.py<br/>(50 métricas: 12 MVP + 38 extendidas)"]:::done
+        end
+
+        subgraph "DB Models (SQLAlchemy)"
+            BusinessModel["business.py"]:::done
+            UserModel["user.py"]:::done
+            ServiceModel["service.py"]:::done
+            ProductModel["product.py"]:::done
+            AppointmentModel["appointment.py"]:::done
+            TurnoApuesta["turno_apuesta.py"]:::done
+            FAQModel["faq.py"]:::done
+            EventModel["events.py + sessions.py"]:::done
+            FeedbackModel["feedback.py"]:::done
+            ThresholdModel["metric_threshold.py"]:::done
+            ReminderLogModel["reminder_log.py"]:::done
         end
 
         subgraph "Infrastructure"
             Settings["app/core/settings.py<br/>(Configuration ✓)"]
             Security["app/core/security.py<br/>(JWT + OAuth2 ✓)"]
             Schemas["app/schemas/<br/>auth, catalog, calendar, chat, faq, admin"]
+            Database["app/db/database.py<br/>(Engine síncrono SQLAlchemy<br/>Base.metadata.create_all auto)"]:::done
         end
 
         subgraph "Databases / External APIs"
@@ -164,6 +187,24 @@ flowchart LR
     end
 
     style BE fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+
+    %% ============================
+    %% SCHEDULER (Celery)
+    %% ============================
+
+    subgraph Scheduler["Scheduler - Recordatorios T-24hs (Celery)"]
+        direction TB
+        
+        CeleryConfig["scheduler/config.py<br/>(Celery app + Redis broker)"]:::done
+        CeleryTasks["scheduler/tasks.py<br/>(send_reminders con 4 niveles de fallback)"]:::done
+        
+        Fallback1["Nivel 1: Template pago Meta"]:::done
+        Fallback2["Nivel 2: Ventana 24h WhatsApp"]:::done
+        Fallback3["Nivel 3: Canal alternativo (SMS/email)"]:::done
+        Fallback4["Nivel 4: Notificar al dueño"]:::done
+    end
+
+    style Scheduler fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
 
     %% ============================
     %% CI/CD Pipeline
@@ -182,12 +223,14 @@ flowchart LR
     subgraph DockerDeploy["Deployment (Docker Compose)"]
         direction TB
         
-        DockerCompose["docker-compose.yml<br/>Orquestación de 4 servicios"]
+        DockerCompose["docker-compose.yml<br/>Orquestación de 6 servicios"]
         
         APIContainer["API Container<br/>backend/Dockerfile<br/>Python 3.11-slim<br/>Port: 8000"]
         FrontContainer["Frontend Container<br/>frontend/Dockerfile<br/>Node 22-alpine<br/>Port: 3000"]
         DBContainer["PostgreSQL Container<br/>postgres:16-alpine<br/>Port: 5432"]
         RedisContainer["Redis Container<br/>redis:7-alpine<br/>Port: 6379"]
+        CeleryWorker["Celery Worker Container<br/>(mismo Dockerfile backend)"]:::done
+        CeleryBeat["Celery Beat Container<br/>(scheduler 9 AM)"]:::done
         
         DBVolumen[("Volume: chatbot_postgres_data")]
         RedisVolumen[("Volume: chatbot_redis_data")]
@@ -196,10 +239,10 @@ flowchart LR
     style DockerDeploy fill:#e8eaf6,stroke:#5c6bc0,stroke-width:2px
 
     %% ============================
-    %% EVENT TRACKING POINTS (10 BASE - Estándar del Proyecto)
+    %% EVENT TRACKING POINTS (10 BASE - Instrumentados)
     %% ============================
 
-    subgraph EventTracking["Event Tracking (10 Base) - POR IMPLEMENTAR"]
+    subgraph EventTracking["Event Tracking (10 Base) - ✅ IMPLEMENTADO"]
         ConvStarted["conversation_started"]:::event
         MenuOption["menu_option_selected"]:::event
         ServiceSel["service_selected"]:::event
@@ -242,12 +285,10 @@ flowchart LR
     %% ============================
 
     subgraph "Analytics Engine"
-        Grafana["Grafana Dashboard"]
-        Stats["Conversation Statistics<br/>Aggregated Metrics"]
-    end
-
-    subgraph "Event Store"
-        Events[(Events - Event Log)]
+        APIAdmin["GET /api/v1/admin/metrics<br/>50 métricas en tiempo real"]:::done
+        UMBRALES["GET/PUT /api/v1/admin/metric-thresholds<br/>Umbrales warning/critical configurables"]:::done
+        ReminderLog["GET /api/v1/admin/reminder-log<br/>Historial de recordatorios"]:::done
+        Health["GET /api/v1/admin/health<br/>Health check"]:::done
     end
 
 
@@ -256,7 +297,6 @@ flowchart LR
     %% ============================
 
     Users -->|Sends Message| Meta
-    LandingPage & MarketingPage -.- Users
     GoogleAuth -->|OAuth Flow| AuthConfig
     AuthConfig -->|POST /auth/google| Auth
     LoginPage & RegisterPage -.- Users
@@ -264,16 +304,36 @@ flowchart LR
     
     Meta -->|Webhook Event| Webhook
     Webhook -->|Processes Data| ChatbotRouter
-    Webhook -.-|Calls API| Catalog
+    Webhook -.-|Calls API| CatalogRouter
     
     ChatbotRouter -->|Internal Logic| WhatsAppService
     ChatbotRouter -->|State Management| StateManager
     WhatsAppService -->|Calls API| Meta
     
-    ChatbotRouter -.- DB_Logic
+    ChatbotRouter -->|log_event| EventLogger
+    EventLogger -->|INSERT| PG
+    MetricsQueries -->|SELECT| PG
+    
+    CatalogService -->|CRUD| PG
+    CalendarService -->|CRUD| PG
+    NegocioService -->|Orquestación| PG
+    FAQService -->|CRUD| PG
+    
     StateManager -.- Redis
     Security -.- Webhook
     Settings -.- Webhook
+    Database -->|Base.metadata.create_all| PG
+
+    %% ============================
+    %% SCHEDULER CONNECTIONS
+    %% ============================
+
+    CeleryConfig -->|broker| Redis
+    CeleryTasks -->|send_message| WhatsAppService
+    CeleryTasks -->|SELECT turnos| PG
+    CeleryTasks -->|INSERT reminder_log| PG
+    CeleryTasks -->|log_event reminder_sent| EventLogger
+    CeleryBeat -->|dispara cada 9 AM| CeleryTasks
 
     %% ============================
     %% CI/CD CONNECTIONS
@@ -290,6 +350,8 @@ flowchart LR
     DockerCompose -->|Orquesta| FrontContainer
     DockerCompose -->|Orquesta| DBContainer
     DockerCompose -->|Orquesta| RedisContainer
+    DockerCompose -->|Orquesta| CeleryWorker
+    DockerCompose -->|Orquesta| CeleryBeat
     
     APIContainer -->|Ejecuta| Webhook
     FrontContainer -->|Sirve| FrontendApp
@@ -303,42 +365,29 @@ flowchart LR
     %% INTEGRACIÓN DE EVENTOS EN METRICS DB
     %% ============================
 
-    Events -.- ConvStarted
-    Events -.- MenuOption
-    Events -.- ServiceSel
-    Events -.- FallbackTrig
-    Events -.- AppointmentCreated
-    Events -.- Escalation
-    Events -.- CSAT
-    Events -.- ReminderSent
-    Events -.- ReminderResp
-    Events -.- ConvClosed
+    EventLogger -.- ConvStarted
+    EventLogger -.- MenuOption
+    EventLogger -.- ServiceSel
+    EventLogger -.- FallbackTrig
+    EventLogger -.- AppointmentCreated
+    EventLogger -.- Escalation
+    EventLogger -.- CSAT
+    EventLogger -.- ReminderSent
+    EventLogger -.- ReminderResp
+    EventLogger -.- ConvClosed
 
     %% ============================
-    %% CÁLCULO DE MÉTRICAS
+    %% ADMIN ENDPOINTS
     %% ============================
 
-    ChatbotRouter -.- Stats
-    Stats -.-|Calculates| MetricsDB
-    
-    ConvRate ~~~ Stats
-    PctBotTurnos ~~~ Stats
-    AbandonoRate ~~~ Stats
-    FallbackRate ~~~ Stats
-    TopFallbacks ~~~ Stats
-    NocturnoPct ~~~ Stats
-    ResolucionRate ~~~ Stats
-    CancelRate ~~~ Stats
-    NoShowRate ~~~ Stats
-    ConfirmRate ~~~ Stats
-    TopServicios ~~~ Stats
-    CSATAvg ~~~ Stats
+    APIAdmin --> MetricsQueries
+    UMBRALES -->|GET/PUT| ThresholdModel
+    ReminderLog --> ReminderLogModel
+    Health -->|status ok| BE
 
     %% ============================
-    %% PERSISTENCIA Y VISUALIZACIÓN
+    %% PERSISTENCIA
     %% ============================
 
-    MetricsDB -.- Grafana
-    
     MetricsDB -.-|Stores Data| PG
     MetricsDB -.-|Caches Data| Redis

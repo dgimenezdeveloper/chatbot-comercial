@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
 import { ConfiguracionIcon } from "@/components/icons/ConfiguracionIcon";
+import { MetricasIcon } from "@/components/icons/MetricasIcon";
 import { PanelIcon } from "@/components/icons/PanelIcon";
 import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
 import { AppSidebarShell } from "@/components/layout/sidebar/app-sidebar-shell";
@@ -15,6 +16,7 @@ const menuItems = [
   { label: "Panel",         href: "/dashboard",               icon: PanelIcon,        exact: true },
   { label: "Agenda",        href: "/dashboard/agenda",        icon: AgendaIcon        },
   { label: "Clientes",      href: "/dashboard/clientes",      icon: ClientesIcon      },
+  { label: "Métricas",      href: "/dashboard/metrics",       icon: MetricasIcon      },
   { label: "Servicios",     href: "/dashboard/servicios",     icon: ServiciosIcon     },
   { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
 ];
@@ -26,8 +28,8 @@ function isActiveRoute(pathname, href, exact = false) {
 /**
  * Sidebar receives the pre-rendered `userFooter` as a prop so this Client
  * Component doesn't need to call `auth()` directly (which requires a Server
- * Component context). The footer is built in DashboardMobileBar / DashboardLayout
- * as a Server Component and passed down.
+ * Component context). The footer is built in DashboardLayout as a Server
+ * Component and passed down.
  */
 export function Sidebar({ userFooter }) {
   const pathname = usePathname();

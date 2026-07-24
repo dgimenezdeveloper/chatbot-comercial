@@ -11,7 +11,7 @@ Imaginá que tenés un negocio — una peluquería, un consultorio, un taller �
 Este chatbot hace exactamente eso:
 
 - 🗓️ Tus clientes **agendan turnos** hablando por WhatsApp, como si chatearan con una persona
-- ⏰ **Les llega un recordatorio automático** el día anterior al turno
+- ⏰ **Les llega un recordatorio automático** el día anterior al turno (se envía una vez al día a las 9 AM)
 - ✅ Pueden **confirmar o cancelar** respondiendo al mensaje
 - ⭐ Al terminar, **califican la atención** con 1 a 5 estrellas
 
@@ -35,14 +35,33 @@ El bot no solo atiende: también **te muestra cómo está funcionando tu negocio
 
 En total tenés **50 indicadores** para entender tu negocio. No hace falta mirarlos todos — vos elegís los que más te importan.
 
+### Las 12 métricas clave (MVP)
+
+Estas son las que definen si el bot funciona o no. Cada una tiene un **semáforo** automático:
+
+| # | Métrica | ¿Qué mide? | ¿Cuándo preocuparse? |
+|---|---------|-----------|---------------------|
+| 1 | **Conversión inicio → turno** | De cada 100 personas que escriben, cuántas agendan | Menos de 20 de cada 100 |
+| 2 | **Turnos creados por el bot** | ¿El bot agencia sola o necesitás ayudar? | Menos del 40% |
+| 3 | **Abandono por paso** | ¿En qué paso del flujo se pierde la gente? | Más del 40% |
+| 4 | **Fallback (no entiende)** | ¿Cada cuánto el bot no entiende un mensaje? | Más del 25% de los mensajes |
+| 5 | **Top 10 mensajes no entendidos** | ¿Qué es lo que la gente pregunta y el bot no entiende? | Cualquier cambio sirve para mejorar |
+| 6 | **Turnos nocturnos** | ¿Cuántos turnos se reservan fuera del horario comercial (20hs a 8hs)? | Menos del 30% — el bot no da valor agregado |
+| 7 | **Resolución autónoma** | ¿El bot resuelve solo sin necesidad de humano? | Menos del 50% |
+| 8 | **Cancelaciones** | ¿Cuántos turnos se cancelan? | Más del 20% |
+| 9 | **No-show** | ¿Cuántos clientes no vienen al turno? | Más del 15% |
+| 10 | **Confirmación de recordatorio** | ¿Cuántos confirman que van a venir? | Menos del 50% |
+| 11 | **Servicios más reservados** | ¿Qué es lo que más pide la gente? | Para decidir stock y promociones |
+| 12 | **CSAT promedio** | ¿Qué puntaje te ponen los clientes (1 a 5)? | Menos de 3.5 |
+
 ---
 
 ## 3. ¿Cómo funcionan los recordatorios?
 
-Cada vez que un cliente agenda un turno, el sistema **automáticamente** intenta enviarle un recordatorio el día anterior. Así funciona:
+Cada día a las **9 AM (hora de Buenos Aires)**, el sistema revisa los turnos del día siguiente y les envía un recordatorio automático. Así funciona:
 
 ```
-🔍 El sistema detecta un turno para mañana
+🔍 El sistema revisa los turnos de MAÑANA (una vez al día, 9 AM)
               │
      ┌────────┴────────┐
      ▼                 ▼
@@ -75,6 +94,8 @@ Cada vez que un cliente agenda un turno, el sistema **automáticamente** intenta
 
 **Resumen:** El sistema intenta por todos los medios avisarle al cliente. Si no hay forma, **te avisa a vos** para que lo contactes manualmente.
 
+Cada intento queda registrado en el **historial de recordatorios**, así siempre sabés qué pasó con cada cliente.
+
 ---
 
 ## 4. ¿Qué significan los colores?
@@ -87,7 +108,7 @@ Cada indicador tiene un **semáforo** para que de un vistazo sepas si las cosas 
 | 🟡 **Amarillo (Atención)** | Ojo, está rozando el límite | Cancelaciones 28% — revisá por qué |
 | 🔴 **Rojo (Crítico)** | Hay un problema, hay que actuar | No-show 40% — mucha gente no viene |
 
-**Vos definís los límites.** Lo que para una peluquería es "normal", para un consultorio médico puede ser "preocupante". Cada negocio configura sus propios números.
+**Vos definís los límites.** Lo que para una peluquería es "normal", para un consultorio médico puede ser "preocupante". Cada negocio configura sus propios números a través del panel de administración.
 
 ---
 
@@ -99,11 +120,11 @@ Cada indicador tiene un **semáforo** para que de un vistazo sepas si las cosas 
 
 ### ¿Cómo veo los indicadores de mi negocio?
 
-Al principio se consultan desde un panel técnico (el equipo te da acceso). Más adelante va a haber **un panel visual** donde podrás ver todo con gráficos, como una app.
+Los indicadores se consultan a través del panel de administración. El equipo de desarrollo te da acceso y podés ver todas las métricas en tiempo real con sus semáforos de colores.
 
 ### ¿Cómo activo los recordatorios?
 
-Vienen activados por defecto. El sistema revisa los turnos cada hora y envía los mensajes automáticamente.
+Vienen activados por defecto. El sistema revisa los turnos **una vez por día a las 9 AM** y envía los mensajes automáticamente a los clientes que tienen turno al día siguiente.
 
 ### ¿Cuánto cuesta?
 
@@ -111,7 +132,11 @@ El envío de recordatorios usa WhatsApp normal, que no tiene costo extra. Si que
 
 ### ¿Qué pasa si un cliente no recibe el recordatorio?
 
-El sistema intenta 4 caminos distintos antes de rendirse. Si fallan todos, **te avisa a tu WhatsApp** con los datos del turno (nombre del cliente, fecha, hora, servicio) para que vos lo contactes.
+El sistema intenta **4 caminos distintos** antes de rendirse:
+1. Template pago de Meta (sin límite de 24 horas)
+2. WhatsApp normal (si el cliente escribió en las últimas 24 horas)
+3. Canal alternativo como SMS o email (si está configurado)
+4. Si fallan todos, **te avisa a tu WhatsApp** con los datos del turno (nombre del cliente, fecha, hora, servicio) para que vos lo contactes manualmente
 
 ### ¿Puedo cambiar los límites de alerta?
 
@@ -119,7 +144,7 @@ El sistema intenta 4 caminos distintos antes de rendirse. Si fallan todos, **te 
 
 ### ¿Cómo sé a quiénes se les avisó?
 
-Podés consultar el historial de recordatorios: te muestra cada cliente, cada turno, si se envió o falló, y por qué canal se mandó.
+Podés consultar el **historial de recordatorios**: te muestra cada cliente, cada turno, si se envió o falló, y por qué canal se mandó.
 
 ### ¿Qué datos necesito para empezar?
 
@@ -128,6 +153,14 @@ Solo dos cosas:
 - **Tus servicios y horarios** (qué ofrecés y cuándo)
 
 El equipo de desarrollo se encarga del resto.
+
+### ¿Qué son los umbrales configurables?
+
+Cada negocio tiene valores distintos. Podés definir para cada métrica:
+- Un valor **warning** (amarillo) — cuando empieza a preocupar
+- Un valor **critical** (rojo) — cuando hay que actuar sí o sí
+
+Por ejemplo, una peluquería puede aceptar 15% de no-show, mientras que un consultorio médico puede querer la alerta roja al 5%.
 
 ---
 
@@ -141,9 +174,12 @@ El equipo de desarrollo se encarga del resto.
 | **Tasa de conversión** | De cada 100 personas que preguntan, cuántas agendan turno |
 | **Escalamiento** | Cuando el bot no puede resolver y deriva a una persona |
 | **Churn** | Clientes que dejaron de venir. Mide "abandono" |
-| **Umbral** | El número límite que separa "bien" de "regular" y "mal" |
+| **Umbral** | El número límite que separa "bien" de "regular" y "mal". Cada negocio configura los suyos |
+| **Umbral warning** | Valor amarillo — cuando la métrica empieza a preocupar |
+| **Umbral critical** | Valor rojo — cuando hay que actuar urgente |
 | **Read receipt** | La confirmación de WhatsApp de que el mensaje fue leído (doble tilde azul ✓✓) |
 | **Ventana de 24h** | Regla de WhatsApp: solo podés escribirle a un cliente si él te habló en las últimas 24 horas |
+| **Template de Meta** | Mensaje pre-aprobado por Meta que se puede enviar sin límite de 24 horas |
 
 ---
 

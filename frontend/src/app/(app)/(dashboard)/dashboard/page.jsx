@@ -2,7 +2,6 @@ import { Plus, LayoutDashboard } from "lucide-react";
 
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge } from "@/components/ui/badge/badge";
 import { Button } from "@/components/ui/button/button";
 import {
   Table,
@@ -22,10 +21,10 @@ import { cn } from "@/lib/utils";
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  confirmed:       { label: "Confirmado",        variant: "secondary"    },
-  pending_deposit: { label: "Pendiente de Seña", variant: "outline"      },
-  expired:         { label: "Expirado",           variant: "destructive"  },
-  unassigned:      { label: "Sin Asignar",        variant: "outline"      },
+  confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30"              },
+  pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40"   },
+  expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30"  },
+  unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border"              },
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -43,11 +42,22 @@ function StatCard({ value, label }) {
 }
 
 /**
- * StatusBadge — renders the appointment status pill.
+ * StatusBadge — semantic status pill for appointment states.
+ * Uses success/warning/destructive/muted tokens from the theme.
  */
 function StatusBadge({ status }) {
-  const config = STATUS_CONFIG[status] ?? { label: status, variant: "outline" };
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  const config = STATUS_CONFIG[status] ?? {
+    label: status,
+    className: "bg-muted text-muted-foreground border border-border",
+  };
+  return (
+    <span className={cn(
+      "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+      config.className,
+    )}>
+      {config.label}
+    </span>
+  );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -69,7 +79,6 @@ export default function DashboardPage() {
       <PageHeader
         icon={<LayoutDashboard className="size-5" />}
         title="Panel de Control — Administrador"
-        subtitle={todayLabel}
       />
 
       {/* ── Stats row ─────────────────────────────────────────────────────── */}
