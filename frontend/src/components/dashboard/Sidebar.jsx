@@ -30,8 +30,13 @@ function isActiveRoute(pathname, href, exact = false) {
  * Component doesn't need to call `auth()` directly (which requires a Server
  * Component context). The footer is built in DashboardLayout as a Server
  * Component and passed down.
+ *
+ * Props:
+ *   userFooter   — pre-rendered Server Component node
+ *   onNavigate   — optional callback fired when a nav link is clicked
+ *                  (used by MobileTopBar to close the Sheet)
  */
-export function Sidebar({ userFooter }) {
+export function Sidebar({ userFooter, onNavigate }) {
   const pathname = usePathname();
 
   return (
@@ -45,6 +50,7 @@ export function Sidebar({ userFooter }) {
             <Link
               key={item.label}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active

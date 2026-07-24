@@ -1,11 +1,11 @@
 import { MobileTopBar } from "@/components/layout/MobileTopBar";
-import { Sidebar } from "@/components/dashboard/Sidebar";
 
 /**
- * Server Component wrapper that composes MobileTopBar with the
- * dashboard Sidebar so DashboardLayout stays a Server Component.
- * Receives the pre-built userFooter from DashboardLayout.
+ * Server Component wrapper — passes userFooter to MobileTopBar.
+ * MobileTopBar builds its own Sidebar instance client-side so it can
+ * wire onNavigate={() => setOpen(false)} without prop-drilling through
+ * a pre-rendered Server Component node.
  */
 export function DashboardMobileBar({ userFooter }) {
-  return <MobileTopBar sidebar={<Sidebar userFooter={userFooter} />} />;
+  return <MobileTopBar userFooter={userFooter} />;
 }

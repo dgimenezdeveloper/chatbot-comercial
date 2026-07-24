@@ -2,24 +2,22 @@
 
 import { useState } from "react";
 import { Menu } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-} from "@/components/ui/sheet/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet/sheet";
+import { Sidebar } from "@/components/dashboard/Sidebar";
 import LogoPymio from "@/components/icons/logo-pymio";
 import { cn } from "@/lib/utils";
 
 /**
  * MobileTopBar — sticky top bar shown on mobile (< lg) for the dashboard.
  *
- * Hamburger opens a left-side Sheet with the sidebar content.
- * The Sheet's built-in close button (top-right X) is used — no custom X added.
+ * Builds its own Sidebar instance inside the Sheet and passes
+ * onNavigate={() => setOpen(false)} so any nav link closes the drawer.
  *
  * Props:
- *   sidebar   — the full sidebar React node to render inside the Sheet
- *   className — extra classes on the bar
+ *   userFooter — pre-rendered Server Component node for the sidebar footer
+ *   className  — extra classes on the bar
  */
-export function MobileTopBar({ sidebar, className }) {
+export function MobileTopBar({ userFooter, className }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -50,14 +48,17 @@ export function MobileTopBar({ sidebar, className }) {
         </button>
       </header>
 
-      {/* Drawer — side=right, built-in X close button */}
+      {/* Drawer — side=right */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
           className="w-[280px] p-0 bg-card border-l border-border"
         >
           <div className="h-full">
-            {sidebar}
+            <Sidebar
+              userFooter={userFooter}
+              onNavigate={() => setOpen(false)}
+            />
           </div>
         </SheetContent>
       </Sheet>
