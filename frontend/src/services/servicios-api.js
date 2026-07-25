@@ -12,7 +12,8 @@
 
 import apiClient from "@/lib/api-client";
 
-const ENDPOINT = "/catalog/servicios";
+// AGREGADA BARRA FINAL PARA EVITAR REDIRECCIÓN 307 DE FASTAPI EN AZURE
+const ENDPOINT = "/catalog/servicios/";
 
 /**
  * List all services for the authenticated business.
@@ -40,7 +41,7 @@ export async function createServicio(payload) {
  * @returns {Promise<Object>} Updated service
  */
 export async function updateServicio(id, payload) {
-  const { data } = await apiClient.put(`${ENDPOINT}/${id}`, payload);
+  const { data } = await apiClient.put(`/catalog/servicios/${id}`, payload);
   return data;
 }
 
@@ -50,5 +51,5 @@ export async function updateServicio(id, payload) {
  * @returns {Promise<void>}
  */
 export async function deleteServicio(id) {
-  await apiClient.delete(`${ENDPOINT}/${id}`);
+  await apiClient.delete(`/catalog/servicios/${id}`);
 }

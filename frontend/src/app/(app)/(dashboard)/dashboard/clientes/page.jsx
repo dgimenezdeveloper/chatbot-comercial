@@ -10,7 +10,8 @@ async function fetchClients(token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${baseUrl}/admin/clientes`, {
+    // AGREGADA BARRA FINAL AL ENDPOINT -> /clientes/
+    const res = await fetch(`${baseUrl}/admin/clientes/`, {
       headers,
       cache: "no-store",
     });

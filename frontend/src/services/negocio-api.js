@@ -1,16 +1,13 @@
 /**
  * API service layer for /admin/negocio.
  *
- * NOTE: The backend currently echoes the payload back without persisting.
- * We call it anyway to demonstrate the integration flow.
- * Real persistence is tracked in INTEGRATION-DECISIONS.md.
- *
  * @module services/negocio-api
  */
 
 import apiClient from "@/lib/api-client";
 
-const ENDPOINT = "/admin/negocio";
+// AGREGADA BARRA FINAL PARA EVITAR REDIRECCIÓN 307 DE FASTAPI EN AZURE
+const ENDPOINT = "/admin/negocio/";
 
 /**
  * Fetch business info.
