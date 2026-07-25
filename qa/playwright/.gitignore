@@ -1,0 +1,8 @@
+node_modules/
+.env
+test-results/
+playwright-report/
+auth.json
+*.log
+.browser-profile/
+/tmp/playwright-chrome-profile/
