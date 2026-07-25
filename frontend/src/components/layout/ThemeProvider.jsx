@@ -1,20 +1,23 @@
+"use client";
+
+import { useEffect } from "react";
+
 /**
- * Server Component — no "use client" needed.
- *
- * Injects an inline blocking script into <head> that adds the theme class
- * to <html> synchronously, before the first paint. This eliminates the
- * flash of fallback colors that a useEffect approach would cause.
- *
- * Note: React shows a dev-only warning about <script> tags during client-side
- * navigation. This is harmless — the theme class persists on <html> from the
- * initial SSR render and doesn't need to re-execute on soft nav.
+ * ThemeProvider — Aplica la clase del tema (theme-app o theme-landing)
+ * directamente a <html> de forma compatible con React 19 y Next.js 16.
  */
 export default function ThemeProvider({ theme }) {
-  return (
-    <script
-      dangerouslySetInnerHTML={{
-        __html: `document.documentElement.classList.add(${JSON.stringify(theme)})`,
-      }}
-    />
-  );
+  useEffect(() => {
+    if (!theme) return;
+
+    // Agregar la clase del tema actual a <html>
+    document.documentElement.classList.add(theme);
+
+    // Limpieza al desmontar o cambiar de ruta
+    return () => {
+      document.documentElement.classList.remove(theme);
+    };
+  }, [theme]);
+
+  return null;
 }

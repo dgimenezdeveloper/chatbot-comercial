@@ -1,7 +1,7 @@
 """Tests para calendar service — CRUD de turnos (appointments)."""
 
 from datetime import date, datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,10 +17,16 @@ from app.services.calendar import (
 
 
 class TestCreateAppointment:
-    def test_creates_and_returns_appointment(self, mock_db):
+    @patch("app.services.calendar.create_event", return_value=None)
+    def test_creates_and_returns_appointment(self, mock_gcal, mock_db):
         def refresh_side_effect(obj):
             obj.id = 100
         mock_db.refresh.side_effect = refresh_side_effect
+        
+        biz_mock = MagicMock(id=1, google_calendar_id=None)
+        svc_mock = MagicMock(id=2, duration_minutes=30, name="Corte")
+        mock_db.query.return_value.filter.return_value.first.side_effect = [biz_mock, svc_mock]
+
         data = {
             "business_id": 1, "service_id": 2,
             "scheduled_date": datetime(2026, 1, 15, 10, 0),
@@ -77,9 +83,11 @@ class TestGetAppointmentsByPhone:
 
 
 class TestCancelAppointment:
-    def test_cancels_appointment_with_reason(self, mock_db):
-        appointment = MagicMock(id=1, status="scheduled", scheduled_date=datetime(2026, 1, 15, 10, 0))
-        mock_db.query.return_value.filter.return_value.first.return_value = appointment
+    @patch("app.services.calendar.delete_event")
+    def test_cancels_appointment_with_reason(self, mock_delete_event, mock_db):
+        appointment = MagicMock(id=1, status="scheduled", scheduled_date=datetime(2026, 1, 15, 10, 0), google_event_id=None)
+        biz_mock = MagicMock(id=1, google_calendar_id=None)
+        mock_db.query.return_value.filter.return_value.first.side_effect = [appointment, biz_mock]
 
         result = cancel_appointment(mock_db, appointment_id=1, business_id=1, reason="Cliente no puede")
         assert result.status == "cancelled"
@@ -87,7 +95,8 @@ class TestCancelAppointment:
         assert result.cancellation_scheduled_date is not None
         mock_db.commit.assert_called_once()
 
-    def test_returns_none_when_not_found(self, mock_db):
+    @patch("app.services.calendar.delete_event")
+    def test_returns_none_when_not_found(self, mock_delete_event, mock_db):
         mock_db.query.return_value.filter.return_value.first.return_value = None
         result = cancel_appointment(mock_db, appointment_id=999, business_id=1, reason="x")
         assert result is None

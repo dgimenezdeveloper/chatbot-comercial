@@ -38,14 +38,12 @@ class TestSendRemindersFilter:
         """The query must include Appointment.notification_sent_at.is_(None)."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # send_reminders now uses while-loop batching: offset().limit().all()
         chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
         chain.offset.return_value.limit.return_value.all.return_value = []
         mock_async_run.return_value = {"total": 0, "sent": 0, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
 
-        # Verify filter was called
         filter_call = mock_db.query.return_value.filter
         assert filter_call.called, "send_reminders must call .filter() on the query"
 
@@ -62,8 +60,6 @@ class TestSendRemindersFilter:
         result = send_reminders()
         assert result["total"] == 0
         assert result["sent"] == 0
-        # When no appointments, asyncio.run is not called with the inner function
-        # because the function bails out early
 
     @patch("app.scheduler.tasks.SessionLocal")
     @patch("app.scheduler.tasks.asyncio.run")
@@ -81,19 +77,13 @@ class TestSendRemindersFilter:
     @patch("app.scheduler.tasks.SessionLocal")
     @patch("app.scheduler.tasks.asyncio.run")
     def test_closes_db_even_on_error(self, mock_async_run, mock_session_local):
-        """db.close() is called even if an exception occurs.
-        
-        send_reminders now catches exceptions in the while loop and returns
-        an error dict. db.close() is always called in finally.
-        """
+        """db.close() is called even if an exception occurs."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # Simular error en el batch: offset().limit().all() lanza excepción
         chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
         chain.offset.return_value.limit.return_value.all.side_effect = RuntimeError("DB error")
 
         result = send_reminders()
-        # El error es capturado por el try/except externo
         assert result.get("error") is True
         mock_db.close.assert_called_once()
 
@@ -111,22 +101,17 @@ class TestSingleAsyncioRun:
         """One asyncio.run call processes all appointments."""
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        # 5 appointments for tomorrow — mock the offset().limit().all() chain
         mock_appointments = [MagicMock(id=i, business_id=1) for i in range(5)]
         chain = mock_db.query.return_value.filter.return_value.with_for_update.return_value.order_by.return_value
-        # First call returns the 5 appointments, second returns empty (breaks loop)
         chain.offset.return_value.limit.return_value.all.side_effect = [
             mock_appointments,
-            [],  # second batch empty → break
+            [],
         ]
         mock_async_run.return_value = {"total": 5, "sent": 5, "failed": 0, "skipped": 0, "notified_owner": 0}
 
         send_reminders()
 
-        # asyncio.run should be called exactly once
         assert mock_async_run.call_count == 1
-        # The argument should be a coroutine (from _process_reminders)
-        import asyncio
         arg = mock_async_run.call_args[0][0]
         assert asyncio.iscoroutine(arg)
 
@@ -136,12 +121,13 @@ class TestSingleAsyncioRun:
 # ============================================================================
 
 class TestWithin24hWindow:
-    """W3: _within_24h_window uses MAX(Event.timestamp), not ChatSession.started_at."""
+    """W3: _within_24h_window uses MAX(Event.timestamp)."""
 
     def test_uses_max_event_timestamp(self):
         """Verifies query uses func.max(Event.timestamp)."""
         mock_db = MagicMock()
         recent = datetime.now(timezone.utc) - timedelta(hours=1)
+        mock_db.query.return_value.filter.return_value.limit.return_value.first.return_value = (1,)
         mock_db.query.return_value.filter.return_value.scalar.return_value = recent
 
         appointment = MagicMock()
@@ -154,6 +140,7 @@ class TestWithin24hWindow:
     def test_no_last_message_returns_false(self):
         """When there's no message from user, returns False."""
         mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.limit.return_value.first.return_value = (1,)
         mock_db.query.return_value.filter.return_value.scalar.return_value = None
 
         appointment = MagicMock()
@@ -167,6 +154,7 @@ class TestWithin24hWindow:
         """Last message > 24h ago → False."""
         mock_db = MagicMock()
         old = datetime.now(timezone.utc) - timedelta(hours=25)
+        mock_db.query.return_value.filter.return_value.limit.return_value.first.return_value = (1,)
         mock_db.query.return_value.filter.return_value.scalar.return_value = old
 
         appointment = MagicMock()
@@ -177,14 +165,10 @@ class TestWithin24hWindow:
         assert result is False
 
     def test_exactly_24h_returns_true(self):
-        """Exactly at 24h boundary → True (edge case).
-
-        Uses a fraction of a second inside the window to avoid timing race
-        between test execution and function call.
-        """
+        """Exactly at 24h boundary → True (edge case)."""
         mock_db = MagicMock()
-        # 23h 59min 59s ago — still within the 24h window
         edge = datetime.now(timezone.utc) - timedelta(hours=23, minutes=59, seconds=59)
+        mock_db.query.return_value.filter.return_value.limit.return_value.first.return_value = (1,)
         mock_db.query.return_value.filter.return_value.scalar.return_value = edge
 
         appointment = MagicMock()
@@ -211,21 +195,15 @@ class TestWithin24hWindow:
 # ============================================================================
 
 class TestRollbackOnException:
-    """W5: _process_reminders must call db.rollback() on send_message failure."""
+    """W5: _process_reminders must isolation savepoint."""
 
     @patch("app.scheduler.tasks.log_event")
     @patch("app.scheduler.tasks.send_message", new_callable=AsyncMock)
     def test_rollback_called_on_failure(self, mock_send, mock_log_event):
         """When send_message raises, savepoint is used (begin_nested)."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_send.side_effect = Exception("Connection error")
 
         appointment = MagicMock()
@@ -241,23 +219,16 @@ class TestRollbackOnException:
 
         assert results["failed"] == 1
         assert results["sent"] == 0
-        # Savepoint is used instead of global rollback
         mock_db.begin_nested.assert_called()
-        mock_db.add.assert_called()  # Log entry is still added
+        mock_db.add.assert_called()
 
     @patch("app.scheduler.tasks.log_event")
     @patch("app.scheduler.tasks.send_message", new_callable=AsyncMock)
     def test_log_entry_added_after_rollback(self, mock_send, mock_log_event):
         """After rollback, a failed ReminderLog is still added."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_send.side_effect = Exception("Timeout")
 
         appointment = MagicMock()
@@ -272,7 +243,6 @@ class TestRollbackOnException:
         results = run_async(_process_reminders(mock_db, [appointment]))
 
         assert results["failed"] == 1
-        # db.add() is called for the ReminderLog
         mock_db.add.assert_called()
 
 
@@ -287,13 +257,8 @@ class TestFourLevelFallback:
     def test_level_1_templates(self, mock_send_template, mock_log_event):
         """Level 1: business.use_whatsapp_templates=True → template reminder."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=True,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=True)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=True)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
 
         appointment = MagicMock()
         appointment.id = 1
@@ -316,14 +281,8 @@ class TestFourLevelFallback:
     def test_level_2_24h_window(self, mock_within, mock_send, mock_log_event):
         """Level 2: within 24h window → whatsapp_text."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = True
 
         appointment = MagicMock()
@@ -347,11 +306,8 @@ class TestFourLevelFallback:
     def test_level_3_alternative_channel(self, mock_within, mock_alt_channel, mock_log_event):
         """Level 3: outside 24h window, alternative channel → fallback_channel."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = False
         mock_alt_channel.return_value = True
 
@@ -366,7 +322,6 @@ class TestFourLevelFallback:
 
         results = run_async(_process_reminders(mock_db, [appointment]))
 
-        # Level 3 now results in "skipped" instead of "failed"
         assert results["skipped"] == 1
         assert results["failed"] == 0
 
@@ -376,16 +331,8 @@ class TestFourLevelFallback:
     def test_level_4_notify_owner(self, mock_within, mock_send, mock_log_event):
         """Level 4: outside 24h window, no alt channel, owner_phone → notified_owner."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone="+5491122223333",
-            sms_enabled=False,
-            email_enabled=False,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone="+5491122223333", sms_enabled=False, email_enabled=False)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone="+5491122223333", sms_enabled=False, email_enabled=False)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = False
 
         appointment = MagicMock()
@@ -401,8 +348,7 @@ class TestFourLevelFallback:
 
         assert results["notified_owner"] == 1
         assert results["sent"] == 0
-        mock_send.assert_called_once()  # sends owner notification
-        # Verify it sends to owner_phone
+        mock_send.assert_called_once()
         call_kwargs = mock_send.call_args.kwargs
         assert call_kwargs["phone"] == "+5491122223333"
 
@@ -411,16 +357,8 @@ class TestFourLevelFallback:
     def test_level_4_no_owner_phone(self, mock_within, mock_log_event):
         """Level 4: no owner_phone → just log without sending."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-            sms_enabled=False,
-            email_enabled=False,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None, sms_enabled=False, email_enabled=False)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None, sms_enabled=False, email_enabled=False)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = False
 
         appointment = MagicMock()
@@ -434,14 +372,13 @@ class TestFourLevelFallback:
 
         results = run_async(_process_reminders(mock_db, [appointment]))
 
-        # No owner_phone → notified_owner still incremented, but no message sent
         assert results["notified_owner"] == 1
 
     @patch("app.scheduler.tasks.log_event")
     def test_business_not_found_skipped(self, mock_log_event):
         """When business is not found, the appointment is skipped."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.all.return_value = []
 
         appointment = MagicMock()
         appointment.id = 1
@@ -458,7 +395,6 @@ class TestFourLevelFallback:
 # ============================================================================
 
 class TestHasAlternativeChannel:
-    """_has_alternative_channel placeholder — always returns False."""
 
     def test_returns_false(self):
         """Returns False when Business has no alternative channels enabled."""
@@ -515,14 +451,8 @@ class TestProcessRemindersLogEvent:
     def test_log_event_called_on_success(self, mock_within, mock_send, mock_log_event):
         """log_event is called with event_type='reminder_sent' on success."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = True
 
         appointment = MagicMock()
@@ -545,11 +475,8 @@ class TestProcessRemindersLogEvent:
     def test_log_event_not_called_on_failure(self, mock_send, mock_log_event):
         """log_event is NOT called when send_message fails."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_send.side_effect = Exception("Network error")
 
         appointment = MagicMock()
@@ -563,7 +490,6 @@ class TestProcessRemindersLogEvent:
 
         run_async(_process_reminders(mock_db, [appointment]))
 
-        # log_event should not be called on failure
         mock_log_event.assert_not_called()
 
     @patch("app.scheduler.tasks.log_event")
@@ -572,14 +498,8 @@ class TestProcessRemindersLogEvent:
     def test_notification_sent_at_set_on_success(self, mock_within, mock_send, mock_log_event):
         """appointment.notification_sent_at is set to current time on success."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
-            id=1,
-            use_whatsapp_templates=False,
-            owner_phone=None,
-        )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
-        ]
+        biz_mock = MagicMock(id=1, use_whatsapp_templates=False, owner_phone=None)
+        mock_db.query.return_value.filter.return_value.all.return_value = [biz_mock]
         mock_within.return_value = True
 
         appointment = MagicMock()
@@ -595,6 +515,3 @@ class TestProcessRemindersLogEvent:
         results = run_async(_process_reminders(mock_db, [appointment]))
 
         assert results["sent"] == 1
-        # notification_sent_at is set at DB level in send_reminders(),
-        # not in _process_reminders(). The DB update happens before the async processing.
-        # _process_reminders only maintains it (sets to None on failure).

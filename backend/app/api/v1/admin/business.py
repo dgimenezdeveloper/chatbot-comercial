@@ -1,14 +1,15 @@
 """Endpoint CRUD de negocio — gestión de configuración multi-tenant.
 
 GET  /api/v1/admin/business/{id} — obtener configuración
-PUT  /api/v1/admin/business/{id} — actualizar configuración (incl. recordatorios)
+PUT  /api/v1/admin/business/{id} — actualizar configuración
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models.business import Business
 
@@ -16,8 +17,19 @@ router = APIRouter()
 
 
 @router.get("/{business_id}")
-async def get_business(business_id: int, db: Session = Depends(get_db)):
-    """Retorna la configuración del negocio."""
+async def get_business(
+    business_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna la configuración del negocio validando que coincida con el JWT."""
+    user_business_id = current_user.get("business_id", 1)
+    if business_id != user_business_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: No tienes permisos para acceder a otro comercio."
+        )
+
     biz = db.query(Business).filter(Business.id == business_id).first()
     if not biz:
         return {"error": "not_found", "business_id": business_id}
@@ -29,6 +41,7 @@ async def get_business(business_id: int, db: Session = Depends(get_db)):
         "timezone": biz.timezone,
         "use_whatsapp_templates": biz.use_whatsapp_templates,
         "owner_phone": biz.owner_phone,
+        "google_calendar_id": biz.google_calendar_id,
     }
 
 
@@ -37,9 +50,18 @@ async def update_business(
     business_id: int,
     use_whatsapp_templates: bool | None = Body(None),
     owner_phone: str | None = Body(None),
+    google_calendar_id: str | None = Body(None),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Actualiza configuración de recordatorios del negocio."""
+    """Actualiza configuración de recordatorios y calendario del negocio de la sesión."""
+    user_business_id = current_user.get("business_id", 1)
+    if business_id != user_business_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: No tienes permisos para modificar otro comercio."
+        )
+
     biz = db.query(Business).filter(Business.id == business_id).first()
     if not biz:
         return {"error": "not_found", "business_id": business_id}
@@ -48,6 +70,8 @@ async def update_business(
         biz.use_whatsapp_templates = use_whatsapp_templates
     if owner_phone is not None:
         biz.owner_phone = owner_phone
+    if google_calendar_id is not None:
+        biz.google_calendar_id = google_calendar_id
 
     db.commit()
     db.refresh(biz)
@@ -56,4 +80,5 @@ async def update_business(
         "name": biz.name,
         "use_whatsapp_templates": biz.use_whatsapp_templates,
         "owner_phone": biz.owner_phone,
+        "google_calendar_id": biz.google_calendar_id,
     }

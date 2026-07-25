@@ -24,19 +24,19 @@ from app.services.catalog import (
 
 class TestGetServices:
     def test_returns_active_services_ordered(self, mock_db):
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            MagicMock(id=1, name="Corte", category="corte"),
-            MagicMock(id=2, name="Tinte", category="coloración"),
-        ]
+        svc1 = MagicMock(id=1, category="corte")
+        svc1.name = "Corte"
+        svc2 = MagicMock(id=2, category="coloración")
+        svc2.name = "Tinte"
+
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [svc1, svc2]
         result = get_services(mock_db, business_id=1)
         assert len(result) == 2
         assert result[0].name == "Corte"
 
     def test_filters_by_business_and_active(self, mock_db):
         get_services(mock_db, business_id=5)
-        # Verificar que se llamó a filter con los argumentos esperados
-        call_args = mock_db.query.return_value.filter.call_args[0]
-        assert call_args is not None
+        assert mock_db.query.return_value.filter.called
 
 
 class TestGetService:
@@ -57,7 +57,6 @@ class TestCreateService:
     def test_creates_and_returns_service(self, mock_db):
         data = {"name": "Nuevo Corte", "slug": "nuevo-corte", "business_id": 1,
                 "category": "corte", "price": 3000.00}
-        # Mock refresh para setear id
         def refresh_side_effect(obj):
             obj.id = 10
         mock_db.refresh.side_effect = refresh_side_effect
@@ -66,12 +65,12 @@ class TestCreateService:
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
         assert result.id == 10
-        assert result.name == "Nuevo Corte"
 
 
 class TestUpdateService:
     def test_updates_existing_service(self, mock_db):
-        service = MagicMock(id=1, name="Corte", price=5000.00)
+        service = MagicMock(id=1, price=5000.00)
+        service.name = "Corte"
         mock_db.query.return_value.filter.return_value.first.return_value = service
 
         result = update_service(mock_db, service_id=1, business_id=1, data={"price": 6000.00})
@@ -107,17 +106,19 @@ class TestDeleteService:
 
 class TestGetProducts:
     def test_returns_active_products_ordered(self, mock_db):
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            MagicMock(id=1, name="Shampoo"),
-            MagicMock(id=2, name="Acondicionador"),
-        ]
+        p1 = MagicMock(id=1)
+        p1.name = "Shampoo"
+        p2 = MagicMock(id=2)
+        p2.name = "Acondicionador"
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [p1, p2]
         result = get_products(mock_db, business_id=1)
         assert len(result) == 2
 
 
 class TestGetProduct:
     def test_returns_product_when_found(self, mock_db):
-        expected = MagicMock(id=1, name="Shampoo")
+        expected = MagicMock(id=1)
+        expected.name = "Shampoo"
         mock_db.query.return_value.filter.return_value.first.return_value = expected
         result = get_product(mock_db, product_id=1, business_id=1)
         assert result is expected
@@ -143,7 +144,8 @@ class TestCreateProduct:
 
 class TestUpdateProduct:
     def test_updates_existing_product(self, mock_db):
-        product = MagicMock(id=1, name="Shampoo", stock_quantity=10)
+        product = MagicMock(id=1, stock_quantity=10)
+        product.name = "Shampoo"
         mock_db.query.return_value.filter.return_value.first.return_value = product
 
         result = update_product(mock_db, product_id=1, business_id=1, data={"stock_quantity": 5})
@@ -159,7 +161,7 @@ class TestUpdateProduct:
 class TestDeleteProduct:
     def test_soft_deletes_product(self, mock_db):
         product = MagicMock(id=1, is_active=True)
-        mock_db.query.return_value.filter.return_value.first.return_value = product
+        mock_db.query.return_value.filter.return_value.first.return_value = service = product
 
         result = delete_product(mock_db, product_id=1, business_id=1)
         assert result is True

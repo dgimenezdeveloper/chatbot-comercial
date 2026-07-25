@@ -7,36 +7,42 @@ import { useTurnos } from "@/hooks/useTurnos";
 import { Loader2 } from "lucide-react";
 
 /**
- * Maps turnos from useTurnos hook to the shape AgendaView expects.
- * AgendaView needs: { id, clientName, serviceName, date, startTime, endTime, status, tone }
+ * Mapea los turnos del hook useTurnos al formato que espera AgendaView.
  */
 function toAgendaAppointment(turno) {
-  // Estimate end time (default 45 min since backend doesn't provide duration)
-  const [hours, minutes] = turno.time.split(":").map(Number);
-  const endMinutes = minutes + 45;
-  const endHours = hours + Math.floor(endMinutes / 60);
-  const endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+  const startTime = turno.startTime || turno.time || "09:00";
+  let endTime = turno.endTime;
+
+  if (!endTime) {
+    const [hours, minutes] = startTime.split(":").map(Number);
+    const endMinutes = minutes + 45;
+    const endHours = hours + Math.floor(endMinutes / 60);
+    endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+  }
 
   const statusTone = {
     confirmado: "green",
+    confirmed: "green",
     pendiente: "purple",
+    scheduled: "purple",
     cancelado: "gray",
+    cancelled: "gray",
   };
 
   return {
     id: String(turno.id),
-    clientName: turno.clientName,
-    serviceName: turno.serviceName,
+    clientName: turno.clientName || turno.client || "Cliente",
+    serviceName: turno.serviceName || turno.service || "Servicio General",
     date: turno.date,
-    startTime: turno.time,
-    endTime,
-    status: turno.status === "confirmado" ? "confirmed" : turno.status,
+    startTime: startTime,
+    endTime: endTime,
+    status: (turno.status === "confirmado" || turno.status === "confirmed") ? "confirmed" : turno.status,
     tone: statusTone[turno.status] || "green",
   };
 }
 
 export default function AgendaPage() {
-  const { turnos, isLoading, isError, error, refetch } = useTurnos();
+  const { turnos = [], isLoading, isError, error, refetch } = useTurnos();
 
   if (isLoading) {
     return (
@@ -53,7 +59,7 @@ export default function AgendaPage() {
     return (
       <DashboardPageLayout>
         <ErrorState
-          message={error?.message}
+          message={error?.message || "Ocurrió un error al cargar la agenda."}
           onRetry={refetch}
         />
       </DashboardPageLayout>

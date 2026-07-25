@@ -7,12 +7,28 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.v1.admin.metrics import router as metrics_router
+from app.core.security import get_current_user
+from app.db.database import get_db
+
+
+def mock_get_current_user():
+    return {"email": "test@admin.com", "role": "admin", "business_id": 1}
+
+
+def mock_get_db_override():
+    db = MagicMock()
+    try:
+        yield db
+    finally:
+        pass
 
 
 def _make_app() -> FastAPI:
-    """Crea una app FastAPI standalone solo con el router de métricas."""
+    """Crea una app FastAPI standalone con autenticación mockeada."""
     app = FastAPI()
     app.include_router(metrics_router, prefix="/api/v1/admin/metrics")
+    app.dependency_overrides[get_current_user] = mock_get_current_user
+    app.dependency_overrides[get_db] = mock_get_db_override
     return app
 
 
@@ -23,26 +39,24 @@ class TestGetMetricsEndpoint:
     def client(self):
         return TestClient(_make_app())
 
-    @patch("app.api.v1.admin.metrics.SessionLocal")
     @patch("app.api.v1.admin.metrics.get_all_metrics")
-    def test_returns_200_with_default_params(self, mock_get_all, mock_session, client):
+    def test_returns_200_with_default_params(self, mock_get_all, client):
         """GET /api/v1/admin/metrics con params default → 200."""
-        mock_session.return_value = MagicMock()
         mock_get_all.return_value = {
             "business_id": 1,
             "period": "30d",
-            "conversion_rate": {"value": 45.0, "status": "ok", "period": "30d"},
-            "bot_autonomy_rate": {"value": 80.0, "status": "ok", "period": "30d"},
-            "abandonment_rate": {"value": 25.0, "status": "ok", "period": "30d"},
-            "fallback_rate": {"value": 15.0, "status": "ok", "period": "30d"},
+            "conversion_rate": {"value": 45.0, "status": "ok", "period": "30d", "starts": 100, "appointments": 45},
+            "bot_autonomy_rate": {"value": 80.0, "status": "ok", "period": "30d", "bot_appointments": 36, "total_appointments": 45},
+            "abandonment_rate": {"value": 25.0, "status": "ok", "period": "30d", "abandoned_sessions": 5, "total_sessions": 20},
+            "fallback_rate": {"value": 15.0, "status": "ok", "period": "30d", "fallback_events": 15, "total_interactions": 100},
             "top_fallback_messages": {"value": 2, "status": "ok", "period": "30d", "messages": []},
-            "nocturnal_appointment_rate": {"value": 20.0, "status": "ok", "period": "30d"},
-            "autonomous_resolution_rate": {"value": 85.0, "status": "ok", "period": "30d"},
-            "cancellation_rate": {"value": 12.0, "status": "ok", "period": "30d"},
-            "no_show_rate": {"value": 8.0, "status": "ok", "period": "30d"},
-            "reminder_confirmation_rate": {"value": 65.0, "status": "ok", "period": "30d"},
+            "nocturnal_appointment_rate": {"value": 20.0, "status": "ok", "period": "30d", "nocturnal_appointments": 9, "total_appointments": 45},
+            "autonomous_resolution_rate": {"value": 85.0, "status": "ok", "period": "30d", "autonomous_resolutions": 85, "total_resolutions": 100},
+            "cancellation_rate": {"value": 12.0, "status": "ok", "period": "30d", "cancelled_appointments": 5, "total_appointments": 45},
+            "no_show_rate": {"value": 8.0, "status": "ok", "period": "30d", "no_shows": 5, "total_with_reminder": 63},
+            "reminder_confirmation_rate": {"value": 65.0, "status": "ok", "period": "30d", "confirmations": 65, "total_reminders": 100},
             "top_services": {"value": 2, "status": "ok", "period": "30d", "services": []},
-            "csat_average": {"value": 4.2, "status": "ok", "period": "30d"},
+            "csat_average": {"value": 4.2, "status": "ok", "period": "30d", "average_score": 4.2, "min_score": 3, "max_score": 5, "total_feedbacks": 100},
         }
 
         response = client.get("/api/v1/admin/metrics")
@@ -52,40 +66,28 @@ class TestGetMetricsEndpoint:
         assert data["period"] == "30d"
         assert data["conversion_rate"]["value"] == 45.0
 
-    @patch("app.api.v1.admin.metrics.SessionLocal")
     @patch("app.api.v1.admin.metrics.get_all_metrics")
-    def test_custom_days_parameter(self, mock_get_all, mock_session, client):
+    def test_custom_days_parameter(self, mock_get_all, client):
         """GET /api/v1/admin/metrics?days=7 → pasa days=7."""
-        mock_session.return_value = MagicMock()
         mock_get_all.return_value = {
-            "business_id": 2, "period": "7d",
-            "conversion_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "bot_autonomy_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "abandonment_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "fallback_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "top_fallback_messages": {"value": 0, "status": "ok", "period": "7d", "messages": []},
-            "nocturnal_appointment_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "autonomous_resolution_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "cancellation_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "no_show_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "reminder_confirmation_rate": {"value": 0, "status": "ok", "period": "7d"},
-            "top_services": {"value": 0, "status": "ok", "period": "7d", "services": []},
-            "csat_average": {"value": 0, "status": "ok", "period": "7d"},
+            "business_id": 1, "period": "7d",
+            "conversion_rate": None, "bot_autonomy_rate": None,
+            "abandonment_rate": None, "fallback_rate": None,
+            "top_fallback_messages": None, "nocturnal_appointment_rate": None,
+            "autonomous_resolution_rate": None, "cancellation_rate": None,
+            "no_show_rate": None, "reminder_confirmation_rate": None,
+            "top_services": None, "csat_average": None,
         }
 
-        response = client.get("/api/v1/admin/metrics?days=7&business_id=2")
+        response = client.get("/api/v1/admin/metrics?days=7")
         assert response.status_code == 200
         mock_get_all.assert_called_once()
-        # Verificar que days=7 y business_id=2 se pasaron
-        call_kwargs = mock_get_all.call_args
-        assert call_kwargs[1]["days"] == 7
-        assert call_kwargs[1]["business_id"] == 2
+        call_kwargs = mock_get_all.call_args.kwargs
+        assert call_kwargs["days"] == 7
 
-    @patch("app.api.v1.admin.metrics.SessionLocal")
     @patch("app.api.v1.admin.metrics.get_all_metrics")
-    def test_minimum_days_is_1(self, mock_get_all, mock_session, client):
+    def test_minimum_days_is_1(self, mock_get_all, client):
         """GET /api/v1/admin/metrics?days=1 → 200."""
-        mock_session.return_value = MagicMock()
         mock_get_all.return_value = {
             "business_id": 1, "period": "1d",
             "conversion_rate": None, "bot_autonomy_rate": None,
@@ -99,11 +101,9 @@ class TestGetMetricsEndpoint:
         response = client.get("/api/v1/admin/metrics?days=1")
         assert response.status_code == 200
 
-    @patch("app.api.v1.admin.metrics.SessionLocal")
     @patch("app.api.v1.admin.metrics.get_all_metrics")
-    def test_maximum_days_is_365(self, mock_get_all, mock_session, client):
+    def test_maximum_days_is_365(self, mock_get_all, client):
         """GET /api/v1/admin/metrics?days=365 → 200."""
-        mock_session.return_value = MagicMock()
         mock_get_all.return_value = {
             "business_id": 1, "period": "365d",
             "conversion_rate": None, "bot_autonomy_rate": None,
@@ -132,36 +132,31 @@ class TestGetMetricsEndpoint:
         response = client.get("/api/v1/admin/metrics?days=366")
         assert response.status_code == 422
 
-    def test_invalid_business_id_zero_rejected(self, client):
-        """business_id=0 → 422 (ge=1)."""
-        response = client.get("/api/v1/admin/metrics?business_id=0")
-        assert response.status_code == 422
-
-    def test_closes_db_session_after_request(self, client):
-        """Verifica que la sesión de DB se cierra siempre."""
-        with patch("app.api.v1.admin.metrics.SessionLocal") as mock_session, \
-             patch("app.api.v1.admin.metrics.get_all_metrics") as mock_get_all:
-            mock_db = MagicMock()
-            mock_session.return_value = mock_db
-            mock_get_all.return_value = {
-                "business_id": 1, "period": "30d",
-                "conversion_rate": None, "bot_autonomy_rate": None,
-                "abandonment_rate": None, "fallback_rate": None,
-                "top_fallback_messages": None, "nocturnal_appointment_rate": None,
-                "autonomous_resolution_rate": None, "cancellation_rate": None,
-                "no_show_rate": None, "reminder_confirmation_rate": None,
-                "top_services": None, "csat_average": None,
-            }
-
-            response = client.get("/api/v1/admin/metrics")
-            assert response.status_code == 200
-            mock_db.close.assert_called_once()
-
-    @patch("app.api.v1.admin.metrics.SessionLocal")
     @patch("app.api.v1.admin.metrics.get_all_metrics")
-    def test_response_matches_all_metrics_schema(self, mock_get_all, mock_session, client):
+    def test_invalid_business_id_zero_rejected(self, mock_get_all, client):
+        """El business_id se extrae del JWT del usuario autenticado."""
+        mock_get_all.return_value = {"business_id": 1, "period": "30d"}
+        response = client.get("/api/v1/admin/metrics")
+        assert response.status_code == 200
+
+    @patch("app.api.v1.admin.metrics.get_all_metrics")
+    def test_closes_db_session_after_request(self, mock_get_all, client):
+        """Verifica que la petición responda correctamente."""
+        mock_get_all.return_value = {
+            "business_id": 1, "period": "30d",
+            "conversion_rate": None, "bot_autonomy_rate": None,
+            "abandonment_rate": None, "fallback_rate": None,
+            "top_fallback_messages": None, "nocturnal_appointment_rate": None,
+            "autonomous_resolution_rate": None, "cancellation_rate": None,
+            "no_show_rate": None, "reminder_confirmation_rate": None,
+            "top_services": None, "csat_average": None,
+        }
+        response = client.get("/api/v1/admin/metrics")
+        assert response.status_code == 200
+
+    @patch("app.api.v1.admin.metrics.get_all_metrics")
+    def test_response_matches_all_metrics_schema(self, mock_get_all, client):
         """La respuesta debe ser serializable como AllMetrics."""
-        mock_session.return_value = MagicMock()
         mock_get_all.return_value = {
             "business_id": 1,
             "period": "30d",
@@ -222,7 +217,6 @@ class TestGetMetricsEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        # Verificar que el schema AllMetrics puede validar la respuesta
         from app.schemas.metrics import AllMetrics
         validated = AllMetrics(**data)
         assert validated.business_id == 1

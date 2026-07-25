@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2, Plus, LayoutDashboard } from "lucide-react";
-
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button/button";
@@ -16,8 +15,6 @@ import {
 import { useTurnos } from "@/hooks/useTurnos";
 import { cn } from "@/lib/utils";
 
-// ─── Status config ────────────────────────────────────────────────────────────
-
 const STATUS_CONFIG = {
   confirmado:      { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
   confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
@@ -27,8 +24,6 @@ const STATUS_CONFIG = {
   expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30" },
   unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border" },
 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({ value, label, isLoading }) {
   return (
@@ -58,20 +53,16 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function DashboardPage() {
-  const { turnos, todayTurnos, isLoading } = useTurnos();
+  const { turnos = [], todayTurnos = [], isLoading } = useTurnos();
 
   return (
     <DashboardPageLayout>
-      {/* ── Header ────────────────────────────────────────────────────────── */}
       <PageHeader
         icon={<LayoutDashboard className="size-5" />}
-        title="Panel de Control — Administrador"
+        title="Panel de Control"
       />
 
-      {/* ── Stats row ─────────────────────────────────────────────────────── */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           value={todayTurnos.length}
@@ -89,13 +80,12 @@ export default function DashboardPage() {
           isLoading={isLoading}
         />
         <StatCard
-          value={todayTurnos.filter((t) => t.status === "confirmado").length}
+          value={todayTurnos.filter((t) => t.status === "confirmado" || t.status === "confirmed").length}
           label="Confirmados hoy"
           isLoading={isLoading}
         />
       </div>
 
-      {/* ── Today's appointments ──────────────────────────────────────────── */}
       <section className="mb-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">
@@ -145,7 +135,7 @@ export default function DashboardPage() {
                 todayTurnos.map((turno) => (
                   <TableRow key={turno.id} className="border-border hover:bg-muted/30">
                     <TableCell className="px-5 py-4 font-medium text-foreground">
-                      {turno.time}
+                      {turno.startTime || turno.time}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-foreground">
                       {turno.clientName}
@@ -157,7 +147,6 @@ export default function DashboardPage() {
                       <StatusBadge status={turno.status} />
                     </TableCell>
                     <TableCell className="px-5 py-4 text-right">
-                      {/* Future: action buttons */}
                     </TableCell>
                   </TableRow>
                 ))
@@ -167,7 +156,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ── All turnos summary ────────────────────────────────────────────── */}
       <section>
         <div className="overflow-hidden rounded-xl border border-border">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4 text-sm">
@@ -175,19 +163,19 @@ export default function DashboardPage() {
               Resumen:
             </span>
             <span className="flex items-baseline gap-1.5">
-              <span className="text-muted-foreground">Total</span>
+              <span className="text-muted-foreground">Total:</span>
               <span className="font-bold text-foreground">{isLoading ? "..." : turnos.length}</span>
             </span>
             <span className="flex items-baseline gap-1.5">
-              <span className="text-muted-foreground">Confirmados</span>
+              <span className="text-muted-foreground">Confirmados:</span>
               <span className="font-bold text-foreground">
-                {isLoading ? "..." : turnos.filter((t) => t.status === "confirmado").length}
+                {isLoading ? "..." : turnos.filter((t) => t.status === "confirmado" || t.status === "confirmed").length}
               </span>
             </span>
             <span className="flex items-baseline gap-1.5">
-              <span className="text-muted-foreground">Pendientes</span>
+              <span className="text-muted-foreground">Pendientes:</span>
               <span className="font-bold text-foreground">
-                {isLoading ? "..." : turnos.filter((t) => t.status === "pendiente").length}
+                {isLoading ? "..." : turnos.filter((t) => t.status === "pendiente" || t.status === "scheduled").length}
               </span>
             </span>
           </div>

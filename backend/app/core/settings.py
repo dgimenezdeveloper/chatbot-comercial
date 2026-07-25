@@ -22,10 +22,11 @@ class Settings(BaseSettings):
     WHATSAPP_BUSINESS_ACCOUNT_ID: str
     META_API_VERSION: str = "v25.0"
 
-    # Google OAuth2
+    # Google OAuth2 & Calendar
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None  # JSON string de la Service Account
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     APP_ENV: str = "development"

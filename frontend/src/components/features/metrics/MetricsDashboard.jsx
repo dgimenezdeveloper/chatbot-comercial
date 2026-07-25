@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { Filter, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,8 +34,6 @@ import {
 import { useMetrics } from "@/hooks/useMetrics";
 import { useMetricsFilter } from "@/hooks/useMetricsFilter";
 import { useMetricsData } from "@/hooks/useMetricsData";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function Skeleton({ className }) {
   return <div className={cn("animate-pulse rounded-lg bg-muted", className)} />;
@@ -70,18 +69,9 @@ function PeriodFilter({ filters, setFilters, isStale, onRefetch }) {
   );
 }
 
-// ─── Main client component ────────────────────────────────────────────────────
-
-/**
- * MetricsDashboard — Client Component.
- *
- * Auth is handled by the Axios interceptor automatically.
- * Uses TanStack Query via useMetrics hook for caching, polling, and deduplication.
- */
 export function MetricsDashboard() {
   const { filters, setFilters } = useMetricsFilter({
     days: 30,
-    businessId: 1,
     includeExtended: true,
   });
 
@@ -97,9 +87,8 @@ export function MetricsDashboard() {
     hourlyDistributionData,
   } = useMetricsData(data);
 
-  const handleRefetch = refetch;
+  const handleRefetch = useCallback(() => refetch(), [refetch]);
 
-  // ── Error state ─────────────────────────────────────────────────────────────
   if (error && !data) {
     const isAuthError = error.message?.includes("401") || error.message?.includes("autenticado");
     const isNetworkError = error.message?.includes("conexión") || error.message?.includes("Network");
@@ -112,12 +101,10 @@ export function MetricsDashboard() {
         />
         <div className="flex flex-1 items-center justify-center py-20">
           <div className="flex max-w-md flex-col items-center gap-4 text-center">
-            {/* Icon */}
             <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
               <MetricasIcon className="size-7 text-destructive" />
             </div>
 
-            {/* Title */}
             <h2 className="text-lg font-semibold text-foreground">
               {isAuthError
                 ? "Sesión expirada"
@@ -126,7 +113,6 @@ export function MetricsDashboard() {
                   : "No se pudieron cargar las métricas"}
             </h2>
 
-            {/* Description */}
             <p className="text-sm text-muted-foreground">
               {isAuthError
                 ? "Tu sesión expiró o no tenés permisos. Intentá cerrar sesión y volver a ingresar."
@@ -135,7 +121,6 @@ export function MetricsDashboard() {
                   : "Ocurrió un error al obtener los datos. Podés intentar de nuevo o verificar la configuración."}
             </p>
 
-            {/* Error detail (collapsible for debugging) */}
             <details className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2 text-left">
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
                 Ver detalle técnico
@@ -145,7 +130,6 @@ export function MetricsDashboard() {
               </p>
             </details>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-2">
               <Button variant="outline" onClick={handleRefetch}>
                 <RefreshCw className="size-4" />
@@ -174,9 +158,9 @@ export function MetricsDashboard() {
 
       <div className="space-y-8">
         {/* KPI Cards */}
-        <section className="rounded-2xl  p-6 shadow-sm">
+        <section className="rounded-2xl p-6 shadow-sm">
           <div className="mb-4">
-            <h2 className="text-base font-semibold ">
+            <h2 className="text-base font-semibold">
               Indicadores Clave de Rendimiento
             </h2>
             <p className="mt-0.5 text-sm text-primary-foreground/70">

@@ -7,17 +7,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [Google],
   pages: {
     signIn: "/login",
+    error: "/login", // Redirige errores de autenticación a la página de login
   },
   callbacks: {
-    async jwt({ token, account }) {
+    /**
+     * Guardián de inicio de sesión:
+     * Se ejecuta ANTES de crear la sesión en el frontend.
+     * Consulta al backend si el mail está en la Lista Blanca.
+     * Si el backend responde error (403), devuelve `false` y NextAuth cancela el login.
+     */
+    async signIn({ account }) {
       if (account?.provider === "google" && account.access_token) {
         try {
-          logger.info(
-            { url: `${process.env.NEXT_PUBLIC_API_URL}/auth/google` },
-            "Initiating POST to backend"
-          )
-          
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/google`, {
+          const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`
+          logger.info({ url: apiUrl }, "Validando token de Google con la Lista Blanca del backend...")
+
+          const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -25,36 +30,45 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             body: JSON.stringify({ access_token: account.access_token }),
           })
 
-          if (response.ok) {
-            const data = await response.json()
-            logger.info("Backend response OK. Token received.")
-            token.backendAccessToken = data.access_token
-            token.user = {
-              ...data.user,
-              picture: data.user.picture,
-              email: data.user.email,
-              name: data.user.name,
-            }
-          } else {
-            logger.error({ status: response.status }, "Backend responded with error status")
-            token.error = "BackendAuthenticationError"
+          if (!response.ok) {
+            logger.error(
+              { status: response.status },
+              "Acceso denegado: El correo no está en la Lista Blanca del backend."
+            )
+            // Cancelar login en NextAuth
+            return false
           }
+
+          const data = await response.json()
+          logger.info("Validación exitosa en backend. Usuario autorizado.")
+          
+          // Guardamos temporalmente la respuesta del backend en la cuenta
+          account.backendData = data
+          return true
         } catch (error) {
-          logger.error({ err: error.message }, "Backend connection failed")
-          token.error = "BackendAuthenticationError"
+          logger.error({ err: error.message }, "Error de conexión con el backend durante signIn")
+          return false
         }
+      }
+      return true
+    },
+
+    async jwt({ token, account }) {
+      if (account?.backendData) {
+        token.backendAccessToken = account.backendData.access_token
+        token.user = account.backendData.user
       }
       return token
     },
+
     async session({ session, token }) {
-      session.backendAccessToken = token.backendAccessToken
-      session.error = token.error
-      
+      if (token.backendAccessToken) {
+        session.backendAccessToken = token.backendAccessToken
+      }
       if (token.user) {
         session.user = token.user
       }
-      
       return session
-    }
-  }
+    },
+  },
 })

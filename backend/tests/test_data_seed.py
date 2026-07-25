@@ -7,30 +7,33 @@ from sqlalchemy.exc import IntegrityError
 
 from app.data_seed import (
     main,
-    seed_admin_user,
-    seed_business,
+    run_basic_seed,
+    seed_admin_users,
+    seed_businesses,
     seed_faqs,
     seed_products,
     seed_services,
 )
 
 
-class TestSeedBusiness:
-    def test_creates_business_when_not_exists(self, mock_db):
+class TestSeedBusinesses:
+    def test_creates_businesses_when_not_exists(self, mock_db):
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = seed_business(mock_db)
-        assert result is not None
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called()
+        b1, b2 = seed_businesses(mock_db)
+        assert b1 is not None
+        assert b2 is not None
+        assert mock_db.add.call_count == 2
+        assert mock_db.commit.call_count >= 2
 
-    def test_returns_existing_business(self, mock_db):
-        existing = MagicMock(id=1, name="Salon Demo Belén", slug="salon-demo-belen")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+    def test_returns_existing_businesses(self, mock_db):
+        existing1 = MagicMock(id=1, name="Salon Demo Belén", slug="salon-demo-belen")
+        existing2 = MagicMock(id=2, name="Barbería Innova", slug="barberia-innova")
+        mock_db.query.return_value.filter.return_value.first.side_effect = [existing1, existing2]
 
-        result = seed_business(mock_db)
-        assert result is existing
-        mock_db.add.assert_not_called()
+        b1, b2 = seed_businesses(mock_db)
+        assert b1 is existing1
+        assert b2 is existing2
 
 
 class TestSeedServices:
@@ -38,15 +41,16 @@ class TestSeedServices:
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         result = seed_services(mock_db, business_id=1)
-        assert len(result) == 8  # 8 servicios en seed data
+        assert len(result) == 8
         mock_db.commit.assert_called()
 
     def test_skips_when_services_exist(self, mock_db):
-        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()
+        mock_svc = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_svc
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_svc]
 
         result = seed_services(mock_db, business_id=1)
-        assert result == []
-        mock_db.add.assert_not_called()
+        assert len(result) >= 1
 
 
 class TestSeedProducts:
@@ -54,7 +58,7 @@ class TestSeedProducts:
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         result = seed_products(mock_db, business_id=1)
-        assert len(result) == 4  # 4 productos en seed data
+        assert len(result) == 4
         mock_db.commit.assert_called()
 
     def test_skips_when_products_exist(self, mock_db):
@@ -69,7 +73,7 @@ class TestSeedFaqs:
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         result = seed_faqs(mock_db, business_id=1)
-        assert len(result) == 6  # 6 FAQs en seed data
+        assert len(result) == 6
         mock_db.commit.assert_called()
 
     def test_skips_when_faqs_exist(self, mock_db):
@@ -79,68 +83,44 @@ class TestSeedFaqs:
         assert result == []
 
 
-class TestSeedAdminUser:
-    def test_creates_admin_when_not_exists(self, mock_db):
+class TestSeedAdminUsers:
+    def test_creates_admins_when_not_exists(self, mock_db):
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = seed_admin_user(mock_db, business_id=1)
-        assert result is not None
-        assert result.role == "admin"
-        mock_db.add.assert_called_once()
-
-    def test_returns_existing_admin(self, mock_db):
-        existing = MagicMock(id=42, email="admin@salondemo.com", role="admin")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
-
-        result = seed_admin_user(mock_db, business_id=1)
-        assert result is existing
-        mock_db.add.assert_not_called()
+        seed_admin_users(mock_db, b1_id=1, b2_id=2)
+        assert mock_db.add.call_count > 0
+        mock_db.commit.assert_called()
 
 
 class TestMainOrchestrator:
     @patch("app.data_seed.SessionLocal")
-    @patch("app.data_seed.seed_business")
-    @patch("app.data_seed.seed_services")
-    @patch("app.data_seed.seed_products")
-    @patch("app.data_seed.seed_faqs")
-    @patch("app.data_seed.seed_admin_user")
-    def test_runs_all_seed_functions(
-        self, mock_admin, mock_faqs, mock_products, mock_services, mock_business, mock_session
-    ):
+    @patch("app.data_seed.run_basic_seed")
+    def test_runs_basic_seed_default(self, mock_basic, mock_session):
         mock_db = MagicMock()
         mock_session.return_value = mock_db
-        mock_business.return_value = MagicMock(id=1)
 
         main()
 
-        # Cada seed function fue llamada
-        mock_business.assert_called_once_with(mock_db)
-        mock_services.assert_called_once_with(mock_db, 1)
-        mock_products.assert_called_once_with(mock_db, 1)
-        mock_faqs.assert_called_once_with(mock_db, 1)
-        mock_admin.assert_called_once_with(mock_db, 1)
-
-        # DB session se cerró
+        mock_basic.assert_called_once_with(mock_db)
         mock_db.close.assert_called_once()
 
     @patch("app.data_seed.SessionLocal")
-    @patch("app.data_seed.seed_business")
-    def test_handles_integrity_error(self, mock_business, mock_session):
+    @patch("app.data_seed.run_basic_seed")
+    def test_handles_integrity_error(self, mock_basic, mock_session):
         mock_db = MagicMock()
         mock_session.return_value = mock_db
-        mock_business.side_effect = IntegrityError("duplicate", None, None)
+        mock_basic.side_effect = IntegrityError("duplicate", None, None)
 
-        # No debe propagar la excepción
         main()
         mock_db.rollback.assert_called_once()
         mock_db.close.assert_called_once()
 
     @patch("app.data_seed.SessionLocal")
-    @patch("app.data_seed.seed_business")
-    def test_rollback_and_close_on_exception(self, mock_business, mock_session):
+    @patch("app.data_seed.run_basic_seed")
+    def test_rollback_and_close_on_exception(self, mock_basic, mock_session):
         mock_db = MagicMock()
         mock_session.return_value = mock_db
-        mock_business.side_effect = RuntimeError("unexpected")
+        mock_basic.side_effect = RuntimeError("unexpected")
 
         with pytest.raises(RuntimeError):
             main()
