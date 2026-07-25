@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Scissors, X } from "lucide-react";
+import { Loader2, Pencil, Plus, Scissors, X } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge/badge";
 import { Button } from "@/components/ui/button/button";
+import { ErrorState } from "@/components/ui/error-state/error-state";
 import { Switch } from "@/components/ui/switch/switch";
 import {
   Table,
@@ -43,40 +44,58 @@ function FilterTab({ active, count, label, onClick }) {
 
 export default function ServicesView({
   services,
+  isLoading,
+  isError,
+  error,
+  onRetry,
   onAddService,
   onEditService,
   onDeleteService,
   onToggleStatus,
 }) {
   const [filter, setFilter] = useState(FILTERS.ALL);
-  const [localServices, setLocalServices] = useState(services);
 
   const counts = useMemo(
     () => ({
-      all: localServices.length,
-      active: localServices.filter((s) => s.active).length,
-      inactive: localServices.filter((s) => !s.active).length,
+      all: services.length,
+      active: services.filter((s) => s.active).length,
+      inactive: services.filter((s) => !s.active).length,
     }),
-    [localServices],
+    [services],
   );
 
   const filteredServices = useMemo(() => {
-    if (filter === FILTERS.ACTIVE) return localServices.filter((s) => s.active);
-    if (filter === FILTERS.INACTIVE) return localServices.filter((s) => !s.active);
-    return localServices;
-  }, [filter, localServices]);
+    if (filter === FILTERS.ACTIVE) return services.filter((s) => s.active);
+    if (filter === FILTERS.INACTIVE) return services.filter((s) => !s.active);
+    return services;
+  }, [filter, services]);
 
   const handleToggleStatus = (serviceId, active) => {
-    setLocalServices((prev) =>
-      prev.map((s) => (s.id === serviceId ? { ...s, active } : s)),
-    );
     onToggleStatus?.(serviceId, active);
   };
 
   const handleDelete = (serviceId) => {
-    setLocalServices((prev) => prev.filter((s) => s.id !== serviceId));
     onDeleteService?.(serviceId);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <section className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
+        <Loader2 className="size-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Cargando servicios...</p>
+      </section>
+    );
+  }
+
+  // Error state
+  if (isError) {
+    return (
+      <section className="flex flex-1 flex-col">
+        <ErrorState message={error?.message} onRetry={onRetry} />
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-1 flex-col">
@@ -130,7 +149,7 @@ export default function ServicesView({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={service.active}
-                        onCheckedChange={(checked) => handleToggleStatus(service.id, checked)}
+                        disabled
                       />
                       <span className={cn("text-xs font-semibold uppercase", service.active ? "text-foreground" : "text-muted-foreground")}>
                         {service.active ? "ON" : "OFF"}

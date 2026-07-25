@@ -69,17 +69,13 @@ function PeriodFilter({ filters, setFilters, isStale, onRefetch }) {
   );
 }
 
-export function MetricsDashboard({ accessToken, businessId = 1 }) {
+export function MetricsDashboard() {
   const { filters, setFilters } = useMetricsFilter({
     days: 30,
-    businessId: businessId,  // Leído desde la sesión del usuario
     includeExtended: true,
   });
 
-  const { data, loading, error, isStale, refetch } = useMetrics({
-    ...filters,
-    accessToken,
-  });
+  const { data, loading, error, isStale, refetch } = useMetrics(filters);
 
   const {
     topFallbackData,
@@ -94,22 +90,53 @@ export function MetricsDashboard({ accessToken, businessId = 1 }) {
   const handleRefetch = useCallback(() => refetch(), [refetch]);
 
   if (error && !data) {
+    const isAuthError = error.message?.includes("401") || error.message?.includes("autenticado");
+    const isNetworkError = error.message?.includes("conexión") || error.message?.includes("Network");
+
     return (
       <DashboardPageLayout>
         <PageHeader
           icon={<MetricasIcon className="size-5" />}
           title="Métricas"
         />
-        <div className="flex flex-1 items-center justify-center">
-          <Card className="w-full max-w-sm">
-            <CardHeader>
-              <CardTitle>Error al cargar métricas</CardTitle>
-              <CardDescription>{error.message}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={handleRefetch}>Reintentar</Button>
-            </CardContent>
-          </Card>
+        <div className="flex flex-1 items-center justify-center py-20">
+          <div className="flex max-w-md flex-col items-center gap-4 text-center">
+            <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+              <MetricasIcon className="size-7 text-destructive" />
+            </div>
+
+            <h2 className="text-lg font-semibold text-foreground">
+              {isAuthError
+                ? "Sesión expirada"
+                : isNetworkError
+                  ? "Sin conexión al servidor"
+                  : "No se pudieron cargar las métricas"}
+            </h2>
+
+            <p className="text-sm text-muted-foreground">
+              {isAuthError
+                ? "Tu sesión expiró o no tenés permisos. Intentá cerrar sesión y volver a ingresar."
+                : isNetworkError
+                  ? "No se pudo conectar con el servidor. Verificá que el backend esté corriendo y volvé a intentar."
+                  : "Ocurrió un error al obtener los datos. Podés intentar de nuevo o verificar la configuración."}
+            </p>
+
+            <details className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2 text-left">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                Ver detalle técnico
+              </summary>
+              <p className="mt-2 break-all font-mono text-xs text-destructive">
+                {error.message}
+              </p>
+            </details>
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={handleRefetch}>
+                <RefreshCw className="size-4" />
+                Reintentar
+              </Button>
+            </div>
+          </div>
         </div>
       </DashboardPageLayout>
     );
@@ -143,7 +170,7 @@ export function MetricsDashboard({ accessToken, businessId = 1 }) {
           {loading && !data ? (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-28 animate-pulse rounded-xl bg-primary-foreground/20" />
+                <div key={i} className="h-28 animate-pulse rounded-xl border border-border bg-muted" />
               ))}
             </div>
           ) : (

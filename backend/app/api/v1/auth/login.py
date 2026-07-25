@@ -6,6 +6,7 @@ from app.core.settings import settings
 from app.core.security import create_access_token
 from app.db.database import get_db
 from app.db.models.user import User
+from app.db.models.business import Business
 from app.schemas.auth import LoginMockRequest, GoogleLoginRequest, LoginResponse
 
 router = APIRouter()
@@ -23,7 +24,8 @@ async def login_mock(payload: LoginMockRequest):
         jwt_token = create_access_token(data={
             "sub": "dgimenez.developer@gmail.com",
             "role": "admin",
-            "business_id": 1
+            "business_id": 1,
+            "onboarding_completed": True
         })
         return LoginResponse(
             access_token=jwt_token,
@@ -31,7 +33,8 @@ async def login_mock(payload: LoginMockRequest):
                 "email": "dgimenez.developer@gmail.com",
                 "name": "Diego Gimenez (Peluquería)",
                 "picture": "",
-                "business_id": 1
+                "business_id": 1,
+                "onboarding_completed": True
             }
         )
     raise HTTPException(
@@ -78,11 +81,17 @@ async def login_google_real(payload: GoogleLoginRequest, db: Session = Depends(g
                 detail=f"Acceso denegado: El correo '{email}' no está autorizado en la lista blanca de la plataforma."
             )
 
-        # Emitimos nuestro propio JWT firmado inyectando business_id
+        # --- VERIFICACIÓN DE ESTADO DE ONBOARDING ---
+        biz = db.query(Business).filter(Business.id == user_db.business_id).first()
+        # Inquilino 1 o comercios con descripción ya cargada se consideran con Onboarding Completo
+        is_onboarding_completed = True if (user_db.business_id == 1 or (biz and biz.description)) else False
+
+        # Emitimos nuestro propio JWT firmado inyectando business_id y el flag de onboarding
         jwt_token = create_access_token(data={
             "sub": email,
             "role": user_db.role,
-            "business_id": user_db.business_id
+            "business_id": user_db.business_id,
+            "onboarding_completed": is_onboarding_completed
         })
         
         return LoginResponse(
@@ -91,6 +100,7 @@ async def login_google_real(payload: GoogleLoginRequest, db: Session = Depends(g
                 "email": email,
                 "name": user_db.name or user_info.get("name"),
                 "picture": user_info.get("picture"),
-                "business_id": user_db.business_id
+                "business_id": user_db.business_id,
+                "onboarding_completed": is_onboarding_completed
             }
         )

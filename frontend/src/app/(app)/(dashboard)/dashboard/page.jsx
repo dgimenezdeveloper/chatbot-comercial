@@ -1,6 +1,6 @@
-import { auth } from "@/auth";
-import { Plus, LayoutDashboard } from "lucide-react";
+"use client";
 
+import { Loader2, Plus, LayoutDashboard } from "lucide-react";
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button/button";
@@ -12,24 +12,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table/table";
-import {
-  MOCK_STATS,
-  MOCK_TODAY_APPOINTMENTS,
-  MOCK_WEEKLY_SUMMARY,
-} from "@/lib/data-mock/mock-dashboard";
+import { useTurnos } from "@/hooks/useTurnos";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG = {
-  confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30"              },
-  pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40"   },
-  expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30"  },
-  unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border"              },
+  confirmado:      { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
+  confirmed:       { label: "Confirmado",        className: "bg-success/15 text-success border border-success/30" },
+  pendiente:       { label: "Pendiente",         className: "bg-warning/15 text-warning-foreground border border-warning/40" },
+  pending_deposit: { label: "Pendiente de Seña", className: "bg-warning/15 text-warning-foreground border border-warning/40" },
+  cancelado:       { label: "Cancelado",         className: "bg-destructive/10 text-destructive border border-destructive/30" },
+  expired:         { label: "Expirado",          className: "bg-destructive/10 text-destructive border border-destructive/30" },
+  unassigned:      { label: "Sin Asignar",       className: "bg-muted text-muted-foreground border border-border" },
 };
 
-function StatCard({ value, label }) {
+function StatCard({ value, label, isLoading }) {
   return (
     <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-card px-6 py-5 text-center">
-      <span className="text-3xl font-bold text-foreground">{value}</span>
+      {isLoading ? (
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      ) : (
+        <span className="text-3xl font-bold text-foreground">{value}</span>
+      )}
       <span className="text-sm text-muted-foreground">{label}</span>
     </div>
   );
@@ -37,7 +40,7 @@ function StatCard({ value, label }) {
 
 function StatusBadge({ status }) {
   const config = STATUS_CONFIG[status] ?? {
-    label: status,
+    label: status || "—",
     className: "bg-muted text-muted-foreground border border-border",
   };
   return (
@@ -50,55 +53,36 @@ function StatusBadge({ status }) {
   );
 }
 
-export default async function DashboardPage() {
-  const session = await auth();
-  const businessId = session?.user?.business_id ?? 1;
-
-  // Si es Inquilino 1 (Peluquería), mostramos el dataset rico de prueba.
-  // Si es Inquilino 2 (Barbería nuevo), se muestra vacía como corresponde a un nuevo cliente SaaS.
-  const isTenantRico = businessId === 1;
-
-  const stats = isTenantRico ? MOCK_STATS : {
-    todayAppointments: 0,
-    depositsCobrados: 0,
-    botConsultas: 0,
-    newClients: 0
-  };
-
-  const todayAppointments = isTenantRico ? MOCK_TODAY_APPOINTMENTS : [];
-  
-  const weeklySummary = isTenantRico ? MOCK_WEEKLY_SUMMARY : [
-    { day: "Lunes", count: 0 },
-    { day: "Martes", count: 0 },
-    { day: "Miércoles", count: 0 },
-    { day: "Jueves", count: 0 },
-    { day: "Viernes", count: 0 },
-    { day: "Sábado", count: 0 }
-  ];
+export default function DashboardPage() {
+  const { turnos = [], todayTurnos = [], isLoading } = useTurnos();
 
   return (
     <DashboardPageLayout>
       <PageHeader
         icon={<LayoutDashboard className="size-5" />}
-        title={`Panel de Control — ${session?.user?.name || "Administrador"}`}
+        title="Panel de Control"
       />
 
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          value={stats.todayAppointments}
+          value={todayTurnos.length}
           label="Turnos Hoy"
+          isLoading={isLoading}
         />
         <StatCard
-          value={`$${stats.depositsCobrados.toLocaleString("es-AR")}`}
+          value={`$${(0).toLocaleString("es-AR")}`}
           label="Señas cobradas"
+          isLoading={isLoading}
         />
         <StatCard
-          value={stats.botConsultas}
-          label="Consultas bot"
+          value={turnos.length}
+          label="Turnos totales"
+          isLoading={isLoading}
         />
         <StatCard
-          value={stats.newClients}
-          label="Clientes nuevos"
+          value={todayTurnos.filter((t) => t.status === "confirmado" || t.status === "confirmed").length}
+          label="Confirmados hoy"
+          isLoading={isLoading}
         />
       </div>
 
@@ -135,26 +119,32 @@ export default async function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {todayAppointments.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="px-5 py-8 text-center text-muted-foreground">
-                    No hay turnos agendados para hoy en este comercio.
+                  <TableCell colSpan={5} className="px-5 py-10 text-center">
+                    <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : todayTurnos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="px-5 py-10 text-center text-muted-foreground">
+                    No hay turnos programados para hoy.
                   </TableCell>
                 </TableRow>
               ) : (
-                todayAppointments.map((appt) => (
-                  <TableRow key={appt.id} className="border-border hover:bg-muted/30">
+                todayTurnos.map((turno) => (
+                  <TableRow key={turno.id} className="border-border hover:bg-muted/30">
                     <TableCell className="px-5 py-4 font-medium text-foreground">
-                      {appt.time}
+                      {turno.startTime || turno.time}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-foreground">
-                      {appt.client}
+                      {turno.clientName}
                     </TableCell>
                     <TableCell className="px-5 py-4 text-muted-foreground">
-                      {appt.service}
+                      {turno.serviceName}
                     </TableCell>
                     <TableCell className="px-5 py-4">
-                      <StatusBadge status={appt.status} />
+                      <StatusBadge status={turno.status} />
                     </TableCell>
                     <TableCell className="px-5 py-4 text-right">
                     </TableCell>
@@ -170,14 +160,24 @@ export default async function DashboardPage() {
         <div className="overflow-hidden rounded-xl border border-border">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-4 text-sm">
             <span className="font-bold uppercase tracking-wide text-foreground">
-              Esta semana:
+              Resumen:
             </span>
-            {weeklySummary.map((entry) => (
-              <span key={entry.day} className="flex items-baseline gap-1.5">
-                <span className="text-muted-foreground">{entry.day}</span>
-                <span className="font-bold text-foreground">{entry.count}</span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Total:</span>
+              <span className="font-bold text-foreground">{isLoading ? "..." : turnos.length}</span>
+            </span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Confirmados:</span>
+              <span className="font-bold text-foreground">
+                {isLoading ? "..." : turnos.filter((t) => t.status === "confirmado" || t.status === "confirmed").length}
               </span>
-            ))}
+            </span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground">Pendientes:</span>
+              <span className="font-bold text-foreground">
+                {isLoading ? "..." : turnos.filter((t) => t.status === "pendiente" || t.status === "scheduled").length}
+              </span>
+            </span>
           </div>
         </div>
       </section>

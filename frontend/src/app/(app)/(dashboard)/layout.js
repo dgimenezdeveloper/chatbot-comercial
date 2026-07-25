@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { SidebarUserFooter } from "@/components/dashboard/SidebarUserFooter";
 import { DashboardMobileBar } from "@/components/dashboard/DashboardMobileBar";
+import { OnboardingGuard } from "@/components/guards/OnboardingGuard";
 import AppShell from "@/components/layout/AppShell";
 
 export default async function DashboardLayout({ children }) {
@@ -13,7 +14,9 @@ export default async function DashboardLayout({ children }) {
       sidebar={<Sidebar userFooter={userFooter} />}
       topBar={<DashboardMobileBar userFooter={userFooter} />}
     >
-      {children}
+      <OnboardingGuard requireOnboarding>
+        {children}
+      </OnboardingGuard>
     </AppShell>
   );
 }

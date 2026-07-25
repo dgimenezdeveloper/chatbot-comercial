@@ -401,3 +401,7 @@ reports/
 # Celery Beat scheduler database
 celerybeat-schedule
 
+
+# Archivos temporales
+repomix-output.xml
+.pnpm-store/

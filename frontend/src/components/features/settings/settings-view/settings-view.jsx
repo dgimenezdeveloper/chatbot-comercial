@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Bell, CreditCard, Globe, Settings, Smartphone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, Building2, CreditCard, Globe, Settings, Smartphone } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button/button";
@@ -15,7 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select/select";
 import { Switch } from "@/components/ui/switch/switch";
+import { Textarea } from "@/components/ui/textarea/textarea";
 import { cn } from "@/lib/utils";
+import { getBusinessData, setBusinessData } from "@/lib/business-store";
+import { updateNegocio } from "@/services/negocio-api";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -35,14 +38,9 @@ const CURRENCIES = [
 
 // ─── Shared sub-components ───────────────────────────────────────────────────
 
-/**
- * SettingsSection — card wrapper for a group of related settings.
- * Uses Card-like styling consistent with the rest of the app.
- */
 function SettingsSection({ icon: Icon, title, description, children }) {
   return (
     <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6">
-      {/* Section header */}
       <div className="flex items-start gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Icon className="size-4" />
@@ -54,16 +52,11 @@ function SettingsSection({ icon: Icon, title, description, children }) {
           )}
         </div>
       </div>
-
-      {/* Content */}
       <div className="space-y-4">{children}</div>
     </section>
   );
 }
 
-/**
- * FieldRow — label + control stacked vertically.
- */
 function FieldRow({ label, htmlFor, hint, children }) {
   return (
     <div className="space-y-1.5">
@@ -74,10 +67,6 @@ function FieldRow({ label, htmlFor, hint, children }) {
   );
 }
 
-/**
- * SwitchRow — full-width row with label/description on the left, Switch on the right.
- * Consistent with the toggle patterns used across the dashboard.
- */
 function SwitchRow({ id, label, description, checked, onCheckedChange, disabled }) {
   return (
     <div
@@ -102,7 +91,6 @@ function SwitchRow({ id, label, description, checked, onCheckedChange, disabled 
         checked={checked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}
-        aria-describedby={description ? `${id}-desc` : undefined}
       />
     </div>
   );
@@ -111,6 +99,14 @@ function SwitchRow({ id, label, description, checked, onCheckedChange, disabled 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function SettingsView() {
+  const [business, setBusiness] = useState({
+    name: "",
+    description: "",
+    address: "",
+    phone: "",
+    email: "",
+  });
+
   const [settings, setSettings] = useState({
     timezone: "America/Argentina/Buenos_Aires",
     currency: "ARS",
@@ -123,12 +119,64 @@ export default function SettingsView() {
     autoConfirm: true,
   });
 
-  const update = (field) => (value) =>
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  // Load business data from localStorage on mount
+  useEffect(() => {
+    const stored = getBusinessData();
+    if (stored) {
+      setBusiness({
+        name: stored.name || "",
+        description: stored.description || "",
+        address: stored.address || "",
+        phone: stored.phone || "",
+        email: stored.email || "",
+      });
+    }
+  }, []);
+
+  const updateBusiness = (field) => (e) =>
+    setBusiness((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const updateSettings = (field) => (value) =>
     setSettings((prev) => ({ ...prev, [field]: value }));
 
-  const handleSave = () => {
-    // TODO: connect to API
-    console.log("Configuración guardada:", settings);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage("");
+
+    try {
+      // Update localStorage with business info
+      const currentData = getBusinessData() || {};
+      const updatedData = {
+        ...currentData,
+        name: business.name.trim(),
+        description: business.description.trim(),
+        address: business.address.trim(),
+        phone: business.phone.trim(),
+        email: business.email.trim(),
+      };
+      setBusinessData(updatedData);
+
+      // Call backend (demonstrates integration)
+      await updateNegocio({
+        nombre: business.name.trim(),
+        descripcion: business.description.trim(),
+        horarios: currentData.schedule
+          ? `${currentData.schedule.days?.join(", ")} de ${currentData.schedule.open} a ${currentData.schedule.close}`
+          : "Lunes a Viernes de 09:00 a 19:00",
+        contacto: [business.email, business.phone].filter(Boolean).join(" | "),
+      });
+
+      setSaveMessage("Cambios guardados correctamente.");
+    } catch {
+      // Still save locally even if backend fails
+      setSaveMessage("Guardado localmente. El servidor no respondió.");
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveMessage(""), 4000);
+    }
   };
 
   return (
@@ -139,6 +187,65 @@ export default function SettingsView() {
       />
 
       <div className="grid flex-1 gap-6 xl:grid-cols-2">
+        {/* ── Mi Negocio ───────────────────────────────────────────────────── */}
+        <SettingsSection
+          icon={Building2}
+          title="Mi Negocio"
+          description="Información principal visible para tus clientes."
+        >
+          <FieldRow label="Nombre del negocio" htmlFor="biz-name">
+            <Input
+              id="biz-name"
+              value={business.name}
+              onChange={updateBusiness("name")}
+              placeholder="Ej. Salón Marilyn"
+              className="h-10"
+            />
+          </FieldRow>
+
+          <FieldRow label="Descripción" htmlFor="biz-description">
+            <Textarea
+              id="biz-description"
+              value={business.description}
+              onChange={updateBusiness("description")}
+              placeholder="Contanos brevemente sobre tu negocio..."
+              className="min-h-24 resize-none"
+            />
+          </FieldRow>
+
+          <FieldRow label="Dirección" htmlFor="biz-address">
+            <Input
+              id="biz-address"
+              value={business.address}
+              onChange={updateBusiness("address")}
+              placeholder="Ej. Av. Corrientes 1234, CABA"
+              className="h-10"
+            />
+          </FieldRow>
+
+          <FieldRow label="Teléfono" htmlFor="biz-phone">
+            <Input
+              id="biz-phone"
+              type="tel"
+              value={business.phone}
+              onChange={updateBusiness("phone")}
+              placeholder="Ej. 11 2233 4455"
+              className="h-10"
+            />
+          </FieldRow>
+
+          <FieldRow label="Email" htmlFor="biz-email">
+            <Input
+              id="biz-email"
+              type="email"
+              value={business.email}
+              onChange={updateBusiness("email")}
+              placeholder="tu@mail.com"
+              className="h-10"
+            />
+          </FieldRow>
+        </SettingsSection>
+
         {/* ── Regional ─────────────────────────────────────────────────────── */}
         <SettingsSection
           icon={Globe}
@@ -148,7 +255,8 @@ export default function SettingsView() {
           <FieldRow label="Zona horaria" htmlFor="timezone">
             <Select
               value={settings.timezone}
-              onValueChange={update("timezone")}
+              onValueChange={updateSettings("timezone")}
+              items={TIMEZONES}
             >
               <SelectTrigger id="timezone" className="h-10 w-full">
                 <SelectValue />
@@ -166,7 +274,8 @@ export default function SettingsView() {
           <FieldRow label="Moneda" htmlFor="currency">
             <Select
               value={settings.currency}
-              onValueChange={update("currency")}
+              onValueChange={updateSettings("currency")}
+              items={CURRENCIES}
             >
               <SelectTrigger id="currency" className="h-10 w-full">
                 <SelectValue />
@@ -198,7 +307,7 @@ export default function SettingsView() {
               type="tel"
               placeholder="+54 9 11 1234-5678"
               value={settings.ownerPhone}
-              onChange={(e) => update("ownerPhone")(e.target.value)}
+              onChange={(e) => updateSettings("ownerPhone")(e.target.value)}
               className="h-10"
             />
           </FieldRow>
@@ -208,7 +317,7 @@ export default function SettingsView() {
             label="Templates de WhatsApp"
             description="Usa plantillas oficiales de Meta para recordatorios fuera de la ventana de 24 h."
             checked={settings.useWhatsappTemplates}
-            onCheckedChange={update("useWhatsappTemplates")}
+            onCheckedChange={updateSettings("useWhatsappTemplates")}
           />
 
           <SwitchRow
@@ -216,7 +325,7 @@ export default function SettingsView() {
             label="SMS como canal alternativo"
             description="Envía recordatorios por SMS si WhatsApp no está disponible."
             checked={settings.smsEnabled}
-            onCheckedChange={update("smsEnabled")}
+            onCheckedChange={updateSettings("smsEnabled")}
           />
 
           <SwitchRow
@@ -224,7 +333,7 @@ export default function SettingsView() {
             label="Email como canal alternativo"
             description="Envía confirmaciones y recordatorios por correo electrónico."
             checked={settings.emailEnabled}
-            onCheckedChange={update("emailEnabled")}
+            onCheckedChange={updateSettings("emailEnabled")}
           />
         </SettingsSection>
 
@@ -238,14 +347,14 @@ export default function SettingsView() {
             id="accept-cards"
             label="Tarjetas de crédito y débito"
             checked={settings.acceptCards}
-            onCheckedChange={update("acceptCards")}
+            onCheckedChange={updateSettings("acceptCards")}
           />
 
           <SwitchRow
             id="accepts-cash"
             label="Efectivo"
             checked={settings.acceptsCash}
-            onCheckedChange={update("acceptsCash")}
+            onCheckedChange={updateSettings("acceptsCash")}
           />
         </SettingsSection>
 
@@ -260,7 +369,7 @@ export default function SettingsView() {
             label="Confirmación automática de turnos"
             description="Los turnos se confirman al crearse sin intervención manual."
             checked={settings.autoConfirm}
-            onCheckedChange={update("autoConfirm")}
+            onCheckedChange={updateSettings("autoConfirm")}
           />
 
           <p className="text-xs text-muted-foreground">
@@ -270,9 +379,13 @@ export default function SettingsView() {
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <div className="mt-6 flex justify-end border-t border-border pt-6">
-        <Button type="button" size="lg" onClick={handleSave}>
-          Guardar cambios
+      <div className="mt-6 flex items-center justify-between border-t border-border pt-6">
+        {saveMessage && (
+          <p className="text-sm text-muted-foreground">{saveMessage}</p>
+        )}
+        {!saveMessage && <div />}
+        <Button type="button" size="lg" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Guardando..." : "Guardar cambios"}
         </Button>
       </div>
     </div>

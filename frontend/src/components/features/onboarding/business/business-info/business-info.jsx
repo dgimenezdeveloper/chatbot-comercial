@@ -14,6 +14,14 @@ import {
 import { Textarea } from "@/components/ui/textarea/textarea";
 import FieldError from "@/components/features/onboarding/shared/field-error/field-error";
 
+const CATEGORIES = [
+  { value: "hair-salon", label: "Peluquería" },
+  { value: "barbershop", label: "Barbería" },
+  { value: "beauty-center", label: "Centro de estética" },
+  { value: "nail-salon", label: "Salón de uñas" },
+  { value: "spa", label: "Spa" },
+];
+
 export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
   return (
     <div className="space-y-6">
@@ -52,6 +60,7 @@ export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
         <Select
           value={data.category}
           onValueChange={(value) => onFieldChange("category", value)}
+          items={CATEGORIES}
         >
           <SelectTrigger
             id="business-category"
@@ -61,11 +70,11 @@ export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
             <SelectValue placeholder="Seleccioná la categoría de tu negocio" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="hair-salon">Peluquería</SelectItem>
-            <SelectItem value="barbershop">Barbería</SelectItem>
-            <SelectItem value="beauty-center">Centro de estética</SelectItem>
-            <SelectItem value="nail-salon">Salón de uñas</SelectItem>
-            <SelectItem value="spa">Spa</SelectItem>
+            {CATEGORIES.map((cat) => (
+              <SelectItem key={cat.value} value={cat.value}>
+                {cat.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <FieldError message={errors.category} />
