@@ -19,8 +19,9 @@ function toFrontend(t) {
     startTime: t.startTime || t.hora,
     endTime: t.endTime,
     status: t.status || t.estado,
-    clientName: t.clientName || t.cliente_nombre || t.telefono || "Cliente",
-    serviceName: t.serviceName || t.servicio_nombre || `Servicio #${t.servicio_id || 1}`,
+    // CORRECCIÓN: El backend envía 'nombre_cliente' y 'nombre_servicio'
+    clientName: t.clientName || t.nombre_cliente || t.telefono || "Cliente",
+    serviceName: t.serviceName || t.nombre_servicio || `Servicio #${t.servicio_id || 1}`,
     tone: t.tone || "green",
   };
 }

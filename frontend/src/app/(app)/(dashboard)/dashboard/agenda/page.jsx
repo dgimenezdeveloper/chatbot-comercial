@@ -38,12 +38,12 @@ function toAgendaAppointment(turno) {
 
   // 1. Extraer o construir el nombre del cliente de forma amigable
   let clientName =
-    turno.nombre_cliente ||
     turno.clientName ||
+    turno.nombre_cliente ||
     turno.user_name ||
     turno.client;
 
-  const rawPhone = turno.telefono || turno.user_phone || "";
+  const rawPhone = turno.phone || turno.telefono || turno.user_phone || "";
 
   if (!clientName || clientName === "Cliente" || clientName.startsWith("54911")) {
     if (rawPhone && rawPhone.length >= 4) {
@@ -54,10 +54,10 @@ function toAgendaAppointment(turno) {
   }
 
   // 2. Extraer o construir el nombre del servicio real
-  const serviceId = turno.servicio_id || turno.service_id;
+  const serviceId = turno.serviceId || turno.servicio_id;
   let serviceName =
-    turno.nombre_servicio ||
     turno.serviceName ||
+    turno.nombre_servicio ||
     turno.servicio_nombre ||
     turno.service;
 
@@ -116,7 +116,9 @@ export default function AgendaPage() {
     );
   }
 
-  const appointments = turnos.map(toAgendaAppointment);
+  // Filtrar turnos cancelados para que no ocupen espacio visual en la grilla de la agenda
+  const activeTurnos = turnos.filter(t => t.status !== "cancelled" && t.status !== "cancelado");
+  const appointments = activeTurnos.map(toAgendaAppointment);
 
   return (
     <DashboardPageLayout>
