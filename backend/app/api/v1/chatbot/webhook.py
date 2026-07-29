@@ -465,9 +465,6 @@ async def verify_webhook(mode: str = Query(None, alias="hub.mode"), challenge: s
         return Response(content=challenge, media_type="text/plain")
     return Response(content="Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
-def clean_phone_number(phone: str) -> str:
-    return "541115" + phone[5:] if phone.startswith("54911") else phone
-
 @router.post("/webhook")
 async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
     try:
@@ -481,13 +478,24 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             phone_number = message.get("from")
             message_type = message.get("type")
 
-            if settings.APP_ENV == "development" and phone_number.startswith("549"):
-                phone_number = f"54{phone_number[3:5]}15{phone_number[5:]}"
-            else:
-                phone_number = clean_phone_number(phone_number)
+            # -----------------------------------------------------------------
+            # 1. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS
+            # (Se procesa ANTES que la derivación humana para permitir salir de ella)
+            # -----------------------------------------------------------------
+            if message_type == "interactive":
+                interactive_data = message.get("interactive", {})
+                if interactive_data.get("type") == "button_reply":
+                    selected_id = interactive_data.get("button_reply", {}).get("id")
+                    
+                    if selected_id == "btn_volver_menu":
+                        # Obtener business_id de la sesión para volver al menú
+                        db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
+                        biz_id = db_session.business_id if db_session else MOCK_BUSINESS_ID
+                        await handle_welcome_flow(phone_number, biz_id, db)
+                        return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 1. ¿EL QUE ESCRIBE ES EL DUEÑO DEL LOCAL? (PROXY DE ATENCIÓN)
+            # 2. ¿EL QUE ESCRIBE ES EL DUEÑO DEL LOCAL? (PROXY DE ATENCIÓN)
             # -----------------------------------------------------------------
             all_businesses = db.query(Business).filter(Business.owner_phone.isnot(None)).all()
             matching_business = None
@@ -535,7 +543,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 2. PROCESAMIENTO DE SESIÓN DE CLIENTE
+            # 3. PROCESAMIENTO DE SESIÓN DE CLIENTE
             # -----------------------------------------------------------------
             db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
             if not db_session:
@@ -546,21 +554,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             current_business_id = db_session.business_id
             user_state = await get_user_state(phone_number) or {}
             current_step = user_state.get("estado", "NUEVO")
-
-            # -----------------------------------------------------------------
-            # 3. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS (Incluso durante HUMAN_ESCALATION)
-            # -----------------------------------------------------------------
-            if message_type == "interactive":
-                interactive_data = message.get("interactive", {})
-                if interactive_data.get("type") == "button_reply":
-                    selected_id = interactive_data.get("button_reply", {}).get("id")
-                    
-                    if selected_id == "btn_volver_menu":
-                        await handle_welcome_flow(phone_number, current_business_id, db)
-                        return {"status": "success"}
-                    elif selected_id.startswith("btn_confirm_cancel_"):
-                        await handle_cancel_confirmation(phone_number, selected_id, user_state, current_business_id, db)
-                        return {"status": "success"}
 
             # -----------------------------------------------------------------
             # 4. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
@@ -631,9 +624,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 if interactive_type == "button_reply":
                     selected_id = interactive_data.get("button_reply", {}).get("id")
                     
-                    if selected_id == "btn_volver_menu":
-                        await handle_welcome_flow(phone_number, current_business_id, db)
-                    elif selected_id.startswith("btn_confirm_cancel_"):
+                    if selected_id.startswith("btn_confirm_cancel_"):
                         await handle_cancel_confirmation(phone_number, selected_id, user_state, current_business_id, db)
                     elif current_step == "MENU_PRINCIPAL":
                         await handle_main_menu_selection(phone_number, selected_id, user_state, current_business_id, db)

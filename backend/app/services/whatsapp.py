@@ -16,27 +16,37 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, json=payload, headers=headers)
-            response_data = response.json()
             
             if response.status_code == 200:
                 logger.info(f"Mensaje de WhatsApp despachado de forma exitosa a {payload.get('to')}")
                 return True
             else:
+                response_data = response.json()
                 logger.error(f"Error al enviar mensaje de WhatsApp. Estatus: {response.status_code}. Respuesta: {response_data}")
                 
-                # REINTENTO AUTOMÁTICO PARA SANDBOX DE META EN ARGENTINA
-                # Si Meta rechazó '54911...', reintentamos sin el '9' ('5411...') que es como Meta Sandbox registra los números de prueba.
+                # =====================================================================
+                # REINTENTO AUTOMÁTICO PARA ARGENTINA (Sandbox Meta)
+                # Meta a veces registra los números con '549' y otras con '54'.
+                # Si falla uno, probamos automáticamente con el otro formato.
+                # =====================================================================
                 to_phone = str(payload.get("to", ""))
-                if to_phone.startswith("54911"):
-                    alt_to = "5411" + to_phone[5:]
-                    logger.info(f"Reintentando envío con formato Sandbox alternativo: {alt_to}")
+                alt_to = None
+                
+                if to_phone.startswith("549"):
+                    alt_to = "54" + to_phone[3:]
+                elif to_phone.startswith("54") and not to_phone.startswith("549"):
+                    alt_to = "549" + to_phone[2:]
+                    
+                if alt_to:
+                    logger.info(f"Reintentando envío con formato alternativo: {alt_to}")
                     payload["to"] = alt_to
                     alt_response = await client.post(url, json=payload, headers=headers)
+                    
                     if alt_response.status_code == 200:
-                        logger.info(f"Mensaje de WhatsApp despachado con éxito en reintento a {alt_to}")
+                        logger.info(f"Mensaje despachado con éxito en reintento a {alt_to}")
                         return True
                     else:
-                        logger.error(f"Reintento alternativo a {alt_to} falló: {alt_response.status_code} - {alt_response.json()}")
+                        logger.error(f"Reintento a {alt_to} falló: {alt_response.status_code} - {alt_response.json()}")
 
                 return False
                 
