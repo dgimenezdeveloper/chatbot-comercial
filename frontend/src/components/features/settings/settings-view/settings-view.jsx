@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch/switch";
 import { Textarea } from "@/components/ui/textarea/textarea";
 import { cn } from "@/lib/utils";
 import { getBusinessData, setBusinessData } from "@/lib/business-store";
-import { updateNegocio } from "@/services/negocio-api";
+import { fetchNegocio, updateNegocio } from "@/services/negocio-api";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -99,12 +99,19 @@ function SwitchRow({ id, label, description, checked, onCheckedChange, disabled 
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function SettingsView() {
-  const [business, setBusiness] = useState({
-    name: "",
-    description: "",
-    address: "",
-    phone: "",
-    email: "",
+  // Inicialización perezosa (Lazy initial state) para evitar setState en useEffect
+  const [business, setBusiness] = useState(() => {
+    if (typeof window === "undefined") {
+      return { name: "", description: "", address: "", phone: "", email: "" };
+    }
+    const stored = getBusinessData();
+    return {
+      name: stored?.name || "",
+      description: stored?.description || "",
+      address: stored?.address || "",
+      phone: stored?.phone || "",
+      email: stored?.email || "",
+    };
   });
 
   const [settings, setSettings] = useState({
@@ -122,18 +129,23 @@ export default function SettingsView() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
-  // Load business data from localStorage on mount
+  // Cargar únicamente datos asíncronos del Backend en el Effect
   useEffect(() => {
-    const stored = getBusinessData();
-    if (stored) {
-      setBusiness({
-        name: stored.name || "",
-        description: stored.description || "",
-        address: stored.address || "",
-        phone: stored.phone || "",
-        email: stored.email || "",
-      });
+    let isMounted = true;
+    async function loadBackendData() {
+      try {
+        const data = await fetchNegocio();
+        if (isMounted && data && data.owner_phone) {
+          setSettings((prev) => ({ ...prev, ownerPhone: data.owner_phone }));
+        }
+      } catch (err) {
+        console.error("Error al cargar configuración desde el backend:", err);
+      }
     }
+    loadBackendData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const updateBusiness = (field) => (e) =>
@@ -147,7 +159,6 @@ export default function SettingsView() {
     setSaveMessage("");
 
     try {
-      // Update localStorage with business info
       const currentData = getBusinessData() || {};
       const updatedData = {
         ...currentData,
@@ -159,7 +170,7 @@ export default function SettingsView() {
       };
       setBusinessData(updatedData);
 
-      // Call backend (demonstrates integration)
+      // Sincronización con el Backend (incluye owner_phone)
       await updateNegocio({
         nombre: business.name.trim(),
         descripcion: business.description.trim(),
@@ -167,11 +178,11 @@ export default function SettingsView() {
           ? `${currentData.schedule.days?.join(", ")} de ${currentData.schedule.open} a ${currentData.schedule.close}`
           : "Lunes a Viernes de 09:00 a 19:00",
         contacto: [business.email, business.phone].filter(Boolean).join(" | "),
+        owner_phone: settings.ownerPhone.trim(),
       });
 
       setSaveMessage("Cambios guardados correctamente.");
     } catch {
-      // Still save locally even if backend fails
       setSaveMessage("Guardado localmente. El servidor no respondió.");
     } finally {
       setIsSaving(false);
@@ -300,7 +311,7 @@ export default function SettingsView() {
           <FieldRow
             label="WhatsApp del dueño"
             htmlFor="owner-phone"
-            hint="Recibís alertas cuando falle un recordatorio automático."
+            hint="Recibís alertas cuando falle un recordatorio o cuando un cliente solicite atención humana."
           >
             <Input
               id="owner-phone"

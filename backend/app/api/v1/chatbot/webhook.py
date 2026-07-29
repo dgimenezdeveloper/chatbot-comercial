@@ -37,7 +37,7 @@ BOTONES_PRINCIPALES = [
 ]
 
 # =============================================================================
-# HELPERS
+# HELPERS DE TELÉFONO Y NEGOCIO
 # =============================================================================
 
 def get_business_name(db: Session, business_id: int) -> str:
@@ -50,12 +50,18 @@ def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | N
         return user.name.strip()
     return None
 
-def clean_owner_phone(phone: str | None) -> str | None:
+def format_phone_for_meta(phone: str | None) -> str | None:
+    """Extrae solo dígitos para enviar a Meta Cloud API (E.164 puro)."""
     if not phone: return None
-    cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").strip()
-    if cleaned.startswith("54911"):
-        cleaned = "541115" + cleaned[5:]
-    return cleaned
+    return "".join(c for c in phone if c.isdigit())
+
+def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
+    """Compara dos teléfonos por sus últimos 10 dígitos para evitar inconsistencias de formato."""
+    if not phone1 or not phone2: return False
+    p1 = format_phone_for_meta(phone1)
+    p2 = format_phone_for_meta(phone2)
+    if not p1 or not p2: return False
+    return p1[-10:] == p2[-10:] if len(p1) >= 10 and len(p2) >= 10 else p1 == p2
 
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     variants = {phone_number}
@@ -84,7 +90,7 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
     await set_user_state(phone, user_state)
 
     biz = db.query(Business).filter(Business.id == business_id).first()
-    owner_phone = clean_owner_phone(biz.owner_phone) if biz else None
+    owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
     log_event(
         session_id=phone,
@@ -189,7 +195,6 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             if len(rows) < 9:
                 rows.append({"id": f"faq_{f.id}", "title": f.question[:24], "description": f.answer[:72]})
         
-        # OPCIÓN DE DERIVACIÓN A HUMANO EN EL MENÚ FAQ
         rows.append({"id": "btn_hablar_humano", "title": "👤 Hablar con un humano", "description": "Conectar con un representante real"})
 
         user_state["estado"] = "SELECCIONANDO_FAQ"
@@ -437,7 +442,6 @@ async def handle_faq_query(phone: str, user_text: str, user_state: dict, busines
         await send_interactive_buttons(phone=phone, body_text=f"💡 *{faq.question}*\n\n{faq.answer}", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
         await clear_user_state(phone)
     else:
-        # SI NO ENCUENTRA FAQ, DERIVA A HUMANO
         await trigger_human_escalation(phone, user_text, user_state, business_id, db, reason="faq_not_found")
 
 async def handle_text_fallback(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
@@ -488,8 +492,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             all_businesses = db.query(Business).filter(Business.owner_phone.isnot(None)).all()
             matching_business = None
             for biz in all_businesses:
-                cleaned_owner = clean_owner_phone(biz.owner_phone)
-                if cleaned_owner and (cleaned_owner == phone_number or clean_phone_number(cleaned_owner) == phone_number):
+                if is_same_phone(biz.owner_phone, phone_number):
                     matching_business = biz
                     break
 
@@ -497,9 +500,8 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 user_text = message.get("text", {}).get("body", "").strip()
 
                 if user_text.lower().startswith("/reset_demo"):
-                    pass # Dejar pasar los comandos /reset_demo
+                    pass 
                 else:
-                    # Parsear mensaje del dueño: "145 Hola" o "145 #fin"
                     parts = user_text.split(" ", 1)
                     if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 3:
                         short_id = parts[0]
@@ -552,13 +554,12 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 if message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
-                    # Si el cliente quiere salir de la atención humana por su cuenta
                     if user_text.lower() in ["menu", "menú", "comenzar", "salir"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
 
                     biz = db.query(Business).filter(Business.id == current_business_id).first()
-                    owner_phone = clean_owner_phone(biz.owner_phone) if biz else None
+                    owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
                     if not owner_phone:
                         await send_interactive_buttons(
@@ -589,7 +590,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
                     return {"status": "success"}
 
-                # PALABRAS CLAVE DIRECTAS PARA HABLAR CON HUMANO
                 if any(k in user_text.lower() for k in ["humano", "persona", "agente", "representante", "atencion manual"]):
                     await trigger_human_escalation(phone_number, user_text, user_state, current_business_id, db, reason="keyword_trigger")
                     return {"status": "success"}
