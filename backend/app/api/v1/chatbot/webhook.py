@@ -12,6 +12,7 @@ from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
 from app.db.models.service import Service
 from app.db.models.business import Business
+from app.db.models.user import User
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import get_user_state, set_user_state, clear_user_state
 from app.services.event_logger import log_event
@@ -48,6 +49,13 @@ def get_business_name(db: Session, business_id: int) -> str:
     """Obtiene el nombre real del negocio desde la base de datos."""
     business = db.query(Business).filter(Business.id == business_id).first()
     return business.name if business else "Nuestro Local"
+
+def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | None:
+    """Retorna el nombre del cliente si ya está registrado en DB (ahorra 1 mensaje de consulta)."""
+    user = db.query(User).filter(User.phone == phone, User.business_id == business_id).first()
+    if user and user.name and user.name.strip() and not user.name.startswith("Cliente "):
+        return user.name.strip()
+    return None
 
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     """Actualiza el business_id de la sesión en PostgreSQL y limpia el estado en Redis."""
@@ -106,10 +114,12 @@ async def handle_welcome_flow(phone: str, business_id: int, db: Session):
     )
     
     nombre_negocio = get_business_name(db, business_id)
+    known_name = get_existing_user_name(db, phone, business_id)
+    saludo = f"¡Hola {known_name}! " if known_name else "¡Hola! "
     
     await send_interactive_buttons(
         phone=phone,
-        body_text=f"¡Hola! Bienvenido a {nombre_negocio}. ¿En qué podemos ayudarte hoy?",
+        body_text=f"{saludo}Bienvenido a *{nombre_negocio}*. ¿En qué podemos ayudarte hoy?",
         buttons=BOTONES_PRINCIPALES
     )
 
@@ -456,8 +466,15 @@ async def handle_faq_query(phone: str, user_text: str, user_state: dict, busines
 # =============================================================================
 
 async def handle_catalogo_menu_selection(phone: str, button_id: str, user_state: dict, business_id: int, db: Session):
-    """Maneja la confirmación de pedido de productos."""
+    """Maneja la confirmación de pedido de productos (Optimizado para ahorrar mensajes)."""
     if button_id == "btn_prod_confirmar":
+        # OPTIMIZACIÓN: Si el usuario ya está registrado, confirmamos directamente
+        known_name = get_existing_user_name(db, phone, business_id)
+        if known_name:
+            prod_title = user_state.get("producto_seleccionado", "Producto")
+            await handle_product_confirmation(phone, known_name, user_state, business_id, db)
+            return
+
         user_state["estado"] = "ESPERANDO_NOMBRE_CATALOGO"
         user_state["step"] += 1
         await set_user_state(phone, user_state)
@@ -477,16 +494,18 @@ async def handle_product_confirmation(phone: str, user_text: str, user_state: di
         user.name = user_text.strip()
         db.commit()
 
+    prod_name = user_state.get("producto_seleccionado", "tu producto")
+
     await send_message(
         phone=phone,
-        text=f"✅ ¡Perfecto {user_text.strip()}! Tu pedido ha sido registrado con éxito. Tu reserva de stock ha sido asentada y puedes retirarlo por el local. ¡Gracias por tu compra!"
+        text=f"✅ ¡Perfecto {user_text.strip()}! Tu reserva de *{prod_name}* ha sido registrada con éxito. Puedes pasar a retirarlo por el local. ¡Gracias por tu compra!"
     )
     
     log_event(
         session_id=phone,
         business_id=business_id,
         event_type="conversation_closed",
-        payload={"resultado_final": "producto_comprado", "n_fallbacks": user_state.get("fallback_count", 0)},
+        payload={"resultado_final": "producto_comprado", "producto": prod_name, "n_fallbacks": user_state.get("fallback_count", 0)},
     )
     await clear_user_state(phone)
 
@@ -541,10 +560,17 @@ async def handle_date_selection(phone: str, button_title: str, user_state: dict,
 
 
 async def handle_time_selection(phone: str, button_title: str, user_state: dict, business_id: int, db: Session):
-    """Guarda la hora seleccionada y solicita el nombre del cliente."""
+    """Guarda la hora seleccionada y agrupa la confirmación (Ahorra 1 mensaje si el usuario es conocido)."""
+    user_state["hora_seleccionada"] = button_title
+
+    # OPTIMIZACIÓN: Si el usuario ya existe en la DB con nombre real, se confirma directo
+    known_name = get_existing_user_name(db, phone, business_id)
+    if known_name:
+        await handle_appointment_confirmation(phone, known_name, user_state, business_id, db)
+        return
+
     user_state["estado"] = "ESPERANDO_NOMBRE"
     user_state["step"] += 1
-    user_state["hora_seleccionada"] = button_title
     await set_user_state(phone, user_state)
     
     await send_message(
@@ -581,7 +607,7 @@ async def handle_appointment_confirmation(phone: str, user_text: str, user_state
     # 2. Datos del Turno
     appt_data = {
         "business_id": business_id,
-        "user_id": user.id if user else None, # 👈 Vinculación directa con el Cliente
+        "user_id": user.id if user else None,
         "user_phone": phone,
         "user_name": user_text[:200],
         "service_id": servicio_id,
@@ -661,6 +687,7 @@ async def handle_list_selection(phone: str, selected_id: str, row_title: str, us
     elif selected_id.startswith("prod_"):
         user_state["estado"] = "CONFIRMA_PRODUCTO"
         user_state["step"] += 1
+        user_state["producto_seleccionado"] = row_title
         await set_user_state(phone, user_state)
         
         botones_confirmacion = [
