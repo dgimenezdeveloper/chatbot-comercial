@@ -15,7 +15,10 @@ from app.db.models.user import User
 from app.db.models.business import Business
 from app.db.models.faq import FAQ
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
-from app.services.state_manager import get_user_state, set_user_state, clear_user_state
+from app.services.state_manager import (
+    get_user_state, set_user_state, clear_user_state,
+    create_human_proxy, get_client_by_short_id, close_human_proxy
+)
 from app.services.event_logger import log_event
 from app.services.negocio import get_active_services, get_available_slots, get_business_timezone, get_or_create_user
 from app.services.catalog import get_products
@@ -47,9 +50,18 @@ def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | N
         return user.name.strip()
     return None
 
-def clean_phone_number(phone: str | None) -> str:
-    if not phone: return ""
+def format_phone_for_meta(phone: str | None) -> str | None:
+    """Extrae solo dígitos para enviar a Meta Cloud API (E.164 puro)."""
+    if not phone: return None
     return "".join(c for c in phone if c.isdigit())
+
+def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
+    """Compara dos teléfonos por sus últimos 10 dígitos para evitar inconsistencias de formato."""
+    if not phone1 or not phone2: return False
+    p1 = format_phone_for_meta(phone1)
+    p2 = format_phone_for_meta(phone2)
+    if not p1 or not p2: return False
+    return p1[-10:] == p2[-10:] if len(p1) >= 10 and len(p2) >= 10 else p1 == p2
 
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     variants = {phone_number}
@@ -66,39 +78,56 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
     await send_message(phone=phone_number, text=f"✅ Demo cambiada a {business_name} (ID {target_business_id}).")
 
 # =============================================================================
-# ATENCIÓN HUMANA
+# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL)
 # =============================================================================
 
 async def trigger_human_escalation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session, reason: str = "user_request"):
+    """Deriva la conversación al celular personal del dueño mediante proxy."""
     user_state["estado"] = "HUMAN_ESCALATION"
     await set_user_state(phone, user_state)
+
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    raw_owner_phone = biz.owner_phone if biz else None
+    
+    logger.info(f"[HANDOVER] Iniciando derivación para cliente {phone}. Business ID: {business_id}. Owner phone en DB: '{raw_owner_phone}'")
+
+    owner_phone = format_phone_for_meta(raw_owner_phone)
 
     log_event(
         session_id=phone,
         business_id=business_id,
         event_type="escalation_to_human",
-        payload={"reason": reason, "initial_text": user_text},
+        payload={"reason": reason, "initial_text": user_text, "owner_phone": raw_owner_phone},
     )
 
     await send_interactive_buttons(
         phone=phone,
         body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
-        buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
     )
 
-    biz = db.query(Business).filter(Business.id == business_id).first()
-    owner_phone = clean_phone_number(biz.owner_phone) if biz else None
+    if not owner_phone:
+        logger.warning(f"[HANDOVER] No hay owner_phone configurado para Business ID {business_id}")
+        return
 
-    # Notificar al dueño solo si es un teléfono diferente al del cliente que prueba
-    if owner_phone and owner_phone[-10:] != phone[-10:]:
-        known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
-        owner_msg = (
-            f"🚨 *Atención Requerida*\n\n"
-            f"👤 *Cliente:* {known_name}\n"
-            f"📞 *Teléfono:* {phone}\n"
-            f"💬 *Mensaje:* \"{user_text}\""
-        )
-        await send_message(owner_phone, owner_msg)
+    if is_same_phone(raw_owner_phone, phone):
+        logger.warning(f"[HANDOVER] El teléfono del dueño ({raw_owner_phone}) es el mismo que el del cliente ({phone}). Se omite reenvío para evitar bucle.")
+        return
+
+    short_id = await create_human_proxy(business_id, phone)
+    known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
+
+    owner_msg = (
+        f"🚨 *Atención Requerida [#{short_id}]*\n\n"
+        f"👤 *Cliente:* {known_name}\n"
+        f"📞 *Teléfono:* {phone}\n"
+        f"💬 *Mensaje:* \"{user_text}\"\n\n"
+        f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
+        f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
+    )
+    sent_success = await send_message(owner_phone, owner_msg)
+    if not sent_success:
+        logger.error(f"[HANDOVER] Falló el envío del mensaje al dueño ({owner_phone}). Verifique que el número esté en la lista permitida de Meta.")
 
 # =============================================================================
 # FLUJOS PRINCIPALES
@@ -125,12 +154,15 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.")
             return
 
-        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:8]]
+        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:7]]
         sections = [
             {"title": "Selecciona un Servicio"[:20], "rows": rows_services},
             {"title": "Mi Cuenta"[:20], "rows": [
                 {"id": "action_ver_turno", "title": "👀 Ver mi próximo turno", "description": "Consulta tu reserva activa"},
                 {"id": "action_cancelar_turno", "title": "❌ Cancelar turno", "description": "Libera tu horario agendado"}
+            ]},
+            {"title": "Navegación"[:20], "rows": [
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
             ]}
         ]
         user_state["estado"] = "SELECCIONANDO_SERVICIO"
@@ -144,11 +176,17 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.")
             return
 
-        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:10]]
+        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:9]]
+        sections = [
+            {"title": "Catálogo"[:20], "rows": rows},
+            {"title": "Navegación"[:20], "rows": [
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
+            ]}
+        ]
         user_state["estado"] = "SELECCIONANDO_PRODUCTO"
         user_state["step"] += 1
         await set_user_state(phone, user_state)
-        await send_interactive_list(phone=phone, body_text="Selecciona el producto que deseas reservar para retiro en local:", button_label="Ver Productos 🛍️", sections=[{"title": "Catálogo"[:20], "rows": rows}], header_text="Catálogo de Productos", footer_text=nombre_negocio)
+        await send_interactive_list(phone=phone, body_text="Selecciona el producto que deseas reservar para retiro en local:", button_label="Ver Productos 🛍️", sections=sections, header_text="Catálogo de Productos", footer_text=nombre_negocio)
 
     elif button_id == "btn_faq":
         business = db.query(Business).filter(Business.id == business_id).first()
@@ -164,14 +202,21 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             
         faqs = get_faqs(db, business_id)
         for f in faqs:
-            if len(rows) < 9:
+            if len(rows) < 8:
                 rows.append({"id": f"faq_{f.id}", "title": f.question[:24], "description": f.answer[:72]})
         
         rows.append({"id": "btn_hablar_humano", "title": "👤 Hablar con un humano", "description": "Conectar con un representante real"})
 
+        sections = [
+            {"title": "Consultas Frecuentes"[:20], "rows": rows},
+            {"title": "Navegación"[:20], "rows": [
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
+            ]}
+        ]
+
         user_state["estado"] = "SELECCIONANDO_FAQ"
         await set_user_state(phone, user_state)
-        await send_interactive_list(phone=phone, body_text="Aquí tienes información útil sobre nuestro local:", button_label="Ver Info ❓", sections=[{"title": "Consultas Frecuentes"[:20], "rows": rows}])
+        await send_interactive_list(phone=phone, body_text="Aquí tienes información útil sobre nuestro local:", button_label="Ver Info ❓", sections=sections)
 
 # =============================================================================
 # SELECCIÓN UNIFICADA (SLOTS DE FECHA Y HORA)
@@ -196,20 +241,24 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     slots_tomorrow = get_available_slots(db, svc_db_id, business_id, tomorrow)
 
     rows_today = [{"id": f"slot_{today.isoformat()}_{slot.strftime('%H%M')}", "title": f"Hoy {slot.strftime('%H:%M')} hs"[:24], "description": f"Turno para {row_title}"[:72]} for slot in slots_today[:4]]
-    rows_tomorrow = [{"id": f"slot_{tomorrow.isoformat()}_{slot.strftime('%H%M')}", "title": f"Mañana {slot.strftime('%H:%M')} hs"[:24], "description": f"Turno para {row_title}"[:72]} for slot in slots_tomorrow[:5]]
+    rows_tomorrow = [{"id": f"slot_{tomorrow.isoformat()}_{slot.strftime('%H%M')}", "title": f"Mañana {slot.strftime('%H:%M')} hs"[:24], "description": f"Turno para {row_title}"[:72]} for slot in slots_tomorrow[:4]]
 
     sections = []
     if rows_today: sections.append({"title": "Hoy"[:20], "rows": rows_today})
     if rows_tomorrow: sections.append({"title": "Mañana"[:20], "rows": rows_tomorrow})
 
+    # OPCIÓN DE NAVEGACIÓN Y CAMBIO DE SERVICIO
     sections.append({
-        "title": "Más opciones"[:20],
-        "rows": [{"id": f"more_dates_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"}]
+        "title": "Navegación"[:20],
+        "rows": [
+            {"id": f"more_dates_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"},
+            {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Cambiar de servicio o volver al inicio"}
+        ]
     })
 
     user_state["estado"] = "SELECCIONANDO_SLOT"
     await set_user_state(phone, user_state)
-    await send_interactive_list(phone=phone, body_text=f"Servicio: *{row_title}*.\nSelecciona el horario que mejor te convenga:", button_label="Ver Horarios ⏰", sections=sections)
+    await send_interactive_list(phone=phone, body_text=f"Servicio: *{row_title}*.\nSelecciona el horario que mejor te convenga:", button_label="Ver Opciones ⏰", sections=sections)
 
 async def handle_more_dates_selection(phone: str, selected_id: str, user_state: dict, business_id: int, db: Session):
     svc_db_id = int(selected_id.replace("more_dates_", ""))
@@ -231,8 +280,13 @@ async def handle_more_dates_selection(phone: str, selected_id: str, user_state: 
     if not rows:
         await send_interactive_buttons(phone=phone, body_text="No hay fechas disponibles próximamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
         return
+
+    sections = [
+        {"title": "Próximos días"[:20], "rows": rows[:9]},
+        {"title": "Navegación"[:20], "rows": [{"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}]}
+    ]
         
-    await send_interactive_list(phone=phone, body_text="Selecciona la fecha que prefieras:", button_label="Ver Fechas 📅", sections=[{"title": "Próximos días"[:20], "rows": rows[:10]}])
+    await send_interactive_list(phone=phone, body_text="Selecciona la fecha que prefieras:", button_label="Ver Fechas 📅", sections=sections)
 
 async def handle_specific_date_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     fecha_iso = selected_id.replace("date_", "")
@@ -240,9 +294,14 @@ async def handle_specific_date_selection(phone: str, selected_id: str, row_title
     svc_db_id = user_state.get("servicio_id", 1)
     
     slots = get_available_slots(db, svc_db_id, business_id, target_date)
-    rows = [{"id": f"slot_{fecha_iso}_{slot.strftime('%H%M')}", "title": f"{slot.strftime('%H:%M')} hs"[:24], "description": "Horario disponible"} for slot in slots[:10]]
+    rows = [{"id": f"slot_{fecha_iso}_{slot.strftime('%H%M')}", "title": f"{slot.strftime('%H:%M')} hs"[:24], "description": "Horario disponible"} for slot in slots[:9]]
+    
+    sections = [
+        {"title": "Horarios"[:20], "rows": rows},
+        {"title": "Navegación"[:20], "rows": [{"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}]}
+    ]
         
-    await send_interactive_list(phone=phone, body_text=f"Horarios para el {row_title}:", button_label="Ver Horarios ⏰", sections=[{"title": "Horarios"[:20], "rows": rows}])
+    await send_interactive_list(phone=phone, body_text=f"Horarios para el {row_title}:", button_label="Ver Horarios ⏰", sections=sections)
 
 async def handle_slot_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     parts = selected_id.replace("slot_", "").split("_")
@@ -427,6 +486,11 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await set_user_state(phone, user_state)
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
+def clean_phone_number(phone: str | None) -> str:
+    """Limpia el número dejando solo dígitos."""
+    if not phone: return ""
+    return "".join(c for c in phone if c.isdigit())
+
 # =============================================================================
 # ENRUTADOR PRINCIPAL (WEBHOOK ENDPOINT)
 # =============================================================================
@@ -447,11 +511,74 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
 
         if messages:
             message = messages[0]
-            phone_number = clean_phone_number(message.get("from"))
+            raw_from = message.get("from")
+            phone_number = clean_phone_number(raw_from)
             message_type = message.get("type")
 
             # -----------------------------------------------------------------
-            # 1. ATENCIÓN DE SESIÓN DE CLIENTE BASE
+            # 1. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS
+            # -----------------------------------------------------------------
+            if message_type == "interactive":
+                interactive_data = message.get("interactive", {})
+                if interactive_data.get("type") == "button_reply":
+                    selected_id = interactive_data.get("button_reply", {}).get("id")
+                    
+                    if selected_id == "btn_volver_menu":
+                        db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
+                        biz_id = db_session.business_id if db_session else MOCK_BUSINESS_ID
+                        await handle_welcome_flow(phone_number, biz_id, db)
+                        return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 2. ¿EL QUE ESCRIBE ES EL DUEÑO DEL LOCAL? (PROXY DE ATENCIÓN)
+            # -----------------------------------------------------------------
+            all_businesses = db.query(Business).filter(Business.owner_phone.isnot(None)).all()
+            matching_business = None
+            for biz in all_businesses:
+                if is_same_phone(biz.owner_phone, phone_number):
+                    matching_business = biz
+                    break
+
+            if matching_business and message_type == "text":
+                user_text = message.get("text", {}).get("body", "").strip()
+
+                if user_text.lower().startswith("/reset_demo"):
+                    pass 
+                else:
+                    parts = user_text.split(" ", 1)
+                    if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 3:
+                        short_id = parts[0]
+                        client_phone = await get_client_by_short_id(matching_business.id, short_id)
+
+                        if not client_phone:
+                            await send_message(phone_number, f"⚠️ El chat #{short_id} no existe o ya expiró.")
+                            return {"status": "success"}
+
+                        comando = parts[1].strip() if len(parts) > 1 else ""
+
+                        if comando.lower() == "#fin":
+                            await close_human_proxy(matching_business.id, short_id)
+                            client_state = await get_user_state(client_phone) or {}
+                            client_state["estado"] = "MENU_PRINCIPAL"
+                            await set_user_state(client_phone, client_state)
+
+                            await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para ese cliente.")
+                            await send_interactive_buttons(
+                                phone=client_phone,
+                                body_text="El asistente virtual vuelve a estar activo. ¿En qué podemos ayudarte?",
+                                buttons=BOTONES_PRINCIPALES
+                            )
+                        else:
+                            if comando:
+                                await send_message(client_phone, comando)
+                                logger.info(f"Mensaje del dueño enviado a {client_phone}: {comando}")
+                            else:
+                                await send_message(phone_number, f"Escribe un mensaje después del ID #{short_id}. Ej: `{short_id} Hola!`")
+
+                        return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 3. PROCESAMIENTO DE SESIÓN DE CLIENTE
             # -----------------------------------------------------------------
             db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
             if not db_session:
@@ -464,18 +591,10 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             current_step = user_state.get("estado", "NUEVO")
 
             # -----------------------------------------------------------------
-            # 2. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # 4. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
-                if message_type == "interactive":
-                    interactive_data = message.get("interactive", {})
-                    if interactive_data.get("type") == "button_reply":
-                        selected_id = interactive_data.get("button_reply", {}).get("id")
-                        if selected_id == "btn_volver_menu":
-                            await handle_welcome_flow(phone_number, current_business_id, db)
-                            return {"status": "success"}
-
-                elif message_type == "text":
+                if message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
                     if user_text.lower() in ["menu", "menú", "comenzar", "salir"]:
@@ -493,13 +612,15 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         )
                         return {"status": "success"}
 
+                    short_id = await create_human_proxy(current_business_id, phone_number)
                     known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
-                    await send_message(owner_phone, f"💬 *Cliente {known_name}:*\n{user_text}")
+                    
+                    await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
 
                 return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 3. MENSAJES DE TEXTO PLANO DEL CLIENTE
+            # 5. MENSAJES DE TEXTO PLANO DEL CLIENTE
             # -----------------------------------------------------------------
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
@@ -528,7 +649,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await handle_text_fallback(phone_number, user_text, user_state, current_business_id, db)
 
             # -----------------------------------------------------------------
-            # 4. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
+            # 6. RESPUESTAS INTERACTIVAS RESTANTES (BOTONES Y LISTAS)
             # -----------------------------------------------------------------
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})
@@ -551,7 +672,9 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     selected_id = list_data.get("id")
                     row_title = list_data.get("title", "")
 
-                    if selected_id.startswith("srv_") or selected_id in ["action_ver_turno", "action_cancelar_turno"]:
+                    if selected_id == "btn_volver_menu":
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                    elif selected_id.startswith("srv_") or selected_id in ["action_ver_turno", "action_cancelar_turno"]:
                         await handle_service_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("more_dates_"):
                         await handle_more_dates_selection(phone_number, selected_id, user_state, current_business_id, db)

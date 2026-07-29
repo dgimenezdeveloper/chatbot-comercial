@@ -2,33 +2,48 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { getBusinessName, getBusinessLogo } from "@/lib/business-store";
 import StoreIcon from "@/components/icons/dashboard/store";
+import { fetchNegocio } from "@/services/negocio-api";
+import { getBusinessLogo } from "@/lib/business-store";
 
 /**
  * SidebarBusinessFooter — Client Component.
- *
- * Shows the business name and logo from localStorage.
- * Falls back to user name from session if no business data exists.
- * Does NOT use Google profile photo — the sidebar represents the business, not the user.
- *
- * Props:
- *   userName — user name from session (fallback for business name)
+ * Lee el nombre del negocio directamente desde PostgreSQL en Azure.
  */
 export function SidebarBusinessFooter({ userName }) {
   const [businessName, setBusinessName] = useState(null);
-  const [logoUrl, setLogoUrl] = useState(null);
+
+  // Inicialización perezosa (Lazy initial state) para evitar setState síncrono en useEffect
+  const [logoUrl] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return getBusinessLogo();
+  });
 
   useEffect(() => {
-    setBusinessName(getBusinessName(null));
-    setLogoUrl(getBusinessLogo());
+    let isMounted = true;
+
+    async function loadName() {
+      try {
+        const data = await fetchNegocio();
+        if (isMounted && data && data.nombre) {
+          setBusinessName(data.nombre);
+        }
+      } catch (err) {
+        console.error("Error al cargar nombre del negocio:", err);
+      }
+    }
+
+    loadName();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const displayName = businessName || userName || "Mi Negocio";
 
   return (
     <div className="flex items-center gap-3 rounded-lg bg-background px-2 py-2">
-      {/* Avatar: business logo if uploaded, otherwise StoreIcon */}
       {logoUrl ? (
         <Image
           src={logoUrl}
@@ -44,7 +59,6 @@ export function SidebarBusinessFooter({ userName }) {
         </div>
       )}
 
-      {/* Labels */}
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">Tu negocio</p>
         <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
