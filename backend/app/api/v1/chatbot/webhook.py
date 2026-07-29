@@ -548,7 +548,22 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             current_step = user_state.get("estado", "NUEVO")
 
             # -----------------------------------------------------------------
-            # 3. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # 3. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS (Incluso durante HUMAN_ESCALATION)
+            # -----------------------------------------------------------------
+            if message_type == "interactive":
+                interactive_data = message.get("interactive", {})
+                if interactive_data.get("type") == "button_reply":
+                    selected_id = interactive_data.get("button_reply", {}).get("id")
+                    
+                    if selected_id == "btn_volver_menu":
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                        return {"status": "success"}
+                    elif selected_id.startswith("btn_confirm_cancel_"):
+                        await handle_cancel_confirmation(phone_number, selected_id, user_state, current_business_id, db)
+                        return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 4. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
                 if message_type == "text":
@@ -578,7 +593,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 4. MENSAJES DE TEXTO PLANO DEL CLIENTE
+            # 5. MENSAJES DE TEXTO PLANO DEL CLIENTE
             # -----------------------------------------------------------------
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
@@ -607,7 +622,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await handle_text_fallback(phone_number, user_text, user_state, current_business_id, db)
 
             # -----------------------------------------------------------------
-            # 5. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
+            # 6. RESPUESTAS INTERACTIVAS RESTANTES (BOTONES Y LISTAS)
             # -----------------------------------------------------------------
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})

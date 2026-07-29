@@ -23,6 +23,21 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
                 return True
             else:
                 logger.error(f"Error al enviar mensaje de WhatsApp. Estatus: {response.status_code}. Respuesta: {response_data}")
+                
+                # REINTENTO AUTOMÁTICO PARA SANDBOX DE META EN ARGENTINA
+                # Si Meta rechazó '54911...', reintentamos sin el '9' ('5411...') que es como Meta Sandbox registra los números de prueba.
+                to_phone = str(payload.get("to", ""))
+                if to_phone.startswith("54911"):
+                    alt_to = "5411" + to_phone[5:]
+                    logger.info(f"Reintentando envío con formato Sandbox alternativo: {alt_to}")
+                    payload["to"] = alt_to
+                    alt_response = await client.post(url, json=payload, headers=headers)
+                    if alt_response.status_code == 200:
+                        logger.info(f"Mensaje de WhatsApp despachado con éxito en reintento a {alt_to}")
+                        return True
+                    else:
+                        logger.error(f"Reintento alternativo a {alt_to} falló: {alt_response.status_code} - {alt_response.json()}")
+
                 return False
                 
         except Exception as e:
@@ -89,15 +104,6 @@ async def send_interactive_list(
 ) -> bool:
     """
     Envía un menú de lista desplegable (List Message) de hasta 10 opciones totales.
-    Estructura esperada de 'sections':
-    [
-        {
-            "title": "Sección Principal",
-            "rows": [
-                {"id": "srv_1", "title": "Corte", "description": "Descripción opcional"}
-            ]
-        }
-    ]
     """
     formatted_sections = []
     total_rows = 0
