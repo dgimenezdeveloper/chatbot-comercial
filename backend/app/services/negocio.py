@@ -122,10 +122,13 @@ def get_available_slots(
     # 2. Incluir franjas ocupadas en Google Calendar (si está configurado)
     business = db.query(Business).filter(Business.id == business_id).first()
     if business and business.google_calendar_id:
-        from app.services.google_calendar import get_busy_slots
-        gcal_busy = get_busy_slots(business.google_calendar_id, start_dt, end_dt)
-        for g_start, g_end in gcal_busy:
-            occupied_intervals.append((g_start.astimezone(tz), g_end.astimezone(tz)))
+        try:
+            from app.services.google_calendar import get_busy_slots
+            gcal_busy = get_busy_slots(business.google_calendar_id, start_dt, end_dt)
+            for g_start, g_end in gcal_busy:
+                occupied_intervals.append((g_start.astimezone(tz), g_end.astimezone(tz)))
+        except Exception as e:
+            logger.error(f"Error consultando Google Calendar (se continúa con slots locales): {e}")
 
     slots = []
     current = start_dt.replace(hour=start_hour)
