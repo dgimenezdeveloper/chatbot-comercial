@@ -15,7 +15,10 @@ from app.db.models.user import User
 from app.db.models.business import Business
 from app.db.models.faq import FAQ
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
-from app.services.state_manager import get_user_state, set_user_state, clear_user_state
+from app.services.state_manager import (
+    get_user_state, set_user_state, clear_user_state,
+    create_human_proxy, get_client_by_short_id, close_human_proxy
+)
 from app.services.event_logger import log_event
 from app.services.negocio import get_active_services, get_available_slots, get_business_timezone, get_or_create_user
 from app.services.catalog import get_products
@@ -25,9 +28,6 @@ from app.services.faq import search_faqs, get_faqs
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# =============================================================================
-# CONSTANTES DE CONFIGURACIÓN Y MENÚS
-# =============================================================================
 MOCK_BUSINESS_ID = 1
 
 BOTONES_PRINCIPALES = [
@@ -50,6 +50,13 @@ def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | N
         return user.name.strip()
     return None
 
+def clean_owner_phone(phone: str | None) -> str | None:
+    if not phone: return None
+    cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").strip()
+    if cleaned.startswith("54911"):
+        cleaned = "541115" + cleaned[5:]
+    return cleaned
+
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     variants = {phone_number}
     if phone_number.startswith("541115"): variants.add("54911" + phone_number[6:])
@@ -68,7 +75,55 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
     await send_message(phone=phone_number, text=f"✅ Demo cambiada a {business_name} (ID {target_business_id}).")
 
 # =============================================================================
-# FLUJOS PRINCIPALES OPTIMIZADOS
+# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL)
+# =============================================================================
+
+async def trigger_human_escalation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session, reason: str = "user_request"):
+    """Deriva la conversación al celular personal del dueño mediante proxy."""
+    user_state["estado"] = "HUMAN_ESCALATION"
+    await set_user_state(phone, user_state)
+
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    owner_phone = clean_owner_phone(biz.owner_phone) if biz else None
+
+    log_event(
+        session_id=phone,
+        business_id=business_id,
+        event_type="escalation_to_human",
+        payload={"reason": reason, "initial_text": user_text},
+    )
+
+    if not owner_phone:
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="En este momento nuestros representantes no están disponibles. Por favor déjanos tu consulta y te responderemos a la brevedad.",
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+        )
+        return
+
+    short_id = await create_human_proxy(business_id, phone)
+    known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
+
+    # 1. Avisar al Cliente
+    await send_interactive_buttons(
+        phone=phone,
+        body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
+    )
+
+    # 2. Notificar al WhatsApp Personal del Dueño
+    owner_msg = (
+        f"🚨 *Atención Requerida [#{short_id}]*\n\n"
+        f"👤 *Cliente:* {known_name}\n"
+        f"📞 *Teléfono:* {phone}\n"
+        f"💬 *Mensaje:* \"{user_text}\"\n\n"
+        f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
+        f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
+    )
+    await send_message(owner_phone, owner_msg)
+
+# =============================================================================
+# FLUJOS PRINCIPALES
 # =============================================================================
 
 async def handle_welcome_flow(phone: str, business_id: int, db: Session):
@@ -131,17 +186,15 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             
         faqs = get_faqs(db, business_id)
         for f in faqs:
-            if len(rows) < 10:
+            if len(rows) < 9:
                 rows.append({"id": f"faq_{f.id}", "title": f.question[:24], "description": f.answer[:72]})
-                
-        if rows:
-            user_state["estado"] = "SELECCIONANDO_FAQ"
-            await set_user_state(phone, user_state)
-            await send_interactive_list(phone=phone, body_text="Aquí tienes información útil sobre nuestro local:", button_label="Ver Info ❓", sections=[{"title": "Consultas Frecuentes"[:20], "rows": rows}])
-        else:
-            user_state["estado"] = "ESPERANDO_FAQ"
-            await set_user_state(phone, user_state)
-            await send_message(phone=phone, text="Escribe tu consulta y con gusto te responderemos:")
+        
+        # OPCIÓN DE DERIVACIÓN A HUMANO EN EL MENÚ FAQ
+        rows.append({"id": "btn_hablar_humano", "title": "👤 Hablar con un humano", "description": "Conectar con un representante real"})
+
+        user_state["estado"] = "SELECCIONANDO_FAQ"
+        await set_user_state(phone, user_state)
+        await send_interactive_list(phone=phone, body_text="Aquí tienes información útil sobre nuestro local:", button_label="Ver Info ❓", sections=[{"title": "Consultas Frecuentes"[:20], "rows": rows}])
 
 # =============================================================================
 # SELECCIÓN UNIFICADA (SLOTS DE FECHA Y HORA)
@@ -172,7 +225,6 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     if rows_today: sections.append({"title": "Hoy"[:20], "rows": rows_today})
     if rows_tomorrow: sections.append({"title": "Mañana"[:20], "rows": rows_tomorrow})
 
-    # CORRECCIÓN: ID cambiado a 'more_dates_' para evitar colisión con 'action_'
     sections.append({
         "title": "Más opciones"[:20],
         "rows": [{"id": f"more_dates_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"}]
@@ -183,7 +235,6 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     await send_interactive_list(phone=phone, body_text=f"Servicio: *{row_title}*.\nSelecciona el horario que mejor te convenga:", button_label="Ver Horarios ⏰", sections=sections)
 
 async def handle_more_dates_selection(phone: str, selected_id: str, user_state: dict, business_id: int, db: Session):
-    """Muestra los próximos 7 días disponibles."""
     svc_db_id = int(selected_id.replace("more_dates_", ""))
     user_state["servicio_id"] = svc_db_id
     await set_user_state(phone, user_state)
@@ -207,7 +258,6 @@ async def handle_more_dates_selection(phone: str, selected_id: str, user_state: 
     await send_interactive_list(phone=phone, body_text="Selecciona la fecha que prefieras:", button_label="Ver Fechas 📅", sections=[{"title": "Próximos días"[:20], "rows": rows[:10]}])
 
 async def handle_specific_date_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
-    """Muestra los horarios para una fecha específica elegida en la paginación."""
     fecha_iso = selected_id.replace("date_", "")
     target_date = date.fromisoformat(fecha_iso)
     svc_db_id = user_state.get("servicio_id", 1)
@@ -251,7 +301,6 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
     try:
         appointment = create_appointment(db, appt_data)
         log_event(session_id=phone, business_id=business_id, event_type="appointment_created", payload={"appointment_id": appointment.id, "via_bot": True, "servicio": servicio_nombre, "fecha": fecha_iso, "hora": hora_str})
-        
         confirm_msg = f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicio:* {servicio_nombre}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora:* {hora_str} hs\n\nTe esperamos en nuestro local."
         await send_interactive_buttons(phone=phone, body_text=confirm_msg, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     except Exception as e:
@@ -261,7 +310,7 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
     await clear_user_state(phone)
 
 # =============================================================================
-# PRODUCTOS Y CATÁLOGO OPTIMIZADOS
+# PRODUCTOS Y CATÁLOGO
 # =============================================================================
 
 async def handle_product_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
@@ -286,7 +335,7 @@ async def execute_product_reservation(phone: str, client_name: str, product_name
     await clear_user_state(phone)
 
 # =============================================================================
-# CONSULTA Y CANCELACIÓN
+# CONSULTA, CANCELACIÓN Y FAQ
 # =============================================================================
 
 async def handle_view_appointment(phone: str, user_state: dict, business_id: int, db: Session):
@@ -354,6 +403,10 @@ async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dic
         await clear_user_state(phone)
 
 async def handle_faq_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
+    if selected_id == "btn_hablar_humano":
+        await trigger_human_escalation(phone, "Solicitado desde menú FAQ", user_state, business_id, db, reason="faq_human_button")
+        return
+
     biz = db.query(Business).filter(Business.id == business_id).first()
     respuesta_text = ""
     
@@ -382,20 +435,20 @@ async def handle_faq_query(phone: str, user_text: str, user_state: dict, busines
     if faqs_encontradas:
         faq = faqs_encontradas[0]
         await send_interactive_buttons(phone=phone, body_text=f"💡 *{faq.question}*\n\n{faq.answer}", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await clear_user_state(phone)
     else:
-        await send_interactive_buttons(phone=phone, body_text="No encontré una respuesta exacta. Puedes intentar con otras palabras.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
-    await clear_user_state(phone)
+        # SI NO ENCUENTRA FAQ, DERIVA A HUMANO
+        await trigger_human_escalation(phone, user_text, user_state, business_id, db, reason="faq_not_found")
 
 async def handle_text_fallback(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
     fallback_n = user_state.get("fallback_count", 0) + 1
     user_state["fallback_count"] = fallback_n
 
     if fallback_n >= 2:
-        user_state["estado"] = "HUMAN_ESCALATION"
-        await set_user_state(phone, user_state)
-        await send_message(phone=phone, text="Un representante humano revisará tu mensaje a la brevedad.")
+        await trigger_human_escalation(phone, user_text, user_state, business_id, db, reason="fallback_exceeded")
         return
 
+    await set_user_state(phone, user_state)
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
 # =============================================================================
@@ -429,6 +482,59 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             else:
                 phone_number = clean_phone_number(phone_number)
 
+            # -----------------------------------------------------------------
+            # 1. ¿EL QUE ESCRIBE ES EL DUEÑO DEL LOCAL? (PROXY DE ATENCIÓN)
+            # -----------------------------------------------------------------
+            all_businesses = db.query(Business).filter(Business.owner_phone.isnot(None)).all()
+            matching_business = None
+            for biz in all_businesses:
+                cleaned_owner = clean_owner_phone(biz.owner_phone)
+                if cleaned_owner and (cleaned_owner == phone_number or clean_phone_number(cleaned_owner) == phone_number):
+                    matching_business = biz
+                    break
+
+            if matching_business and message_type == "text":
+                user_text = message.get("text", {}).get("body", "").strip()
+
+                if user_text.lower().startswith("/reset_demo"):
+                    pass # Dejar pasar los comandos /reset_demo
+                else:
+                    # Parsear mensaje del dueño: "145 Hola" o "145 #fin"
+                    parts = user_text.split(" ", 1)
+                    if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 3:
+                        short_id = parts[0]
+                        client_phone = await get_client_by_short_id(matching_business.id, short_id)
+
+                        if not client_phone:
+                            await send_message(phone_number, f"⚠️ El chat #{short_id} no existe o ya expiró.")
+                            return {"status": "success"}
+
+                        comando = parts[1].strip() if len(parts) > 1 else ""
+
+                        if comando.lower() == "#fin":
+                            await close_human_proxy(matching_business.id, short_id)
+                            client_state = await get_user_state(client_phone) or {}
+                            client_state["estado"] = "MENU_PRINCIPAL"
+                            await set_user_state(client_phone, client_state)
+
+                            await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para ese cliente.")
+                            await send_interactive_buttons(
+                                phone=client_phone,
+                                body_text="El asistente virtual vuelve a estar activo. ¿En qué podemos ayudarte?",
+                                buttons=BOTONES_PRINCIPALES
+                            )
+                        else:
+                            if comando:
+                                await send_message(client_phone, comando)
+                                logger.info(f"Mensaje del dueño enviado a {client_phone}: {comando}")
+                            else:
+                                await send_message(phone_number, f"Escribe un mensaje después del ID #{short_id}. Ej: `{short_id} Hola!`")
+
+                        return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 2. PROCESAMIENTO DE SESIÓN DE CLIENTE
+            # -----------------------------------------------------------------
             db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
             if not db_session:
                 db_session = ChatSession(session_id=phone_number, business_id=MOCK_BUSINESS_ID, user_phone=phone_number, status="active")
@@ -436,9 +542,43 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 db.commit()
 
             current_business_id = db_session.business_id
-            user_state = await get_user_state(phone_number)
-            current_step = user_state.get("estado") if user_state else "NUEVO"
+            user_state = await get_user_state(phone_number) or {}
+            current_step = user_state.get("estado", "NUEVO")
 
+            # -----------------------------------------------------------------
+            # 3. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # -----------------------------------------------------------------
+            if current_step == "HUMAN_ESCALATION":
+                if message_type == "text":
+                    user_text = message.get("text", {}).get("body", "").strip()
+
+                    # Si el cliente quiere salir de la atención humana por su cuenta
+                    if user_text.lower() in ["menu", "menú", "comenzar", "salir"]:
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                        return {"status": "success"}
+
+                    biz = db.query(Business).filter(Business.id == current_business_id).first()
+                    owner_phone = clean_owner_phone(biz.owner_phone) if biz else None
+
+                    if not owner_phone:
+                        await send_interactive_buttons(
+                            phone=phone_number,
+                            body_text="En este momento nuestros operadores no están disponibles. Escribe *Menú* para volver al inicio.",
+                            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+                        )
+                        return {"status": "success"}
+
+                    short_id = await create_human_proxy(current_business_id, phone_number)
+                    known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
+                    
+                    # Reenviar mensaje al celular del dueño
+                    await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
+
+                return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 4. MENSAJES DE TEXTO PLANO DEL CLIENTE
+            # -----------------------------------------------------------------
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
 
@@ -447,6 +587,11 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     return {"status": "success"}
                 elif user_text.lower() == "/reset_demo barberia":
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
+                    return {"status": "success"}
+
+                # PALABRAS CLAVE DIRECTAS PARA HABLAR CON HUMANO
+                if any(k in user_text.lower() for k in ["humano", "persona", "agente", "representante", "atencion manual"]):
+                    await trigger_human_escalation(phone_number, user_text, user_state, current_business_id, db, reason="keyword_trigger")
                     return {"status": "success"}
 
                 if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar"] or current_step == "NUEVO":
@@ -461,6 +606,9 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 else:
                     await handle_text_fallback(phone_number, user_text, user_state, current_business_id, db)
 
+            # -----------------------------------------------------------------
+            # 5. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
+            # -----------------------------------------------------------------
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})
                 interactive_type = interactive_data.get("type")
@@ -468,7 +616,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 if interactive_type == "button_reply":
                     selected_id = interactive_data.get("button_reply", {}).get("id")
                     
-                    # Enrutamiento Global de Botones
                     if selected_id == "btn_volver_menu":
                         await handle_welcome_flow(phone_number, current_business_id, db)
                     elif selected_id.startswith("btn_confirm_cancel_"):
@@ -493,7 +640,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         await handle_slot_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("prod_"):
                         await handle_product_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
-                    elif selected_id.startswith("faq_"):
+                    elif selected_id.startswith("faq_") or selected_id == "btn_hablar_humano":
                         await handle_faq_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("cancel_appt_"):
                         try:
