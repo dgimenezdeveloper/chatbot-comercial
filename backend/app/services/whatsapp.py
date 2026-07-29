@@ -25,28 +25,45 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
                 logger.error(f"Error al enviar mensaje de WhatsApp. Estatus: {response.status_code}. Respuesta: {response_data}")
                 
                 # =====================================================================
-                # REINTENTO AUTOMÁTICO PARA ARGENTINA (Sandbox Meta)
-                # Meta a veces registra los números con '549' y otras con '54'.
-                # Si falla uno, probamos automáticamente con el otro formato.
+                # REINTENTO EXHAUSTIVO PARA ARGENTINA (Sandbox Meta)
+                # Meta Sandbox es muy estricto con cómo se registró el número.
+                # Probamos las 3 variantes: 549..., 54..., y 541115...
                 # =====================================================================
                 to_phone = str(payload.get("to", ""))
-                alt_to = None
                 
-                if to_phone.startswith("549"):
-                    alt_to = "54" + to_phone[3:]
-                elif to_phone.startswith("54") and not to_phone.startswith("549"):
-                    alt_to = "549" + to_phone[2:]
+                if to_phone.startswith("54"):
+                    # Extraer la base del número (sin 54, sin 9, sin 15)
+                    base = to_phone[2:]
+                    if base.startswith("9"):
+                        base = base[1:]
                     
-                if alt_to:
-                    logger.info(f"Reintentando envío con formato alternativo: {alt_to}")
-                    payload["to"] = alt_to
-                    alt_response = await client.post(url, json=payload, headers=headers)
+                    base_no_15 = base
+                    if base.startswith("1115"):
+                        base_no_15 = "11" + base[4:]
+                        
+                    # Generar las variantes posibles para Argentina
+                    variants = [
+                        f"549{base_no_15}",
+                        f"54{base_no_15}",
+                    ]
                     
-                    if alt_response.status_code == 200:
-                        logger.info(f"Mensaje despachado con éxito en reintento a {alt_to}")
-                        return True
-                    else:
-                        logger.error(f"Reintento a {alt_to} falló: {alt_response.status_code} - {alt_response.json()}")
+                    # Agregar variante con 15 (asumiendo código de área 11 para Sandbox)
+                    if base_no_15.startswith("11"):
+                        variants.append(f"541115{base_no_15[2:]}")
+                        
+                    # Eliminar duplicados y el número que ya falló en el primer intento
+                    variants = list(dict.fromkeys([v for v in variants if v != to_phone]))
+                    
+                    for alt_to in variants:
+                        logger.info(f"Reintentando envío con formato alternativo: {alt_to}")
+                        payload["to"] = alt_to
+                        alt_response = await client.post(url, json=payload, headers=headers)
+                        
+                        if alt_response.status_code == 200:
+                            logger.info(f"Mensaje despachado con éxito en reintento a {alt_to}")
+                            return True
+                        else:
+                            logger.error(f"Reintento a {alt_to} falló: {alt_response.status_code} - {alt_response.json()}")
 
                 return False
                 

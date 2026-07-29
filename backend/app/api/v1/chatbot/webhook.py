@@ -455,6 +455,11 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await set_user_state(phone, user_state)
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
+def clean_phone_number(phone: str) -> str:
+    """Limpia el número dejando solo dígitos."""
+    if not phone: return ""
+    return "".join(c for c in phone if c.isdigit())
+
 # =============================================================================
 # ENRUTADOR PRINCIPAL (WEBHOOK ENDPOINT)
 # =============================================================================
@@ -478,9 +483,10 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             phone_number = message.get("from")
             message_type = message.get("type")
 
+            phone_number = clean_phone_number(phone_number)
+
             # -----------------------------------------------------------------
             # 1. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS
-            # (Se procesa ANTES que la derivación humana para permitir salir de ella)
             # -----------------------------------------------------------------
             if message_type == "interactive":
                 interactive_data = message.get("interactive", {})
@@ -488,7 +494,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     selected_id = interactive_data.get("button_reply", {}).get("id")
                     
                     if selected_id == "btn_volver_menu":
-                        # Obtener business_id de la sesión para volver al menú
                         db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
                         biz_id = db_session.business_id if db_session else MOCK_BUSINESS_ID
                         await handle_welcome_flow(phone_number, biz_id, db)
@@ -580,7 +585,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     short_id = await create_human_proxy(current_business_id, phone_number)
                     known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
                     
-                    # Reenviar mensaje al celular del dueño
                     await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
 
                 return {"status": "success"}
