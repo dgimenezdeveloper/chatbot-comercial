@@ -1,52 +1,58 @@
+"""Router de turnos de agenda — conectado a PostgreSQL con nombres de servicios y clientes."""
+
+from typing import List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from datetime import timedelta, timezone
-import zoneinfo
 
-from app.db.database import get_db
 from app.core.security import get_current_user
+from app.db.database import get_db
 from app.db.models.appointment import Appointment
 from app.db.models.service import Service
-from app.db.models.business import Business
+from app.schemas.calendar import TurnoRequest, TurnoResponse
 
 router = APIRouter()
 
-@router.get("/", status_code=status.HTTP_200_OK)
+
+@router.get("/", response_model=List[TurnoResponse], status_code=status.HTTP_200_OK)
 async def listar_turnos(
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    """Retorna los turnos reales de PostgreSQL uniendo el nombre descriptivo del servicio y del cliente."""
     business_id = current_user.get("business_id", 1)
     
-    biz = db.query(Business).filter(Business.id == business_id).first()
-    tz_str = biz.timezone if biz and biz.timezone else "America/Argentina/Buenos_Aires"
-    tz = zoneinfo.ZoneInfo(tz_str)
+    results = (
+        db.query(Appointment, Service.name.label("service_name"))
+        .outerjoin(Service, Appointment.service_id == Service.id)
+        .filter(Appointment.business_id == business_id)
+        .order_by(Appointment.scheduled_date.asc())
+        .limit(200)
+        .all()
+    )
     
-    turnos = db.query(Appointment).filter(
-        Appointment.business_id == business_id,
-        Appointment.status.in_(["scheduled", "confirmed", "completed"])
-    ).all()
-    
-    resultado = []
-    for t in turnos:
-        service = db.query(Service).filter(Service.id == t.service_id).first()
-        svc_name = service.name if service else "Servicio General"
-        duration = service.duration_minutes if service else 30
+    turnos = []
+    for appt, service_name in results:
+        # Priorizar el nombre de la DB o armar uno legible
+        if appt.user_name and appt.user_name.strip():
+            cliente_nombre = appt.user_name
+        elif appt.user_phone:
+            cliente_nombre = f"Cliente {appt.user_phone[-4:]}"
+        else:
+            cliente_nombre = "Cliente"
+
+        servicio_desc = service_name or f"Servicio #{appt.service_id}"
         
-        # Garantizar conversión UTC a Local
-        utc_dt = t.scheduled_date if t.scheduled_date.tzinfo else t.scheduled_date.replace(tzinfo=timezone.utc)
-        local_dt = utc_dt.astimezone(tz)
-        end_dt = local_dt + timedelta(minutes=duration)
+        turnos.append(
+            TurnoResponse(
+                id=appt.id,
+                telefono=appt.user_phone or "",
+                servicio_id=appt.service_id,
+                fecha=appt.scheduled_date.strftime("%Y-%m-%d") if appt.scheduled_date else "",
+                hora=appt.scheduled_date.strftime("%H:%M") if appt.scheduled_date else "",
+                estado=appt.status or "confirmado",
+                nombre_cliente=cliente_nombre,
+                nombre_servicio=servicio_desc
+            )
+        )
         
-        resultado.append({
-            "id": str(t.id),
-            "clientName": t.user_name or t.user_phone or "Cliente",
-            "serviceName": svc_name,
-            "date": local_dt.strftime("%Y-%m-%d"),
-            "startTime": local_dt.strftime("%H:%M"),
-            "endTime": end_dt.strftime("%H:%M"),
-            "status": t.status,
-            "tone": "green" if t.status == "confirmed" else "yellow"
-        })
-        
-    return resultado
+    return turnos

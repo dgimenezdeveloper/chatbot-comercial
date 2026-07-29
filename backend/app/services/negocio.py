@@ -15,7 +15,6 @@ from app.db.models.appointment import Appointment
 from app.db.models.business import Business
 from app.db.models.service import Service
 from app.db.models.user import User
-from app.services.google_calendar import get_freebusy
 
 logger = logging.getLogger(__name__)
 
@@ -67,75 +66,82 @@ def get_active_services(db: Session, business_id: int) -> list[Service]:
     )
 
 
+def get_business_timezone(db: Session, business_id: int) -> str:
+    """Retorna el timezone configurado para un negocio."""
+    business = db.query(Business).filter(Business.id == business_id).first()
+    return business.timezone if business else "America/Argentina/Buenos_Aires"
+
+
 def get_available_slots(
     db: Session, service_id: int, business_id: int, target_date: date
 ) -> list[datetime]:
-    """Calcula los slots disponibles cruzando DB local y Google Calendar."""
+    """Calcula los slots disponibles para un servicio en una fecha sin superposiciones.
+
+    Garantiza que un único profesional (un solo cliente a la vez) no tenga turnos solapados,
+    considerando la duración del servicio solicitado y los turnos existentes.
+    """
     service = (
         db.query(Service)
         .filter(Service.id == service_id, Service.business_id == business_id)
         .first()
     )
-    business = db.query(Business).filter(Business.id == business_id).first()
-    
-    if not service or not business:
+    if not service:
         return []
 
-    tz_str = business.timezone or "America/Argentina/Buenos_Aires"
-    tz = zoneinfo.ZoneInfo(tz_str)
-
+    # Horario laboral habitual (09:00 a 20:00)
     start_hour = 9
     end_hour = 20
     duration = service.duration_minutes or 30
 
-    # Límites del día con timezone
-    day_start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=tz)
-    day_end = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=tz)
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
 
-    # 1. Turnos ya ocupados en DB
-    occupied = (
-        db.query(Appointment.scheduled_date)
+    start_dt = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=tz)
+    end_dt = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=tz)
+
+    # 1. Obtener todos los turnos agendados en esa fecha junto con la duración de su servicio
+    existing_appointments = (
+        db.query(Appointment.scheduled_date, Service.duration_minutes)
+        .join(Service, Appointment.service_id == Service.id)
         .filter(
             Appointment.business_id == business_id,
-            Appointment.service_id == service_id,
-            Appointment.scheduled_date >= day_start,
-            Appointment.scheduled_date < day_end,
+            Appointment.scheduled_date >= start_dt,
+            Appointment.scheduled_date <= end_dt,
             Appointment.status.notin_(["cancelled"]),
         )
         .all()
     )
-    # Convertir a timezone local para comparación exacta
-    occupied_times = {o[0].astimezone(tz) for o in occupied}
 
-    # 2. Consultar Google Calendar
-    gcal_busy_slots = []
-    if business.google_calendar_id:
-        gcal_busy_slots = get_freebusy(business.google_calendar_id, day_start, day_end)
+    # Construir la lista de franjas de tiempo completamente ocupadas [inicio, fin)
+    occupied_intervals: list[tuple[datetime, datetime]] = []
+    for appt_date, appt_duration in existing_appointments:
+        b_start = appt_date.astimezone(tz)
+        b_end = b_start + timedelta(minutes=appt_duration or 30)
+        occupied_intervals.append((b_start, b_end))
+
+    # 2. Incluir franjas ocupadas en Google Calendar (si está configurado)
+    business = db.query(Business).filter(Business.id == business_id).first()
+    if business and business.google_calendar_id:
+        from app.services.google_calendar import get_busy_slots
+        gcal_busy = get_busy_slots(business.google_calendar_id, start_dt, end_dt)
+        for g_start, g_end in gcal_busy:
+            occupied_intervals.append((g_start.astimezone(tz), g_end.astimezone(tz)))
 
     slots = []
-    current = day_start.replace(hour=start_hour)
-    end = day_start.replace(hour=end_hour)
+    current = start_dt.replace(hour=start_hour)
+    day_end = start_dt.replace(hour=end_hour)
 
-    while current + timedelta(minutes=duration) <= end:
+    # 3. Iterar cada slot posible y validar colisiones de intervalos de tiempo
+    while current + timedelta(minutes=duration) <= day_end:
+        slot_start = current
         slot_end = current + timedelta(minutes=duration)
+        
         is_free = True
-
-        # Verificar DB local
-        if current in occupied_times:
-            is_free = False
-
-        # Verificar Google Calendar (solapamiento de rangos)
-        if is_free:
-            for busy_start, busy_end in gcal_busy_slots:
-                # Convertir a timezone local por si la API devuelve UTC
-                busy_start_tz = busy_start.astimezone(tz)
-                busy_end_tz = busy_end.astimezone(tz)
-                
-                # Hay solapamiento si el inicio del slot es menor al fin del evento ocupado
-                # Y el fin del slot es mayor al inicio del evento ocupado
-                if current < busy_end_tz and slot_end > busy_start_tz:
-                    is_free = False
-                    break
+        for occ_start, occ_end in occupied_intervals:
+            # Condición matemática de solapamiento de intervalos
+            if (slot_start < occ_end) and (slot_end > occ_start):
+                is_free = False
+                break
 
         if is_free:
             slots.append(current)
@@ -143,9 +149,3 @@ def get_available_slots(
         current += timedelta(minutes=duration)
 
     return slots
-
-
-def get_business_timezone(db: Session, business_id: int) -> str:
-    """Retorna el timezone configurado para un negocio."""
-    business = db.query(Business).filter(Business.id == business_id).first()
-    return business.timezone if business else "America/Argentina/Buenos_Aires"

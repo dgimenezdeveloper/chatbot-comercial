@@ -1,4 +1,8 @@
+"""Esquemas Pydantic para el módulo de agenda (Calendar)."""
+
+from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
+
 
 class TurnoRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -8,8 +12,11 @@ class TurnoRequest(BaseModel):
     fecha: str = Field(..., description="Fecha del turno en formato YYYY-MM-DD")
     hora: str = Field(..., description="Hora del turno en formato HH:MM")
 
+
 class TurnoResponse(TurnoRequest):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="Identificador único del turno")
-    estado: str = Field(default="confirmado", description="Estado actual del turno (ej. confirmado, cancelado)")
+    estado: str = Field(default="confirmado", description="Estado actual del turno")
+    nombre_cliente: Optional[str] = Field(None, description="Nombre legible del cliente")
+    nombre_servicio: Optional[str] = Field(None, description="Nombre legible del servicio")
