@@ -79,6 +79,7 @@ def get_available_slots(
 
     Garantiza que un único profesional (un solo cliente a la vez) no tenga turnos solapados,
     considerando la duración del servicio solicitado y los turnos existentes.
+    Además, filtra los horarios que ya pasaron en el día actual.
     """
     service = (
         db.query(Service)
@@ -95,6 +96,7 @@ def get_available_slots(
 
     tz_str = get_business_timezone(db, business_id)
     tz = zoneinfo.ZoneInfo(tz_str)
+    now_local = datetime.now(tz)
 
     start_dt = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=tz)
     end_dt = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=tz)
@@ -133,6 +135,12 @@ def get_available_slots(
     slots = []
     current = start_dt.replace(hour=start_hour)
     day_end = start_dt.replace(hour=end_hour)
+
+    # FILTRADO DE HORARIOS PASADOS: Si es hoy, avanzamos 'current' hasta superar la hora actual + 15 min de margen
+    if target_date == now_local.date():
+        buffer_time = now_local + timedelta(minutes=15)
+        while current <= buffer_time:
+            current += timedelta(minutes=duration)
 
     # 3. Iterar cada slot posible y validar colisiones de intervalos de tiempo
     while current + timedelta(minutes=duration) <= day_end:
