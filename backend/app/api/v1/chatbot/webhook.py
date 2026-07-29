@@ -25,6 +25,9 @@ from app.services.faq import search_faqs, get_faqs
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# =============================================================================
+# CONSTANTES DE CONFIGURACIÓN Y MENÚS
+# =============================================================================
 MOCK_BUSINESS_ID = 1
 
 BOTONES_PRINCIPALES = [
@@ -32,6 +35,10 @@ BOTONES_PRINCIPALES = [
     {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
     {"id": "btn_faq", "title": "❓ Consultas"}
 ]
+
+# =============================================================================
+# HELPERS
+# =============================================================================
 
 def get_business_name(db: Session, business_id: int) -> str:
     business = db.query(Business).filter(Business.id == business_id).first()
@@ -59,6 +66,10 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
 
     for v in variants: await clear_user_state(v)
     await send_message(phone=phone_number, text=f"✅ Demo cambiada a {business_name} (ID {target_business_id}).")
+
+# =============================================================================
+# FLUJOS PRINCIPALES OPTIMIZADOS
+# =============================================================================
 
 async def handle_welcome_flow(phone: str, business_id: int, db: Session):
     await clear_user_state(phone)
@@ -110,17 +121,13 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
         business = db.query(Business).filter(Business.id == business_id).first()
         rows = []
         
-        # Inyección dinámica de la Configuración del Dashboard
-        if business.horarios:
-            rows.append({"id": "faq_sys_horarios", "title": "⏰ Horarios", "description": business.horarios[:72]})
-        if business.contacto:
-            rows.append({"id": "faq_sys_contacto", "title": "📞 Contacto", "description": business.contacto[:72]})
+        if business.horarios: rows.append({"id": "faq_sys_horarios", "title": "⏰ Horarios", "description": business.horarios[:72]})
+        if business.contacto: rows.append({"id": "faq_sys_contacto", "title": "📞 Contacto", "description": business.contacto[:72]})
         
         pagos = []
         if business.accepts_cash: pagos.append("Efectivo")
         if business.accept_cards: pagos.append("Tarjetas")
-        if pagos:
-            rows.append({"id": "faq_sys_pagos", "title": "💳 Métodos de pago", "description": " y ".join(pagos)[:72]})
+        if pagos: rows.append({"id": "faq_sys_pagos", "title": "💳 Métodos de pago", "description": " y ".join(pagos)[:72]})
             
         faqs = get_faqs(db, business_id)
         for f in faqs:
@@ -135,6 +142,10 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             user_state["estado"] = "ESPERANDO_FAQ"
             await set_user_state(phone, user_state)
             await send_message(phone=phone, text="Escribe tu consulta y con gusto te responderemos:")
+
+# =============================================================================
+# SELECCIÓN UNIFICADA (SLOTS DE FECHA Y HORA)
+# =============================================================================
 
 async def handle_service_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     if selected_id == "action_ver_turno":
@@ -161,10 +172,10 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     if rows_today: sections.append({"title": "Hoy"[:20], "rows": rows_today})
     if rows_tomorrow: sections.append({"title": "Mañana"[:20], "rows": rows_tomorrow})
 
-    # PAGINACIÓN: Opción para ver más fechas
+    # CORRECCIÓN: ID cambiado a 'more_dates_' para evitar colisión con 'action_'
     sections.append({
         "title": "Más opciones"[:20],
-        "rows": [{"id": f"action_mas_fechas_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"}]
+        "rows": [{"id": f"more_dates_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"}]
     })
 
     user_state["estado"] = "SELECCIONANDO_SLOT"
@@ -173,7 +184,7 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
 
 async def handle_more_dates_selection(phone: str, selected_id: str, user_state: dict, business_id: int, db: Session):
     """Muestra los próximos 7 días disponibles."""
-    svc_db_id = int(selected_id.replace("action_mas_fechas_", ""))
+    svc_db_id = int(selected_id.replace("more_dates_", ""))
     user_state["servicio_id"] = svc_db_id
     await set_user_state(phone, user_state)
     
@@ -190,7 +201,7 @@ async def handle_more_dates_selection(phone: str, selected_id: str, user_state: 
             })
     
     if not rows:
-        await send_message(phone, "No hay fechas disponibles próximamente.")
+        await send_interactive_buttons(phone=phone, body_text="No hay fechas disponibles próximamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
         return
         
     await send_interactive_list(phone=phone, body_text="Selecciona la fecha que prefieras:", button_label="Ver Fechas 📅", sections=[{"title": "Próximos días"[:20], "rows": rows[:10]}])
@@ -240,12 +251,18 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
     try:
         appointment = create_appointment(db, appt_data)
         log_event(session_id=phone, business_id=business_id, event_type="appointment_created", payload={"appointment_id": appointment.id, "via_bot": True, "servicio": servicio_nombre, "fecha": fecha_iso, "hora": hora_str})
-        await send_message(phone=phone, text=f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicio:* {servicio_nombre}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora:* {hora_str} hs\n\nTe esperamos en nuestro local. Si necesitas cancelar, escribe *Menú*.")
+        
+        confirm_msg = f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicio:* {servicio_nombre}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora:* {hora_str} hs\n\nTe esperamos en nuestro local."
+        await send_interactive_buttons(phone=phone, body_text=confirm_msg, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     except Exception as e:
         logger.error(f"Error creando turno: {e}")
-        await send_message(phone, "Error al procesar la reserva. Intenta nuevamente.")
+        await send_interactive_buttons(phone=phone, body_text="Error al procesar la reserva. Intenta nuevamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     
     await clear_user_state(phone)
+
+# =============================================================================
+# PRODUCTOS Y CATÁLOGO OPTIMIZADOS
+# =============================================================================
 
 async def handle_product_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     user_state["producto_seleccionado"] = row_title
@@ -260,9 +277,17 @@ async def handle_product_selection(phone: str, selected_id: str, row_title: str,
 
 async def execute_product_reservation(phone: str, client_name: str, product_name: str, user_state: dict, business_id: int, db: Session):
     user = get_or_create_user(db, phone, business_id, name=client_name.strip())
-    await send_message(phone=phone, text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de *{product_name}* está asentada. Puedes pasar a retirarlo por el local.")
+    await send_interactive_buttons(
+        phone=phone, 
+        body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de *{product_name}* está asentada. Puedes pasar a retirarlo por el local.",
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+    )
     log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "producto": product_name})
     await clear_user_state(phone)
+
+# =============================================================================
+# CONSULTA Y CANCELACIÓN
+# =============================================================================
 
 async def handle_view_appointment(phone: str, user_state: dict, business_id: int, db: Session):
     appointments = get_appointments_by_phone(db, business_id, phone)
@@ -270,13 +295,23 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
     upcoming = [a for a in appointments if a.status in ["scheduled", "confirmed"] and a.scheduled_date >= now_tz]
 
     if not upcoming:
-        await send_message(phone=phone, text="👀 No tienes turnos próximos agendados.")
+        await send_interactive_buttons(phone=phone, body_text="👀 No tienes turnos próximos agendados.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     else:
         next_appt = upcoming[0]
         service = db.query(Service).filter(Service.id == next_appt.service_id).first()
         tz_str = get_business_timezone(db, business_id)
         local_dt = next_appt.scheduled_date.astimezone(zoneinfo.ZoneInfo(tz_str))
-        await send_message(phone=phone, text=f"👀 *Tu Próximo Turno:*\n\n👤 *Cliente:* {next_appt.user_name or 'Registrado'}\n💇‍♀️ *Servicio:* {service.name if service else 'Servicio'}\n📅 *Fecha:* {local_dt.strftime('%d/%m/%Y')}\n⏰ *Hora:* {local_dt.strftime('%H:%M')} hs")
+        
+        msg = f"👀 *Tu Próximo Turno:*\n\n👤 *Cliente:* {next_appt.user_name or 'Registrado'}\n💇‍♀️ *Servicio:* {service.name if service else 'Servicio'}\n📅 *Fecha:* {local_dt.strftime('%d/%m/%Y')}\n⏰ *Hora:* {local_dt.strftime('%H:%M')} hs"
+        
+        await send_interactive_buttons(
+            phone=phone, 
+            body_text=msg, 
+            buttons=[
+                {"id": f"btn_confirm_cancel_{next_appt.id}", "title": "❌ Cancelar Turno"},
+                {"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}
+            ]
+        )
 
     await clear_user_state(phone)
 
@@ -286,43 +321,69 @@ async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_
     upcoming = [a for a in appointments if a.status in ["scheduled", "confirmed"] and a.scheduled_date >= now_tz]
 
     if not upcoming:
-        await send_message(phone=phone, text="❌ No tienes turnos activos para cancelar.")
-    else:
+        await send_interactive_buttons(phone=phone, body_text="❌ No tienes turnos activos para cancelar.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await clear_user_state(phone)
+        return
+
+    if len(upcoming) == 1:
         appt = upcoming[0]
-        if cancel_appointment(db=db, appointment_id=appt.id, business_id=business_id, reason="Cancelado por el cliente"):
-            await send_message(phone=phone, text="✅ Tu turno ha sido cancelado con éxito. El horario fue liberado.")
-        else:
-            await send_message(phone=phone, text="⚠️ Ocurrió un inconveniente al cancelar tu turno.")
-    await clear_user_state(phone)
+        service = db.query(Service).filter(Service.id == appt.service_id).first()
+        tz_str = get_business_timezone(db, business_id)
+        local_dt = appt.scheduled_date.astimezone(zoneinfo.ZoneInfo(tz_str))
+        
+        await send_interactive_buttons(
+            phone=phone,
+            body_text=f"⚠️ *¿Estás seguro de cancelar este turno?*\n\n💇‍♀️ *Servicio:* {service.name if service else 'Servicio'}\n📅 *Fecha:* {local_dt.strftime('%d/%m/%Y')} a las {local_dt.strftime('%H:%M')} hs",
+            buttons=[{"id": f"btn_confirm_cancel_{appt.id}", "title": "SÍ, Cancelar ❌"}, {"id": "btn_volver_menu", "title": "NO, Volver 🔙"}]
+        )
+    else:
+        rows = [{"id": f"cancel_appt_{appt.id}", "title": f"Turno {appt.scheduled_date.strftime('%d/%m')}"[:24], "description": "Cancelar este turno"} for appt in upcoming[:10]]
+        await send_interactive_list(phone=phone, body_text="Tienes varios turnos agendados. Selecciona cuál deseas cancelar:", button_label="Ver Turnos 📋", sections=[{"title": "Turnos Activos"[:20], "rows": rows}])
+
+async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dict, business_id: int, db: Session):
+    if button_id.startswith("btn_confirm_cancel_"):
+        try:
+            appt_id = int(button_id.replace("btn_confirm_cancel_", ""))
+            if cancel_appointment(db=db, appointment_id=appt_id, business_id=business_id, reason="Cancelado por el cliente"):
+                log_event(session_id=phone, business_id=business_id, event_type="appointment_cancelled", payload={"appointment_id": appt_id, "reason": "cancelado_por_cliente"})
+                await send_interactive_buttons(phone=phone, body_text="✅ Tu turno ha sido cancelado con éxito. El horario fue liberado.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+            else:
+                await send_interactive_buttons(phone=phone, body_text="⚠️ Ocurrió un inconveniente al cancelar tu turno.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        except ValueError:
+            await send_interactive_buttons(phone=phone, body_text="Error al procesar la cancelación.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await clear_user_state(phone)
 
 async def handle_faq_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
-    """Responde las FAQs dinámicas del Dashboard o las de la Base de Datos."""
     biz = db.query(Business).filter(Business.id == business_id).first()
+    respuesta_text = ""
     
     if selected_id == "faq_sys_horarios":
-        await send_message(phone, f"⏰ *Nuestros horarios son:*\n{biz.horarios or 'No especificado'}")
+        respuesta_text = f"⏰ *Nuestros horarios son:*\n{biz.horarios or 'No especificado'}"
     elif selected_id == "faq_sys_contacto":
-        await send_message(phone, f"📞 *Puedes contactarnos en:*\n{biz.contacto or 'No especificado'}")
+        respuesta_text = f"📞 *Puedes contactarnos en:*\n{biz.contacto or 'No especificado'}"
     elif selected_id == "faq_sys_pagos":
         pagos = []
         if biz.accepts_cash: pagos.append("Efectivo")
         if biz.accept_cards: pagos.append("Tarjetas de crédito/débito")
-        await send_message(phone, f"💳 *Métodos de pago aceptados:*\n{', '.join(pagos) if pagos else 'Consultar en el local'}")
+        respuesta_text = f"💳 *Métodos de pago aceptados:*\n{', '.join(pagos) if pagos else 'Consultar en el local'}"
     else:
         faq_id = int(selected_id.replace("faq_", ""))
         faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
         if faq:
-            await send_message(phone, f"💡 *{faq.question}*\n\n{faq.answer}")
+            respuesta_text = f"💡 *{faq.question}*\n\n{faq.answer}"
+        else:
+            respuesta_text = "No se encontró la respuesta."
             
+    await send_interactive_buttons(phone=phone, body_text=respuesta_text, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     await clear_user_state(phone)
 
 async def handle_faq_query(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
     faqs_encontradas = search_faqs(db, business_id, user_text)
     if faqs_encontradas:
         faq = faqs_encontradas[0]
-        await send_message(phone=phone, text=f"💡 *{faq.question}*\n\n{faq.answer}")
+        await send_interactive_buttons(phone=phone, body_text=f"💡 *{faq.question}*\n\n{faq.answer}", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     else:
-        await send_message(phone=phone, text="No encontré una respuesta exacta. Escribe *Menú* para volver a las opciones.")
+        await send_interactive_buttons(phone=phone, body_text="No encontré una respuesta exacta. Puedes intentar con otras palabras.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     await clear_user_state(phone)
 
 async def handle_text_fallback(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
@@ -406,7 +467,13 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
 
                 if interactive_type == "button_reply":
                     selected_id = interactive_data.get("button_reply", {}).get("id")
-                    if current_step == "MENU_PRINCIPAL":
+                    
+                    # Enrutamiento Global de Botones
+                    if selected_id == "btn_volver_menu":
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                    elif selected_id.startswith("btn_confirm_cancel_"):
+                        await handle_cancel_confirmation(phone_number, selected_id, user_state, current_business_id, db)
+                    elif current_step == "MENU_PRINCIPAL":
                         await handle_main_menu_selection(phone_number, selected_id, user_state, current_business_id, db)
                     else:
                         await handle_welcome_flow(phone_number, current_business_id, db)
@@ -416,9 +483,9 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     selected_id = list_data.get("id")
                     row_title = list_data.get("title", "")
 
-                    if selected_id.startswith("srv_") or selected_id.startswith("action_"):
+                    if selected_id.startswith("srv_") or selected_id in ["action_ver_turno", "action_cancelar_turno"]:
                         await handle_service_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
-                    elif selected_id.startswith("action_mas_fechas_"):
+                    elif selected_id.startswith("more_dates_"):
                         await handle_more_dates_selection(phone_number, selected_id, user_state, current_business_id, db)
                     elif selected_id.startswith("date_"):
                         await handle_specific_date_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
@@ -431,7 +498,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     elif selected_id.startswith("cancel_appt_"):
                         try:
                             appt_id = int(selected_id.replace("cancel_appt_", ""))
-                            await handle_cancel_appointment_flow(phone_number, user_state, current_business_id, db)
+                            await handle_cancel_confirmation(phone_number, f"btn_confirm_cancel_{appt_id}", user_state, current_business_id, db)
                         except ValueError:
                             await send_message(phone_number, "Error al procesar la lista de cancelación.")
                             await clear_user_state(phone_number)
