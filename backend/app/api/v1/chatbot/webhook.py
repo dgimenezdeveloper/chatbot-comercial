@@ -37,7 +37,7 @@ BOTONES_PRINCIPALES = [
 ]
 
 # =============================================================================
-# HELPERS DE TELÉFONO Y NEGOCIO
+# HELPERS DE TELÉFONO, NEGOCIO Y VALIDACIÓN DE ESTADO
 # =============================================================================
 
 def get_business_name(db: Session, business_id: int) -> str:
@@ -63,6 +63,32 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
     if not p1 or not p2: return False
     return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
 
+def clean_phone_number(phone: str | None) -> str:
+    if not phone: return ""
+    return "".join(c for c in phone if c.isdigit())
+
+def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
+    """Valida si la opción interactiva elegida pertenece ÚNICAMENTE al paso conversacional activo."""
+    # El botón universal de volver al menú siempre se permite cuando el cliente quiere salir
+    if selected_id == "btn_volver_menu":
+        return True
+
+    # Matriz estricta de acciones permitidas por cada estado activo
+    allowed_prefixes_per_state = {
+        "NUEVO": [],
+        "MENU_PRINCIPAL": ["btn_turnos", "btn_catalogo", "btn_faq"],
+        "SELECCIONANDO_SERVICIO": ["srv_", "action_ver_turno", "action_cancelar_turno"],
+        "SELECCIONANDO_SLOT": ["slot_", "more_dates_", "date_"],
+        "SELECCIONANDO_PRODUCTO": ["prod_"],
+        "SELECCIONANDO_FAQ": ["faq_", "btn_hablar_humano"],
+        "ESPERANDO_FAQ": ["faq_", "btn_hablar_humano"],
+        "CONFIRMA_CANCELACION": ["btn_confirm_cancel_"],
+        "SELECCIONA_TURNO_CANCELAR": ["cancel_appt_", "btn_confirm_cancel_"],
+    }
+
+    allowed = allowed_prefixes_per_state.get(current_step, [])
+    return any(selected_id.startswith(prefix) or selected_id == prefix for prefix in allowed)
+
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     variants = {phone_number}
     sessions = db.query(ChatSession).filter(or_(ChatSession.session_id.in_(variants), ChatSession.user_phone.in_(variants))).all()
@@ -78,11 +104,10 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
     await send_message(phone=phone_number, text=f"✅ Demo cambiada a {business_name} (ID {target_business_id}).")
 
 # =============================================================================
-# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL DEFENSTIVO)
+# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL)
 # =============================================================================
 
 async def trigger_human_escalation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session, reason: str = "user_request"):
-    """Deriva la conversación notificando al dueño. Si el envío al dueño falla, se recupera pacíficamente."""
     biz = db.query(Business).filter(Business.id == business_id).first()
     raw_owner_phone = biz.owner_phone if biz else None
     owner_phone = format_phone_for_meta(raw_owner_phone)
@@ -94,7 +119,6 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
         payload={"reason": reason, "initial_text": user_text, "owner_phone": raw_owner_phone},
     )
 
-    # Si no hay celular de dueño o coincide con el teléfono de prueba del cliente
     if not owner_phone or is_same_phone(raw_owner_phone, phone):
         logger.warning(f"[HANDOVER] Owner phone no configurado o idéntico al cliente ({phone}). Retornando al menú.")
         await send_interactive_buttons(
@@ -117,7 +141,6 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
         f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
     )
 
-    # Intentar enviar al celular personal del dueño
     sent_to_owner = await send_message(owner_phone, owner_msg)
 
     if sent_to_owner:
@@ -495,7 +518,6 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
 def clean_phone_number(phone: str | None) -> str:
-    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
@@ -551,7 +573,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
-                    # Comandos universales de reinicio
                     if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
@@ -566,7 +587,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     short_id = await create_human_proxy(current_business_id, phone_number)
                     known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
                     
-                    # Reenviar mensaje al celular del dueño
                     sent_to_owner = await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
                     if not sent_to_owner:
                         logger.error(f"[HANDOVER] No se pudo reenviar el mensaje al dueño ({owner_phone}). Reiniciando flujo.")
@@ -611,25 +631,32 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 interactive_data = message.get("interactive", {})
                 interactive_type = interactive_data.get("type")
 
+                selected_id = None
+                row_title = ""
                 if interactive_type == "button_reply":
                     selected_id = interactive_data.get("button_reply", {}).get("id")
-                    
+                elif interactive_type == "list_reply":
+                    selected_id = interactive_data.get("list_reply", {}).get("id")
+                    row_title = interactive_data.get("list_reply", {}).get("title", "")
+
+                if selected_id:
+                    # GUARDIÁN DE ESTADO: Bloquea clics en mensajes anteriores
+                    if not is_action_valid_for_state(selected_id, current_step):
+                        logger.warning(f"Opción caducada presionada: '{selected_id}' en estado '{current_step}' para {phone_number}")
+                        await send_interactive_buttons(
+                            phone=phone_number,
+                            body_text="⚠️ Esta opción corresponde a un mensaje anterior y ya no está activa. Para comenzar de nuevo, presiona el botón:",
+                            buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
+                        )
+                        return {"status": "success"}
+
+                    # PROCESAMIENTO DE OPCIONES VÁLIDAS
                     if selected_id == "btn_volver_menu":
                         await handle_welcome_flow(phone_number, current_business_id, db)
                     elif selected_id.startswith("btn_confirm_cancel_"):
                         await handle_cancel_confirmation(phone_number, selected_id, user_state, current_business_id, db)
-                    elif current_step == "MENU_PRINCIPAL":
+                    elif selected_id in ["btn_turnos", "btn_catalogo", "btn_faq"]:
                         await handle_main_menu_selection(phone_number, selected_id, user_state, current_business_id, db)
-                    else:
-                        await handle_welcome_flow(phone_number, current_business_id, db)
-
-                elif interactive_type == "list_reply":
-                    list_data = interactive_data.get("list_reply", {})
-                    selected_id = list_data.get("id")
-                    row_title = list_data.get("title", "")
-
-                    if selected_id == "btn_volver_menu":
-                        await handle_welcome_flow(phone_number, current_business_id, db)
                     elif selected_id.startswith("srv_") or selected_id in ["action_ver_turno", "action_cancelar_turno"]:
                         await handle_service_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("more_dates_"):
