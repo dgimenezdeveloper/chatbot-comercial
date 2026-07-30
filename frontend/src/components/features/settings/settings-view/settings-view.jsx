@@ -19,8 +19,6 @@ import { Textarea } from "@/components/ui/textarea/textarea";
 import { cn } from "@/lib/utils";
 import { fetchNegocio, updateNegocio } from "@/services/negocio-api";
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-
 const TIMEZONES = [
   { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
   { value: "America/Argentina/Cordoba", label: "Córdoba (GMT-3)" },
@@ -34,8 +32,6 @@ const CURRENCIES = [
   { value: "CLP", label: "Peso chileno (CLP)" },
   { value: "MXN", label: "Peso mexicano (MXN)" },
 ];
-
-// ─── Shared sub-components ───────────────────────────────────────────────────
 
 function SettingsSection({ icon: Icon, title, description, children }) {
   return (
@@ -95,8 +91,6 @@ function SwitchRow({ id, label, description, checked, onCheckedChange, disabled 
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
-
 export default function SettingsView() {
   const [business, setBusiness] = useState({
     name: "",
@@ -121,7 +115,7 @@ export default function SettingsView() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
-  // Cargar únicamente datos desde PostgreSQL en Azure
+  // Única fuente de verdad: Cargar datos desde PostgreSQL en Azure
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {

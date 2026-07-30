@@ -13,7 +13,6 @@ import { getBusinessLogo } from "@/lib/business-store";
 export function SidebarBusinessFooter({ userName }) {
   const [businessName, setBusinessName] = useState(null);
 
-  // Inicialización perezosa (Lazy initial state) para evitar setState síncrono en useEffect
   const [logoUrl] = useState(() => {
     if (typeof window === "undefined") return null;
     return getBusinessLogo();
@@ -22,7 +21,7 @@ export function SidebarBusinessFooter({ userName }) {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadName() {
+    async function loadData() {
       try {
         const data = await fetchNegocio();
         if (isMounted && data && data.nombre) {
@@ -33,7 +32,7 @@ export function SidebarBusinessFooter({ userName }) {
       }
     }
 
-    loadName();
+    loadData();
 
     return () => {
       isMounted = false;

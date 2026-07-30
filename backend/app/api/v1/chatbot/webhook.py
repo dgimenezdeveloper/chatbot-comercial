@@ -56,12 +56,12 @@ def format_phone_for_meta(phone: str | None) -> str | None:
     return "".join(c for c in phone if c.isdigit())
 
 def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
-    """Compara dos teléfonos por sus últimos 10 dígitos para evitar inconsistencias de formato."""
+    """Compara dos teléfonos por sus últimos 8 dígitos para evitar inconsistencias de formato."""
     if not phone1 or not phone2: return False
     p1 = format_phone_for_meta(phone1)
     p2 = format_phone_for_meta(phone2)
     if not p1 or not p2: return False
-    return p1[-10:] == p2[-10:] if len(p1) >= 10 and len(p2) >= 10 else p1 == p2
+    return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
 
 async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id: int, business_name: str):
     variants = {phone_number}
@@ -121,7 +121,6 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
     sent_to_owner = await send_message(owner_phone, owner_msg)
 
     if sent_to_owner:
-        # Solo cambiar el estado a HUMAN_ESCALATION si el envío al dueño FUE EXITOSO
         user_state["estado"] = "HUMAN_ESCALATION"
         await set_user_state(phone, user_state)
 
@@ -131,7 +130,6 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
             buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
         )
     else:
-        # Si Meta rechaza el mensaje al dueño (ej. error 131030), no dejamos al cliente colgado
         logger.error(f"[HANDOVER] Falló la notificación al dueño ({owner_phone}). Desplegando menú principal al cliente.")
         await send_interactive_buttons(
             phone=phone,
@@ -165,7 +163,7 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.")
             return
 
-        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:8]]
+        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:7]]
         sections = [
             {"title": "Selecciona un Servicio"[:20], "rows": rows_services},
             {"title": "Mi Cuenta"[:20], "rows": [
@@ -187,7 +185,7 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.")
             return
 
-        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:10]]
+        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:9]]
         sections = [
             {"title": "Catálogo"[:20], "rows": rows},
             {"title": "Navegación"[:20], "rows": [
@@ -497,6 +495,7 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
 def clean_phone_number(phone: str | None) -> str:
+    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
@@ -525,69 +524,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             message_type = message.get("type")
 
             # -----------------------------------------------------------------
-            # 1. INTERCEPTOR GLOBAL DE BOTONES INTERACTIVOS
-            # -----------------------------------------------------------------
-            if message_type == "interactive":
-                interactive_data = message.get("interactive", {})
-                if interactive_data.get("type") == "button_reply":
-                    selected_id = interactive_data.get("button_reply", {}).get("id")
-                    
-                    if selected_id == "btn_volver_menu":
-                        db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
-                        biz_id = db_session.business_id if db_session else MOCK_BUSINESS_ID
-                        await handle_welcome_flow(phone_number, biz_id, db)
-                        return {"status": "success"}
-
-            # -----------------------------------------------------------------
-            # 2. ¿EL QUE ESCRIBE ES EL DUEÑO DEL LOCAL? (PROXY DE ATENCIÓN)
-            # -----------------------------------------------------------------
-            all_businesses = db.query(Business).filter(Business.owner_phone.isnot(None)).all()
-            matching_business = None
-            for biz in all_businesses:
-                if is_same_phone(biz.owner_phone, phone_number):
-                    matching_business = biz
-                    break
-
-            if matching_business and message_type == "text":
-                user_text = message.get("text", {}).get("body", "").strip()
-
-                if user_text.lower().startswith("/reset_demo"):
-                    pass 
-                else:
-                    parts = user_text.split(" ", 1)
-                    if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 3:
-                        short_id = parts[0]
-                        client_phone = await get_client_by_short_id(matching_business.id, short_id)
-
-                        if not client_phone:
-                            await send_message(phone_number, f"⚠️ El chat #{short_id} no existe o ya expiró.")
-                            return {"status": "success"}
-
-                        comando = parts[1].strip() if len(parts) > 1 else ""
-
-                        if comando.lower() == "#fin":
-                            await close_human_proxy(matching_business.id, short_id)
-                            client_state = await get_user_state(client_phone) or {}
-                            client_state["estado"] = "MENU_PRINCIPAL"
-                            await set_user_state(client_phone, client_state)
-
-                            await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para ese cliente.")
-                            await send_interactive_buttons(
-                                phone=client_phone,
-                                body_text="El asistente virtual vuelve a estar activo. ¿En qué podemos ayudarte?",
-                                buttons=BOTONES_PRINCIPALES
-                            )
-                        else:
-                            if comando:
-                                await send_message(client_phone, comando)
-                                logger.info(f"Mensaje del dueño enviado a {client_phone}: {comando}")
-                            else:
-                                await send_message(phone_number, f"Escribe un mensaje después del ID #{short_id}. Ej: `{short_id} Hola!`")
-
-                        return {"status": "success"}
-
-            # -----------------------------------------------------------------
-            # 3. PROCESAMIENTO DE SESIÓN DE CLIENTE
+            # 1. ATENCIÓN DE SESIÓN DE CLIENTE BASE
             # -----------------------------------------------------------------
             db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
             if not db_session:
@@ -600,13 +537,21 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             current_step = user_state.get("estado", "NUEVO")
 
             # -----------------------------------------------------------------
-            # 4. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # 2. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
-                if message_type == "text":
+                if message_type == "interactive":
+                    interactive_data = message.get("interactive", {})
+                    if interactive_data.get("type") == "button_reply":
+                        selected_id = interactive_data.get("button_reply", {}).get("id")
+                        if selected_id == "btn_volver_menu":
+                            await handle_welcome_flow(phone_number, current_business_id, db)
+                            return {"status": "success"}
+
+                elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
-                    # PALABRAS CLAVE UNIVERSALES DE REINICIO
+                    # Comandos universales de reinicio
                     if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
@@ -621,11 +566,9 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     short_id = await create_human_proxy(current_business_id, phone_number)
                     known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
                     
-                    # Intentar reenviar mensaje al celular del dueño
+                    # Reenviar mensaje al celular del dueño
                     sent_to_owner = await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
-                    
                     if not sent_to_owner:
-                        # SI EL REENVÍO AL DUEÑO FALLA, NO DEJAR AL CLIENTE COLGADO
                         logger.error(f"[HANDOVER] No se pudo reenviar el mensaje al dueño ({owner_phone}). Reiniciando flujo.")
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
@@ -633,7 +576,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 5. MENSAJES DE TEXTO PLANO DEL CLIENTE
+            # 3. MENSAJES DE TEXTO PLANO DEL CLIENTE
             # -----------------------------------------------------------------
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
@@ -662,7 +605,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await handle_text_fallback(phone_number, user_text, user_state, current_business_id, db)
 
             # -----------------------------------------------------------------
-            # 6. RESPUESTAS INTERACTIVAS RESTANTES (BOTONES Y LISTAS)
+            # 4. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
             # -----------------------------------------------------------------
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})
