@@ -78,19 +78,13 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
     await send_message(phone=phone_number, text=f"✅ Demo cambiada a {business_name} (ID {target_business_id}).")
 
 # =============================================================================
-# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL)
+# DERIVACIÓN A HUMANO (HANDOVER PROTOCOL DEFENSTIVO)
 # =============================================================================
 
 async def trigger_human_escalation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session, reason: str = "user_request"):
-    """Deriva la conversación al celular personal del dueño mediante proxy."""
-    user_state["estado"] = "HUMAN_ESCALATION"
-    await set_user_state(phone, user_state)
-
+    """Deriva la conversación notificando al dueño. Si el envío al dueño falla, se recupera pacíficamente."""
     biz = db.query(Business).filter(Business.id == business_id).first()
     raw_owner_phone = biz.owner_phone if biz else None
-    
-    logger.info(f"[HANDOVER] Iniciando derivación para cliente {phone}. Business ID: {business_id}. Owner phone en DB: '{raw_owner_phone}'")
-
     owner_phone = format_phone_for_meta(raw_owner_phone)
 
     log_event(
@@ -100,18 +94,15 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
         payload={"reason": reason, "initial_text": user_text, "owner_phone": raw_owner_phone},
     )
 
-    await send_interactive_buttons(
-        phone=phone,
-        body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
-        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
-    )
-
-    if not owner_phone:
-        logger.warning(f"[HANDOVER] No hay owner_phone configurado para Business ID {business_id}")
-        return
-
-    if is_same_phone(raw_owner_phone, phone):
-        logger.warning(f"[HANDOVER] El teléfono del dueño ({raw_owner_phone}) es el mismo que el del cliente ({phone}). Se omite reenvío para evitar bucle.")
+    # Si no hay celular de dueño o coincide con el teléfono de prueba del cliente
+    if not owner_phone or is_same_phone(raw_owner_phone, phone):
+        logger.warning(f"[HANDOVER] Owner phone no configurado o idéntico al cliente ({phone}). Retornando al menú.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="En este momento nuestros representantes no están disponibles. ¿En qué más podemos ayudarte?",
+            buttons=BOTONES_PRINCIPALES
+        )
+        await clear_user_state(phone)
         return
 
     short_id = await create_human_proxy(business_id, phone)
@@ -125,9 +116,29 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
         f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
         f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
     )
-    sent_success = await send_message(owner_phone, owner_msg)
-    if not sent_success:
-        logger.error(f"[HANDOVER] Falló el envío del mensaje al dueño ({owner_phone}). Verifique que el número esté en la lista permitida de Meta.")
+
+    # Intentar enviar al celular personal del dueño
+    sent_to_owner = await send_message(owner_phone, owner_msg)
+
+    if sent_to_owner:
+        # Solo cambiar el estado a HUMAN_ESCALATION si el envío al dueño FUE EXITOSO
+        user_state["estado"] = "HUMAN_ESCALATION"
+        await set_user_state(phone, user_state)
+
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
+        )
+    else:
+        # Si Meta rechaza el mensaje al dueño (ej. error 131030), no dejamos al cliente colgado
+        logger.error(f"[HANDOVER] Falló la notificación al dueño ({owner_phone}). Desplegando menú principal al cliente.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="En este momento nuestros representantes no están disponibles. ¿En qué podemos ayudarte?",
+            buttons=BOTONES_PRINCIPALES
+        )
+        await clear_user_state(phone)
 
 # =============================================================================
 # FLUJOS PRINCIPALES
@@ -154,7 +165,7 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.")
             return
 
-        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:7]]
+        rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:8]]
         sections = [
             {"title": "Selecciona un Servicio"[:20], "rows": rows_services},
             {"title": "Mi Cuenta"[:20], "rows": [
@@ -176,7 +187,7 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             await send_message(phone=phone, text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.")
             return
 
-        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:9]]
+        rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:10]]
         sections = [
             {"title": "Catálogo"[:20], "rows": rows},
             {"title": "Navegación"[:20], "rows": [
@@ -247,7 +258,6 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     if rows_today: sections.append({"title": "Hoy"[:20], "rows": rows_today})
     if rows_tomorrow: sections.append({"title": "Mañana"[:20], "rows": rows_tomorrow})
 
-    # OPCIÓN DE NAVEGACIÓN Y CAMBIO DE SERVICIO
     sections.append({
         "title": "Navegación"[:20],
         "rows": [
@@ -487,7 +497,6 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
 def clean_phone_number(phone: str | None) -> str:
-    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
@@ -597,7 +606,8 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 if message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
-                    if user_text.lower() in ["menu", "menú", "comenzar", "salir"]:
+                    # PALABRAS CLAVE UNIVERSALES DE REINICIO
+                    if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
 
@@ -605,17 +615,20 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
                     if not owner_phone:
-                        await send_interactive_buttons(
-                            phone=phone_number,
-                            body_text="En este momento nuestros operadores no están disponibles. Escribe *Menú* para volver al inicio.",
-                            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
-                        )
+                        await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
 
                     short_id = await create_human_proxy(current_business_id, phone_number)
                     known_name = get_existing_user_name(db, phone_number, current_business_id) or phone_number
                     
-                    await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
+                    # Intentar reenviar mensaje al celular del dueño
+                    sent_to_owner = await send_message(owner_phone, f"💬 *[#{short_id}] {known_name}:*\n{user_text}")
+                    
+                    if not sent_to_owner:
+                        # SI EL REENVÍO AL DUEÑO FALLA, NO DEJAR AL CLIENTE COLGADO
+                        logger.error(f"[HANDOVER] No se pudo reenviar el mensaje al dueño ({owner_phone}). Reiniciando flujo.")
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                        return {"status": "success"}
 
                 return {"status": "success"}
 
@@ -636,7 +649,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await trigger_human_escalation(phone_number, user_text, user_state, current_business_id, db, reason="keyword_trigger")
                     return {"status": "success"}
 
-                if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar"] or current_step == "NUEVO":
+                if user_text.lower() in ["hola", "menu", "menú", "volver", "comenzar", "salir", "reiniciar", "cancelar"] or current_step == "NUEVO":
                     await handle_welcome_flow(phone_number, current_business_id, db)
                 elif current_step == "ESPERANDO_NOMBRE_TURNO":
                     await execute_appointment_creation(phone_number, user_text, user_state, current_business_id, db)
