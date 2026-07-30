@@ -4,33 +4,6 @@ from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
-def get_argentina_number_variants(phone: str) -> list[str]:
-    """Genera las variantes posibles de un número argentino para Meta Cloud API (Sandbox/Prod)."""
-    digits = "".join(c for c in phone if c.isdigit())
-    if not digits.startswith("54"):
-        return [digits] if digits else []
-
-    base = digits[2:]
-    if base.startswith("9"):
-        base = base[1:]
-
-    base_no_15 = base
-    if base.startswith("1115"):
-        base_no_15 = "11" + base[4:]
-    elif base.startswith("15") and len(base) == 10:
-        base_no_15 = base[2:]
-
-    variants = [
-        digits,
-        f"549{base_no_15}",
-        f"54{base_no_15}",
-    ]
-
-    if base_no_15.startswith("11"):
-        variants.append(f"541115{base_no_15[2:]}")
-
-    return list(dict.fromkeys(variants))
-
 async def _send_whatsapp_payload(payload: dict) -> bool:
     """Helper interno para despachar payloads JSON de forma asíncrona a la API de Meta."""
     url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
@@ -39,25 +12,23 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
         "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
-
-    original_to = str(payload.get("to", ""))
-    variants = get_argentina_number_variants(original_to)
     
-    async with httpx.AsyncClient() as client:
-        for target_phone in variants:
-            payload["to"] = target_phone
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-                if response.status_code == 200:
-                    logger.info(f"Mensaje de WhatsApp despachado con éxito a {target_phone}")
-                    return True
-                else:
-                    logger.warning(f"Intento de envío a {target_phone} falló ({response.status_code}): {response.json().get('error', {}).get('message')}")
-            except Exception as e:
-                logger.error(f"Excepción enviando a {target_phone}: {e}")
+    # Formato limpio de número E.164 (solo dígitos)
+    to_phone = "".join(c for c in str(payload.get("to", "")) if c.isdigit())
+    payload["to"] = to_phone
 
-        logger.error(f"Todos los intentos de envío fallaron para el número base {original_to}")
-        return False
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code == 200:
+                logger.info(f"Mensaje de WhatsApp despachado con éxito a {to_phone}")
+                return True
+            else:
+                logger.error(f"Error enviando WhatsApp a {to_phone}. Estatus: {response.status_code}. Respuesta: {response.json()}")
+                return False
+        except Exception as e:
+            logger.error(f"Excepción al conectar con la API de Meta: {str(e)}")
+            return False
 
 async def send_message(phone: str, text: str) -> bool:
     """Envía un mensaje de texto plano estándar."""

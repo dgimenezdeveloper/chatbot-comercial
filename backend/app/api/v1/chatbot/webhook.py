@@ -37,7 +37,7 @@ BOTONES_PRINCIPALES = [
 ]
 
 # =============================================================================
-# HELPERS DE TELÉFONO, NEGOCIO Y VALIDACIÓN DE ESTADO
+# HELPERS DE TELÉFONO Y NEGOCIO
 # =============================================================================
 
 def get_business_name(db: Session, business_id: int) -> str:
@@ -50,30 +50,24 @@ def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | N
         return user.name.strip()
     return None
 
-def format_phone_for_meta(phone: str | None) -> str | None:
-    """Extrae solo dígitos para enviar a Meta Cloud API (E.164 puro)."""
-    if not phone: return None
-    return "".join(c for c in phone if c.isdigit())
-
-def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
-    """Compara dos teléfonos por sus últimos 8 dígitos para evitar inconsistencias de formato."""
-    if not phone1 or not phone2: return False
-    p1 = format_phone_for_meta(phone1)
-    p2 = format_phone_for_meta(phone2)
-    if not p1 or not p2: return False
-    return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
-
 def clean_phone_number(phone: str | None) -> str:
+    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
+def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
+    """Compara dos teléfonos por sus últimos 8 dígitos."""
+    if not phone1 or not phone2: return False
+    p1 = clean_phone_number(phone1)
+    p2 = clean_phone_number(phone2)
+    if not p1 or not p2: return False
+    return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
+
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
     """Valida si la opción interactiva elegida pertenece ÚNICAMENTE al paso conversacional activo."""
-    # El botón universal de volver al menú siempre se permite cuando el cliente quiere salir
     if selected_id == "btn_volver_menu":
         return True
 
-    # Matriz estricta de acciones permitidas por cada estado activo
     allowed_prefixes_per_state = {
         "NUEVO": [],
         "MENU_PRINCIPAL": ["btn_turnos", "btn_catalogo", "btn_faq"],
@@ -108,58 +102,42 @@ async def _reset_demo_tenant(db: Session, phone_number: str, target_business_id:
 # =============================================================================
 
 async def trigger_human_escalation(phone: str, user_text: str, user_state: dict, business_id: int, db: Session, reason: str = "user_request"):
+    """Deriva la conversación notificando al celular personal del dueño por WhatsApp."""
+    user_state["estado"] = "HUMAN_ESCALATION"
+    await set_user_state(phone, user_state)
+
     biz = db.query(Business).filter(Business.id == business_id).first()
-    raw_owner_phone = biz.owner_phone if biz else None
-    owner_phone = format_phone_for_meta(raw_owner_phone)
+    raw_owner_phone = biz.owner_phone if (biz and biz.owner_phone) else "5491162193426"
+    owner_phone = clean_phone_number(raw_owner_phone)
 
     log_event(
         session_id=phone,
         business_id=business_id,
         event_type="escalation_to_human",
-        payload={"reason": reason, "initial_text": user_text, "owner_phone": raw_owner_phone},
+        payload={"reason": reason, "initial_text": user_text, "owner_phone": owner_phone},
     )
 
-    if not owner_phone or is_same_phone(raw_owner_phone, phone):
-        logger.warning(f"[HANDOVER] Owner phone no configurado o idéntico al cliente ({phone}). Retornando al menú.")
-        await send_interactive_buttons(
-            phone=phone,
-            body_text="En este momento nuestros representantes no están disponibles. ¿En qué más podemos ayudarte?",
-            buttons=BOTONES_PRINCIPALES
-        )
-        await clear_user_state(phone)
-        return
-
-    short_id = await create_human_proxy(business_id, phone)
-    known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
-
-    owner_msg = (
-        f"🚨 *Atención Requerida [#{short_id}]*\n\n"
-        f"👤 *Cliente:* {known_name}\n"
-        f"📞 *Teléfono:* {phone}\n"
-        f"💬 *Mensaje:* \"{user_text}\"\n\n"
-        f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
-        f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
+    # 1. Avisar al Cliente por WhatsApp
+    await send_interactive_buttons(
+        phone=phone,
+        body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
     )
 
-    sent_to_owner = await send_message(owner_phone, owner_msg)
+    # 2. Notificar al WhatsApp personal del dueño (solo si es un número distinto al cliente)
+    if owner_phone and not is_same_phone(owner_phone, phone):
+        short_id = await create_human_proxy(business_id, phone)
+        known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
 
-    if sent_to_owner:
-        user_state["estado"] = "HUMAN_ESCALATION"
-        await set_user_state(phone, user_state)
-
-        await send_interactive_buttons(
-            phone=phone,
-            body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
-            buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
+        owner_msg = (
+            f"🚨 *Atención Requerida [#{short_id}]*\n\n"
+            f"👤 *Cliente:* {known_name}\n"
+            f"📞 *Teléfono:* {phone}\n"
+            f"💬 *Mensaje:* \"{user_text}\"\n\n"
+            f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
+            f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
         )
-    else:
-        logger.error(f"[HANDOVER] Falló la notificación al dueño ({owner_phone}). Desplegando menú principal al cliente.")
-        await send_interactive_buttons(
-            phone=phone,
-            body_text="En este momento nuestros representantes no están disponibles. ¿En qué podemos ayudarte?",
-            buttons=BOTONES_PRINCIPALES
-        )
-        await clear_user_state(phone)
+        await send_message(owner_phone, owner_msg)
 
 # =============================================================================
 # FLUJOS PRINCIPALES
@@ -517,10 +495,6 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await set_user_state(phone, user_state)
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
-def clean_phone_number(phone: str | None) -> str:
-    if not phone: return ""
-    return "".join(c for c in phone if c.isdigit())
-
 # =============================================================================
 # ENRUTADOR PRINCIPAL (WEBHOOK ENDPOINT)
 # =============================================================================
@@ -573,6 +547,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
+                    # PALABRAS CLAVE UNIVERSALES DE REINICIO
                     if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
