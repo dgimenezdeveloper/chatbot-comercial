@@ -20,11 +20,35 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(url, json=payload, headers=headers)
+            
             if response.status_code == 200:
                 logger.info(f"Mensaje de WhatsApp despachado con éxito a {to_phone}")
                 return True
             else:
-                logger.error(f"Error enviando WhatsApp a {to_phone}. Estatus: {response.status_code}. Respuesta: {response.json()}")
+                response_json = response.json()
+                logger.error(f"Error enviando WhatsApp a {to_phone}. Estatus: {response.status_code}. Respuesta: {response_json}")
+                
+                # =====================================================================
+                # REINTENTO AUTOMÁTICO PARA SANDBOX DE META EN ARGENTINA
+                # Si enviamos con '549' y Meta Sandbox lo tiene guardado como '54' (sin el 9),
+                # reintentamos alternando el formato.
+                # =====================================================================
+                alt_to = None
+                if to_phone.startswith("549"):
+                    alt_to = "54" + to_phone[3:]
+                elif to_phone.startswith("54") and not to_phone.startswith("549"):
+                    alt_to = "549" + to_phone[2:]
+
+                if alt_to:
+                    logger.info(f"Reintentando envío con formato alternativo para Meta Sandbox: {alt_to}")
+                    payload["to"] = alt_to
+                    alt_response = await client.post(url, json=payload, headers=headers)
+                    if alt_response.status_code == 200:
+                        logger.info(f"Mensaje despachado con éxito en reintento a {alt_to}")
+                        return True
+                    else:
+                        logger.error(f"Reintento a {alt_to} falló ({alt_response.status_code}): {alt_response.json()}")
+
                 return False
         except Exception as e:
             logger.error(f"Excepción al conectar con la API de Meta: {str(e)}")
