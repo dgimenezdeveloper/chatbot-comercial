@@ -72,7 +72,7 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
 
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
     """Valida si la opción interactiva elegida pertenece al paso conversacional activo."""
-    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"] or selected_id.startswith("rem_"):
+    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"] or selected_id.startswith("rem_") or selected_id.startswith("btn_mod_appt_") or selected_id.startswith("btn_confirm_cancel_"):
         return True
 
     if current_step == "NUEVO":
@@ -525,6 +525,7 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
             phone=phone, 
             body_text=msg, 
             buttons=[
+                {"id": f"btn_mod_appt_{next_appt.id}", "title": "🔄 Modificar Turno"},
                 {"id": f"btn_confirm_cancel_{next_appt.id}", "title": "❌ Cancelar Turno"},
                 {"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}
             ]
@@ -782,6 +783,20 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         except ValueError:
                             await send_message(phone_number, "Error al procesar la lista de cancelación.")
                             await clear_user_state(phone_number)
+                    elif selected_id.startswith("btn_mod_appt_") or selected_id.startswith("rem_mod_"):
+                        appt_id = int(selected_id.replace("btn_mod_appt_", "").replace("rem_mod_", ""))
+                        appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+                        if appt:
+                            service = db.query(Service).filter(Service.id == appt.service_id).first()
+                            cancel_appointment(db, appt_id, current_business_id, "Modificación solicitada por el cliente")
+                            await send_message(phone_number, "Vamos a reprogramar tu turno. Selecciona la nueva fecha:")
+                            user_state["servicios"] = [{
+                                "id": appt.service_id,
+                                "name": service.name if service else "Servicio",
+                                "duration": service.duration_minutes if service else 30,
+                                "price": float(service.price) if service else 0.0
+                            }]
+                            await show_date_selection(phone_number, user_state, current_business_id, db)
                     elif selected_id.startswith("rem_conf_"):
                         appt_id = int(selected_id.replace("rem_conf_", ""))
                         appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
@@ -789,14 +804,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                             appt.no_show_status = "confirmed_yes"
                             db.commit()
                         await send_message(phone_number, "¡Gracias por confirmar! Te esperamos.")
-                    elif selected_id.startswith("rem_mod_"):
-                        appt_id = int(selected_id.replace("rem_mod_", ""))
-                        appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
-                        if appt:
-                            cancel_appointment(db, appt_id, current_business_id, "Modificación desde recordatorio")
-                            await send_message(phone_number, "Vamos a reprogramar tu turno. Selecciona la nueva fecha:")
-                            user_state["servicios"] = [{"id": appt.service_id, "name": "Servicio", "duration": 30, "price": 0}]
-                            await show_date_selection(phone_number, user_state, current_business_id, db)
                     elif selected_id.startswith("rem_canc_"):
                         appt_id = int(selected_id.replace("rem_canc_", ""))
                         cancel_appointment(db, appt_id, current_business_id, "Cancelado desde recordatorio")
