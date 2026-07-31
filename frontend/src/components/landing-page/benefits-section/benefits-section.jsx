@@ -142,18 +142,18 @@ export default function BenefitsSection() {
               </div>
 
               {/* Clone of Slide 1 — for infinite loop */}
-              <div className="w-full shrink-0 flex flex-col md:flex-row items-stretch gap-7.5 min-h-90 mr-[5%]">
+              <div className="w-full shrink-0 flex flex-col md:flex-row items-center gap-7.5 min-h-90 mr-[5%]">
                 <div>
                   <Image
                     src="/smartphone.png"
                     alt="Chat de WhatsApp con Pymio"
                     width={300}
                     height={500}
-                    className="h-full w-auto object-contain rounded-xl "
+                    className="h-full w-auto object-contain rounded-xl"
                   />
                 </div>
                 <div className="flex flex-col justify-center flex-1">
-                  <p className="font-sans text-[24px] font-medium text-foreground leading-snug">
+                  <p className="font-sans text-[24px] font-medium text-foreground leading-[160%]">
                     Con Pymio tus mañanas, tardes y semanas están programadas,
                     organizadas y accesibles según tus necesidades particulares.
                     Él se encarga de contestar todas las consultas, y cargar las
