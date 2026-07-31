@@ -149,23 +149,17 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
 
     sent_to_owner = await send_message(owner_phone, owner_msg)
 
-    if sent_to_owner:
-        user_state["estado"] = "HUMAN_ESCALATION"
-        await set_user_state(phone, user_state)
+    if not sent_to_owner:
+        logger.warning(f"[QA BYPASS] Falló la notificación al dueño ({owner_phone}), pero forzaremos la derivación para testing.")
 
-        await send_interactive_buttons(
-            phone=phone,
-            body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
-            buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
-        )
-    else:
-        logger.error(f"[HANDOVER] Falló la notificación al dueño ({owner_phone}). Desplegando menú principal al cliente.")
-        await send_interactive_buttons(
-            phone=phone,
-            body_text="En este momento nuestros representantes no están disponibles. ¿En qué podemos ayudarte?",
-            buttons=BOTONES_PRINCIPALES
-        )
-        await clear_user_state(phone)
+    user_state["estado"] = "HUMAN_ESCALATION"
+    await set_user_state(phone, user_state)
+
+    await send_interactive_buttons(
+        phone=phone,
+        body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
+    )
 
 # =============================================================================
 # FLUJOS PRINCIPALES
@@ -525,7 +519,6 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
 
     upcoming.sort(key=lambda a: a.scheduled_date)
 
-    # Agrupar servicios consecutivos que corresponden a la misma visita
     visits = []
     for appt in upcoming:
         service = db.query(Service).filter(Service.id == appt.service_id).first()
@@ -656,7 +649,6 @@ async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dic
                 tz = zoneinfo.ZoneInfo(tz_str)
                 local_dt = appt.scheduled_date.astimezone(tz)
                 
-                # Buscar todos los turnos consecutivos del cliente en esa misma visita
                 client_appts = get_appointments_by_phone(db, business_id, phone)
                 group = [
                     a for a in client_appts
@@ -762,24 +754,46 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             current_step = user_state.get("estado", "NUEVO")
 
             # -----------------------------------------------------------------
-            # 2. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # 2. INTERCEPCIÓN PRIORITARIA DE MENSAJES DEL DUEÑO (PROXY HANDOVER)
+            # -----------------------------------------------------------------
+            if message_type == "text":
+                user_text = message.get("text", {}).get("body", "").strip()
+                parts = user_text.split(" ", 1)
+                if len(parts) >= 1 and parts[0].isdigit():
+                    short_id = parts[0]
+                    client_phone = await get_client_by_short_id(current_business_id, short_id)
+                    if client_phone:
+                        # Es un mensaje del dueño para responder o cerrar chat con cliente
+                        if len(parts) > 1 and parts[1].strip().lower() == "#fin":
+                            await close_human_proxy(current_business_id, short_id)
+                            await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para el cliente.")
+                            await send_interactive_buttons(
+                                phone=client_phone,
+                                body_text="👨‍💻 El asistente virtual vuelve a estar activo. ¿En qué más puedo ayudarte?",
+                                buttons=BOTONES_PRINCIPALES
+                            )
+                            await clear_user_state(client_phone)
+                        else:
+                            msg_to_client = parts[1].strip() if len(parts) > 1 else ""
+                            if msg_to_client:
+                                await send_message(client_phone, msg_to_client)
+                        return {"status": "success"}
+
+            # -----------------------------------------------------------------
+            # 3. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
+            # (EL BOT PERMANECE 100% SILENCIOSO. TODO TEXTO SE REENVÍA AL DUEÑO)
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
                 if message_type == "interactive":
                     interactive_data = message.get("interactive", {})
                     if interactive_data.get("type") == "button_reply":
                         selected_id = interactive_data.get("button_reply", {}).get("id")
-                        if selected_id == "btn_volver_menu":
+                        if selected_id in ["btn_volver_menu", "btn_cancelar_humano"]:
                             await handle_welcome_flow(phone_number, current_business_id, db)
                             return {"status": "success"}
 
                 elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
-
-                    if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
-                        await handle_welcome_flow(phone_number, current_business_id, db)
-                        return {"status": "success"}
-
                     biz = db.query(Business).filter(Business.id == current_business_id).first()
                     owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
@@ -797,34 +811,10 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 return {"status": "success"}
 
             # -----------------------------------------------------------------
-            # 3. MENSAJES DE TEXTO PLANO DEL CLIENTE (O DUEÑO)
+            # 4. MENSAJES DE TEXTO PLANO DEL CLIENTE (O COMANDOS ADMIN/DEMO)
             # -----------------------------------------------------------------
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
-
-                # --- INTERCEPCIÓN DE MENSAJES DEL DUEÑO AL CLIENTE (PROXY) ---
-                parts = user_text.split(" ", 1)
-                if len(parts) >= 1 and parts[0].isdigit():
-                    short_id = parts[0]
-                    # Verificar si este short_id existe en Redis para este negocio
-                    client_phone = await get_client_by_short_id(current_business_id, short_id)
-                    if client_phone:
-                        # Es un mensaje del dueño para el cliente
-                        if len(parts) > 1 and parts[1].strip().lower() == "#fin":
-                            await close_human_proxy(current_business_id, short_id)
-                            await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para el cliente.")
-                            await send_interactive_buttons(
-                                phone=client_phone,
-                                body_text="👨‍💻 El asistente virtual vuelve a estar activo. ¿En qué más puedo ayudarte?",
-                                buttons=BOTONES_PRINCIPALES
-                            )
-                            await clear_user_state(client_phone)
-                        else:
-                            msg_to_client = parts[1].strip() if len(parts) > 1 else ""
-                            if msg_to_client:
-                                await send_message(client_phone, msg_to_client)
-                        return {"status": "success"}
-                # ------------------------------------------------------------
 
                 # Comandos de reseteo de demo
                 if user_text.lower() == "/reset_demo estetica":
@@ -834,7 +824,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
                     return {"status": "success"}
 
-                # --- NUEVO: COMANDO PARA ABRIR VENTANA 24H DEL DUEÑO ---
+                # Comando para abrir ventana de 24hs del dueño sin activar menú de cliente
                 biz = db.query(Business).filter(Business.id == current_business_id).first()
                 owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
@@ -847,7 +837,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                             "👉 _Si deseas probar el bot como cliente, escribe_ *Hola*"
                         )
                         return {"status": "success"}
-                # ------------------------------------------------------------
 
                 if any(k in user_text.lower() for k in ["humano", "persona", "agente", "representante", "atencion manual"]):
                     await trigger_human_escalation(phone_number, user_text, user_state, current_business_id, db, reason="keyword_trigger")
@@ -865,7 +854,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     await handle_text_fallback(phone_number, user_text, user_state, current_business_id, db)
 
             # -----------------------------------------------------------------
-            # 4. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
+            # 5. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
             # -----------------------------------------------------------------
             elif message_type == "interactive":
                 interactive_data = message.get("interactive", {})
