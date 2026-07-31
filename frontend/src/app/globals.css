@@ -22,6 +22,8 @@
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
 
+  --color-neutral: hsl(var(--neutral));
+
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
 
@@ -175,9 +177,10 @@ THEME: LANDING PAGE
     --section-alt: 220 14% 90%;
   }
 
+  /* TO-DO: Colors for landing dark mode 
   .dark .theme-landing {
-  /* TO-DO: Colors for landing dark mode */
   }
+  */
 
 /* =========================================
 THEME: APP (Dashboard & Onboarding)
@@ -229,9 +232,10 @@ THEME: APP (Dashboard & Onboarding)
     --nav-active-foreground: 221 83% 53%;
   }
 
+  /* TO-DO: Colors for app dark mode 
   .dark .theme-app {
-  /* TO-DO: Colors for app dark mode */
   }
+  */
 
   *{
     @apply border-border;

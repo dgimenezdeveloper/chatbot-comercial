@@ -30,7 +30,7 @@ const FAQ_ITEMS = [
 
 export default function FaqSection() {
   return (
-    <section id="consultas" className="w-full px-6 py-[60px] bg-[hsl(var(--section-alt))]">
+    <section id="consultas" className="w-full px-6 py-15 bg-[hsl(var(--section-alt))]">
       <div className="mx-auto max-w-6xl">
         {/* Title */}
         <h2 className="font-title text-[32px] font-semibold text-[hsl(var(--neutral))] mb-10 md:mb-14">
@@ -49,7 +49,7 @@ export default function FaqSection() {
                 <Accordion.Item
                   key={index}
                   value={index}
-                  className="group rounded-lg border border-border overflow-hidden bg-muted data-[open]:bg-white transition-colors duration-200"
+                  className="group rounded-lg border border-border overflow-hidden bg-muted data-open:bg-white transition-colors duration-200"
                 >
                   <Accordion.Header>
                     <Accordion.Trigger
@@ -61,7 +61,7 @@ export default function FaqSection() {
                     >
                       {item.question}
                       <ChevronDown
-                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[open]:rotate-180"
+                        className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-open:rotate-180"
                         aria-hidden="true"
                       />
                     </Accordion.Trigger>
@@ -69,8 +69,8 @@ export default function FaqSection() {
                   <Accordion.Panel
                     className={cn(
                       "overflow-hidden",
-                      "data-[starting-style]:h-0 data-[ending-style]:h-0",
-                      "h-[var(--accordion-panel-height)]",
+                      "data-starting-style:h-0 data-ending-style:h-0",
+                      "h-(--accordion-panel-height)",
                       "transition-[height] duration-300 ease-in-out"
                     )}
                     keepMounted
@@ -91,7 +91,7 @@ export default function FaqSection() {
               alt="Robot asistente con signo de pregunta"
               width={360}
               height={360}
-              className="w-full max-w-[360px] h-auto object-contain"
+              className="w-auto h-auto object-contain"
               priority={false}
             />
           </div>

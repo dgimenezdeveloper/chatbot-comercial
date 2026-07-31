@@ -74,8 +74,8 @@ export default function Navbar() {
           </a>
         </div>
 
-        <div className="hidden lg:flex items-center gap-[1.125rem]">
-          <div className="h-[1.3125rem] w-[.0625rem] bg-[#486284]/80 mx-1" />
+        <div className="hidden lg:flex items-center gap-4.5">
+          <div className="h-5.25 w-px bg-[#486284]/80 mx-1" />
 
           <a
             href={EXTERNAL_LINKS.register}
@@ -102,7 +102,7 @@ export default function Navbar() {
 
             <SheetContent
               side="right"
-              className="flex flex-col p-6 pt-16 theme-landing w-[85vw] sm:w-[21.875rem] bg-white border-l"
+              className="flex flex-col p-6 pt-16 theme-landing w-[85vw] sm:w-87.5 bg-white border-l"
             >
               <div className="flex flex-col gap-4 mt-2">
                 <a
@@ -147,7 +147,7 @@ export default function Navbar() {
                 </a>
                 <Button
                   onClick={handleOpenLoginMobile}
-                  className="flex items-center justify-center bg-[#486284] text-white rounded-[.25rem] h-[3.25rem] w-full text-[1rem] font-semibold transition-colors hover:bg-[#486284]/90 shadow-sm"
+                  className="flex items-center justify-center bg-[#486284] text-white rounded-lg h-13 w-full text-[1rem] font-semibold transition-colors hover:bg-[#486284]/90 shadow-sm"
                 >
                   Ingresar
                 </Button>

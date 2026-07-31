@@ -7,7 +7,7 @@ import ReadySection from "@/components/landing-page/ready-section/ready-section"
 
 export default function Page() {
   return (
-    <div className="flex flex-col gap-20">
+    <div className="flex flex-col gap-4 lg:gap-10">
       <HeroSection />
       <FeaturesSection />
       <BenefitsSection />
