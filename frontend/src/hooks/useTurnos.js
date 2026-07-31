@@ -6,39 +6,28 @@ import { fetchTurnos, createTurno, cancelTurno } from "@/services/turnos-api";
 const TURNOS_KEY = ["turnos"];
 
 /**
- * Normalizes backend turno shape to the frontend model.
- * Backend: { id, telefono, servicio_id, fecha, hora, estado }
- * Frontend: { id, phone, serviceId, date, time, status, clientName, serviceName }
+ * Normaliza los datos del backend al formato del frontend.
+ * Soporta tanto las keys en inglés de nuestro backend optimizado como las de fallback.
  */
 function toFrontend(t) {
   return {
     id: t.id,
-    phone: t.telefono,
-    serviceId: t.servicio_id,
-    date: t.fecha,
-    time: t.hora,
-    status: t.estado,
-    // Backend doesn't return these yet — provide placeholders
-    clientName: t.cliente_nombre || t.telefono,
-    serviceName: t.servicio_nombre || `Servicio #${t.servicio_id}`,
+    phone: t.phone || t.telefono || "",
+    serviceId: t.serviceId || t.servicio_id || 1,
+    date: t.date || t.fecha, 
+    time: t.startTime || t.hora, 
+    startTime: t.startTime || t.hora,
+    endTime: t.endTime,
+    durationMinutes: t.durationMinutes || t.duracion_minutos || 30,
+    status: t.status || t.estado,
+    clientName: t.clientName || t.nombre_cliente || t.telefono || "Cliente",
+    serviceName: t.serviceName || t.nombre_servicio || `Servicio #${t.servicio_id || 1}`,
+    tone: t.tone || "green",
   };
 }
 
 /**
  * TanStack Query hook for Turnos.
- *
- * @returns {{
- *   turnos: Array,
- *   todayTurnos: Array,
- *   isLoading: boolean,
- *   isError: boolean,
- *   error: Error|null,
- *   refetch: Function,
- *   createAppointment: Function,
- *   cancelAppointment: Function,
- *   isCreating: boolean,
- *   isCancelling: boolean,
- * }}
  */
 export function useTurnos() {
   const queryClient = useQueryClient();
@@ -55,11 +44,12 @@ export function useTurnos() {
     select: (data) => data.map(toFrontend),
   });
 
-  // Filter turnos for today
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const todayTurnos = turnos.filter((t) => t.date === today);
+  // Filtrar los turnos de "Hoy" en la zona horaria local del negocio (Argentina GMT-3)
+  const localISOTime = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
+  
+  const todayTurnos = turnos.filter((t) => t.date === localISOTime);
 
-  // Mutations
+  // Mutaciones
   const createMutation = useMutation({
     mutationFn: (payload) => createTurno(payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TURNOS_KEY }),

@@ -80,3 +80,7 @@ def get_freebusy(calendar_id: str, time_min: datetime, time_max: datetime) -> li
     except Exception as e:
         logger.error(f"Error consultando disponibilidad en Google Calendar: {e}")
         return []
+
+def get_busy_slots(calendar_id: str, time_min: datetime, time_max: datetime):
+    """Alias de compatibilidad para get_freebusy."""
+    return get_freebusy(calendar_id, time_min, time_max)

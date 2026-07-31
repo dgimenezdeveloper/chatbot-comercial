@@ -2,37 +2,34 @@ import { auth } from "@/auth";
 import ClientsView from "@/components/features/clients/clients-view/clients-view";
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 
-async function fetchClients(token) {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://pymebot.azurewebsites.net/api/v1";
-  try {
-    const headers = { "Content-Type": "application/json" };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+export default async function ClientesPage() {
+  const session = await auth();
+  const token = session?.backendAccessToken;
 
-    const res = await fetch(`${baseUrl}/admin/clientes`, {
-      headers,
+  let clients = [];
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+      ? `${process.env.NEXT_PUBLIC_API_URL}/admin/negocio/clientes`
+      : "http://localhost:8000/api/v1/admin/negocio/clientes";
+
+    const res = await fetch(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       cache: "no-store",
     });
 
-    if (!res.ok) {
-      console.error("Error obteniendo clientes:", await res.text());
-      return { clients: [], totalCount: 0 };
+    if (res.ok) {
+      clients = await res.json();
     }
-    return await res.json();
   } catch (error) {
-    console.error("Error conectando con la API de clientes:", error);
-    return { clients: [], totalCount: 0 };
+    console.error("Error al obtener clientes:", error);
   }
-}
-
-export default async function ClientesPage() {
-  const session = await auth();
-  const data = await fetchClients(session?.backendAccessToken);
 
   return (
     <DashboardPageLayout>
-      <ClientsView clients={data.clients} totalCount={data.totalCount} />
+      <ClientsView clients={clients} totalCount={clients.length} />
     </DashboardPageLayout>
   );
 }

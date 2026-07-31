@@ -23,5 +23,9 @@ celery_app.conf.update(
             "task": "app.scheduler.tasks.send_reminders",
             "schedule": crontab(hour=9, minute=0),
         },
+        "send-reminders-2h-before": {
+            "task": "app.scheduler.tasks.send_reminders_2h",
+            "schedule": crontab(minute="*/15"),
+        },
     },
 )

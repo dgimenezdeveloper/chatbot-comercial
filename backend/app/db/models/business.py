@@ -71,6 +71,16 @@ class Business(Base):
         comment="Acepta efectivo",
     )
 
+    # NUEVOS CAMPOS: Sincronización con el Dashboard (FAQ Dinámico)
+    horarios = Column(
+        String(255), nullable=True, 
+        comment="Horarios de atención"
+    )
+    contacto = Column(
+        String(255), nullable=True, 
+        comment="Información de contacto"
+    )
+
     # Configuración de recordatorios
     use_whatsapp_templates = Column(
         Boolean, default=False,

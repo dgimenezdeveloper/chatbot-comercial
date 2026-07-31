@@ -17,10 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch/switch";
 import { Textarea } from "@/components/ui/textarea/textarea";
 import { cn } from "@/lib/utils";
-import { getBusinessData, setBusinessData } from "@/lib/business-store";
-import { updateNegocio } from "@/services/negocio-api";
-
-// ─── Data ────────────────────────────────────────────────────────────────────
+import { fetchNegocio, updateNegocio } from "@/services/negocio-api";
 
 const TIMEZONES = [
   { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
@@ -35,8 +32,6 @@ const CURRENCIES = [
   { value: "CLP", label: "Peso chileno (CLP)" },
   { value: "MXN", label: "Peso mexicano (MXN)" },
 ];
-
-// ─── Shared sub-components ───────────────────────────────────────────────────
 
 function SettingsSection({ icon: Icon, title, description, children }) {
   return (
@@ -96,8 +91,6 @@ function SwitchRow({ id, label, description, checked, onCheckedChange, disabled 
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
-
 export default function SettingsView() {
   const [business, setBusiness] = useState({
     name: "",
@@ -122,18 +115,33 @@ export default function SettingsView() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
-  // Load business data from localStorage on mount
+  // Única fuente de verdad: Cargar datos desde PostgreSQL en Azure
   useEffect(() => {
-    const stored = getBusinessData();
-    if (stored) {
-      setBusiness({
-        name: stored.name || "",
-        description: stored.description || "",
-        address: stored.address || "",
-        phone: stored.phone || "",
-        email: stored.email || "",
-      });
+    let isMounted = true;
+    async function loadBackendData() {
+      try {
+        const data = await fetchNegocio();
+        if (isMounted && data) {
+          setBusiness({
+            name: data.nombre || "",
+            description: data.descripcion || "",
+            address: "",
+            phone: "",
+            email: "",
+          });
+          setSettings((prev) => ({
+            ...prev,
+            ownerPhone: data.owner_phone || "",
+          }));
+        }
+      } catch (err) {
+        console.error("Error al cargar configuración desde backend:", err);
+      }
     }
+    loadBackendData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const updateBusiness = (field) => (e) =>
@@ -147,32 +155,29 @@ export default function SettingsView() {
     setSaveMessage("");
 
     try {
-      // Update localStorage with business info
-      const currentData = getBusinessData() || {};
-      const updatedData = {
-        ...currentData,
-        name: business.name.trim(),
-        description: business.description.trim(),
-        address: business.address.trim(),
-        phone: business.phone.trim(),
-        email: business.email.trim(),
-      };
-      setBusinessData(updatedData);
-
-      // Call backend (demonstrates integration)
-      await updateNegocio({
+      const res = await updateNegocio({
         nombre: business.name.trim(),
         descripcion: business.description.trim(),
-        horarios: currentData.schedule
-          ? `${currentData.schedule.days?.join(", ")} de ${currentData.schedule.open} a ${currentData.schedule.close}`
-          : "Lunes a Viernes de 09:00 a 19:00",
+        horarios: "Lunes a Sábados de 09:00 a 20:00",
         contacto: [business.email, business.phone].filter(Boolean).join(" | "),
+        owner_phone: settings.ownerPhone.trim(),
       });
 
-      setSaveMessage("Cambios guardados correctamente.");
+      if (res) {
+        setBusiness((prev) => ({
+          ...prev,
+          name: res.nombre || prev.name,
+          description: res.descripcion || prev.description,
+        }));
+        setSettings((prev) => ({
+          ...prev,
+          ownerPhone: res.owner_phone || prev.ownerPhone,
+        }));
+      }
+
+      setSaveMessage("Cambios guardados correctamente en la base de datos.");
     } catch {
-      // Still save locally even if backend fails
-      setSaveMessage("Guardado localmente. El servidor no respondió.");
+      setSaveMessage("Error al guardar en el servidor.");
     } finally {
       setIsSaving(false);
       setTimeout(() => setSaveMessage(""), 4000);
@@ -198,7 +203,7 @@ export default function SettingsView() {
               id="biz-name"
               value={business.name}
               onChange={updateBusiness("name")}
-              placeholder="Ej. Salón Marilyn"
+              placeholder="Ej. Salón Pyme"
               className="h-10"
             />
           </FieldRow>
@@ -300,7 +305,7 @@ export default function SettingsView() {
           <FieldRow
             label="WhatsApp del dueño"
             htmlFor="owner-phone"
-            hint="Recibís alertas cuando falle un recordatorio automático."
+            hint="Recibís alertas cuando falle un recordatorio o cuando un cliente solicite atención humana."
           >
             <Input
               id="owner-phone"
@@ -381,7 +386,7 @@ export default function SettingsView() {
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <div className="mt-6 flex items-center justify-between border-t border-border pt-6">
         {saveMessage && (
-          <p className="text-sm text-muted-foreground">{saveMessage}</p>
+          <p className="text-sm font-medium text-primary">{saveMessage}</p>
         )}
         {!saveMessage && <div />}
         <Button type="button" size="lg" onClick={handleSave} disabled={isSaving}>

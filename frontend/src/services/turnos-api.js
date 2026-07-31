@@ -1,15 +1,13 @@
 /**
  * API service layer for /calendar/turnos.
  *
- * NOTE: Backend currently returns hardcoded data (2 turnos).
- * We integrate anyway to demonstrate the flow.
- *
  * @module services/turnos-api
  */
 
 import apiClient from "@/lib/api-client";
 
-const ENDPOINT = "/calendar/turnos";
+// AGREGADA BARRA FINAL PARA EVITAR REDIRECCIÓN 307 DE FASTAPI EN AZURE
+const ENDPOINT = "/calendar/turnos/";
 
 /**
  * List all appointments.
@@ -37,5 +35,5 @@ export async function createTurno(payload) {
  * @returns {Promise<void>}
  */
 export async function cancelTurno(id) {
-  await apiClient.delete(`${ENDPOINT}/${id}`);
+  await apiClient.delete(`/calendar/turnos/${id}`);
 }

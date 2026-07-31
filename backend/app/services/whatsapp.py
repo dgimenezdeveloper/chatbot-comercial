@@ -4,6 +4,32 @@ from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
+def get_whatsapp_phone_variants(phone: str) -> list[str]:
+    """Genera las 3 variantes de formato de Argentina para garantizar la entrega en Meta Sandbox o Producción."""
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return []
+    
+    if not digits.startswith("54"):
+        return [digits]
+
+    # Extraer base local (últimos 8 dígitos)
+    if len(digits) >= 10:
+        local_8 = digits[-8:]
+        area = digits[-10:-8] # ej: "11"
+        
+        base_no_15 = local_8
+        
+        variants = [
+            digits,                                # El original (ej: 5491169695436)
+            f"54{area}{base_no_15}",               # Formato sin 9 (ej: 541169695436)
+            f"541115{base_no_15}" if area == "11" else f"54{area}15{base_no_15}", # Formato Sandbox Meta con 15 (ej: 54111569695436)
+            f"549{area}{base_no_15}",              # Formato Prod con 9
+        ]
+        return list(dict.fromkeys(variants))
+    
+    return [digits]
+
 async def _send_whatsapp_payload(payload: dict) -> bool:
     """Helper interno para despachar payloads JSON de forma asíncrona a la API de Meta."""
     url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
@@ -12,22 +38,25 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
         "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
+
+    original_to = str(payload.get("to", ""))
+    variants = get_whatsapp_phone_variants(original_to)
     
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(url, json=payload, headers=headers)
-            response_data = response.json()
-            
-            if response.status_code == 200:
-                logger.info(f"Mensaje de WhatsApp despachado de forma exitosa a {payload.get('to')}")
-                return True
-            else:
-                logger.error(f"Error al enviar mensaje de WhatsApp. Estatus: {response.status_code}. Respuesta: {response_data}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Excepción al conectar con la API de Meta: {str(e)}")
-            return False
+        for target_phone in variants:
+            payload["to"] = target_phone
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    logger.info(f"Mensaje de WhatsApp despachado con éxito a {target_phone}")
+                    return True
+                else:
+                    logger.warning(f"Intento de envío a {target_phone} falló ({response.status_code}): {response.json().get('error', {}).get('message')}")
+            except Exception as e:
+                logger.error(f"Excepción enviando a {target_phone}: {e}")
+
+        logger.error(f"Todos los intentos de envío fallaron para el número base {original_to}")
+        return False
 
 async def send_message(phone: str, text: str) -> bool:
     """Envía un mensaje de texto plano estándar."""
@@ -44,12 +73,8 @@ async def send_message(phone: str, text: str) -> bool:
     return await _send_whatsapp_payload(payload)
 
 async def send_interactive_buttons(phone: str, body_text: str, buttons: list) -> bool:
-    """
-    Envía un mensaje interactivo con hasta 3 botones de respuesta rápida (Reply Buttons).
-    Estructura esperada de 'buttons': [{'id': 'btn_id', 'title': 'Título'}]
-    """
+    """Envía un mensaje interactivo con hasta 3 botones de respuesta rápida."""
     if len(buttons) > 3:
-        logger.warning(f"Se recibieron {len(buttons)} botones. WhatsApp permite un máximo de 3. Truncando lista.")
         buttons = buttons[:3]
 
     formatted_buttons = []
@@ -57,8 +82,8 @@ async def send_interactive_buttons(phone: str, body_text: str, buttons: list) ->
         formatted_buttons.append({
             "type": "reply",
             "reply": {
-                "id": btn["id"],
-                "title": btn["title"][:20]  # Meta restringe a máximo 20 caracteres
+                "id": btn["id"][:256],
+                "title": btn["title"][:20]
             }
         })
 
@@ -69,12 +94,8 @@ async def send_interactive_buttons(phone: str, body_text: str, buttons: list) ->
         "type": "interactive",
         "interactive": {
             "type": "button",
-            "body": {
-                "text": body_text
-            },
-            "action": {
-                "buttons": formatted_buttons
-            }
+            "body": {"text": body_text},
+            "action": {"buttons": formatted_buttons}
         }
     }
     return await _send_whatsapp_payload(payload)
@@ -87,18 +108,7 @@ async def send_interactive_list(
     header_text: str = None,
     footer_text: str = None
 ) -> bool:
-    """
-    Envía un menú de lista desplegable (List Message) de hasta 10 opciones totales.
-    Estructura esperada de 'sections':
-    [
-        {
-            "title": "Sección Principal",
-            "rows": [
-                {"id": "srv_1", "title": "Corte", "description": "Descripción opcional"}
-            ]
-        }
-    ]
-    """
+    """Envía un menú de lista desplegable de hasta 10 opciones totales."""
     formatted_sections = []
     total_rows = 0
     
@@ -106,44 +116,36 @@ async def send_interactive_list(
         section_rows = []
         for row in sec.get("rows", []):
             if total_rows >= 10:
-                logger.warning("Límite máximo de 10 opciones totales alcanzado. Omitiendo filas restantes.")
                 break
                 
             row_data = {
                 "id": row["id"],
-                "title": row["title"][:24]  # Meta restringe a máximo 24 caracteres
+                "title": row["title"][:24]
             }
             if row.get("description"):
-                row_data["description"] = row["description"][:72]  # Meta restringe a máximo 72 caracteres
+                row_data["description"] = row["description"][:72]
                 
             section_rows.append(row_data)
             total_rows += 1
             
         formatted_sections.append({
-            "title": sec.get("title", "")[:20],  # Meta restringe a máximo 20 caracteres
+            "title": sec.get("title", "")[:24],
             "rows": section_rows
         })
 
     interactive_payload = {
         "type": "list",
-        "body": {
-            "text": body_text
-        },
+        "body": {"text": body_text},
         "action": {
-            "button": button_label[:20],  # Meta restringe el label del botón a máximo 20 caracteres
+            "button": button_label[:20],
             "sections": formatted_sections
         }
     }
 
     if header_text:
-        interactive_payload["header"] = {
-            "type": "text",
-            "text": header_text[:60]  # Meta restringe el header a máximo 60 caracteres
-        }
+        interactive_payload["header"] = {"type": "text", "text": header_text[:60]}
     if footer_text:
-        interactive_payload["footer"] = {
-            "text": footer_text[:60]  # Meta restringe el footer a máximo 60 caracteres
-        }
+        interactive_payload["footer"] = {"text": footer_text[:60]}
 
     payload = {
         "messaging_product": "whatsapp",

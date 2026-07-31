@@ -1,5 +1,7 @@
 """Endpoint de gestión de clientes para el panel de administración."""
 
+import zoneinfo
+from datetime import timezone
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -8,6 +10,7 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.db.models.user import User
 from app.db.models.appointment import Appointment
+from app.services.negocio import get_business_timezone
 
 router = APIRouter()
 
@@ -17,6 +20,8 @@ async def listar_clientes(
     current_user: dict = Depends(get_current_user)
 ):
     business_id = current_user.get("business_id", 1)
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
     
     # Consultar usuarios pertenecientes al comercio (clientes guest y registrados)
     users = db.query(User).filter(User.business_id == business_id).all()
@@ -36,8 +41,11 @@ async def listar_clientes(
         ).order_by(Appointment.scheduled_date.desc()).first()
         
         last_visit = "Sin visitas"
-        if last_appt:
-            last_visit = last_appt.scheduled_date.strftime("%d/%m/%Y")
+        if last_appt and last_appt.scheduled_date:
+            dt = last_appt.scheduled_date
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            last_visit = dt.astimezone(tz).strftime("%d/%m/%Y")
             
         resultado.append({
             "id": str(u.id),
