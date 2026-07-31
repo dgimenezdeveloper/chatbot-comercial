@@ -33,6 +33,11 @@ class Business(Base):
         comment="Negocio activo en el sistema",
     )
 
+    # Módulos Dinámicos Multiempresa
+    enable_services = Column(Boolean, default=True, comment="Módulo de Turnos/Citas")
+    enable_products = Column(Boolean, default=True, comment="Módulo de Catálogo")
+    enable_faqs = Column(Boolean, default=True, comment="Módulo de Preguntas Frecuentes")
+
     # Configuración WhatsApp
     whatsapp_phone_id = Column(
         String(50), nullable=True,
@@ -71,7 +76,7 @@ class Business(Base):
         comment="Acepta efectivo",
     )
 
-    # NUEVOS CAMPOS: Sincronización con el Dashboard (FAQ Dinámico)
+    # Sincronización con el Dashboard (FAQ Dinámico)
     horarios = Column(
         String(255), nullable=True, 
         comment="Horarios de atención"

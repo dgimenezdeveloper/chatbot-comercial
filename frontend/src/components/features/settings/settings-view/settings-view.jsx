@@ -110,12 +110,14 @@ export default function SettingsView() {
     acceptCards: true,
     acceptsCash: true,
     autoConfirm: true,
+    enableServices: true,
+    enableProducts: true,
+    enableFaqs: true,
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
-  // Única fuente de verdad: Cargar datos desde PostgreSQL en Azure
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {
@@ -132,6 +134,9 @@ export default function SettingsView() {
           setSettings((prev) => ({
             ...prev,
             ownerPhone: data.owner_phone || "",
+            enableServices: data.enable_services ?? true,
+            enableProducts: data.enable_products ?? true,
+            enableFaqs: data.enable_faqs ?? true,
           }));
         }
       } catch (err) {
@@ -161,6 +166,9 @@ export default function SettingsView() {
         horarios: "Lunes a Sábados de 09:00 a 20:00",
         contacto: [business.email, business.phone].filter(Boolean).join(" | "),
         owner_phone: settings.ownerPhone.trim(),
+        enable_services: settings.enableServices,
+        enable_products: settings.enableProducts,
+        enable_faqs: settings.enableFaqs,
       });
 
       if (res) {
@@ -172,6 +180,9 @@ export default function SettingsView() {
         setSettings((prev) => ({
           ...prev,
           ownerPhone: res.owner_phone || prev.ownerPhone,
+          enableServices: res.enable_services ?? prev.enableServices,
+          enableProducts: res.enable_products ?? prev.enableProducts,
+          enableFaqs: res.enable_faqs ?? prev.enableFaqs,
         }));
       }
 
@@ -249,6 +260,37 @@ export default function SettingsView() {
               className="h-10"
             />
           </FieldRow>
+        </SettingsSection>
+
+        {/* ── Módulos del Chatbot ──────────────────────────────────────────── */}
+        <SettingsSection
+          icon={Smartphone}
+          title="Módulos del Chatbot"
+          description="Elige qué secciones estarán visibles en el menú de WhatsApp para tus clientes."
+        >
+          <SwitchRow
+            id="enable-services"
+            label="Módulo de Turnos y Citas"
+            description="Permite a tus clientes consultar disponibilidad y agendar turnos automáticamente."
+            checked={settings.enableServices}
+            onCheckedChange={updateSettings("enableServices")}
+          />
+
+          <SwitchRow
+            id="enable-products"
+            label="Módulo de Catálogo de Productos"
+            description="Muestra tus productos en venta con precios y fotos."
+            checked={settings.enableProducts}
+            onCheckedChange={updateSettings("enableProducts")}
+          />
+
+          <SwitchRow
+            id="enable-faqs"
+            label="Preguntas Frecuentes e Información"
+            description="Muestra información del local (horarios, ubicación, medios de pago)."
+            checked={settings.enableFaqs}
+            onCheckedChange={updateSettings("enableFaqs")}
+          />
         </SettingsSection>
 
         {/* ── Regional ─────────────────────────────────────────────────────── */}
@@ -361,25 +403,6 @@ export default function SettingsView() {
             checked={settings.acceptsCash}
             onCheckedChange={updateSettings("acceptsCash")}
           />
-        </SettingsSection>
-
-        {/* ── Chatbot ───────────────────────────────────────────────────────── */}
-        <SettingsSection
-          icon={Smartphone}
-          title="Chatbot"
-          description="Preferencias de funcionamiento del asistente virtual."
-        >
-          <SwitchRow
-            id="auto-confirm"
-            label="Confirmación automática de turnos"
-            description="Los turnos se confirman al crearse sin intervención manual."
-            checked={settings.autoConfirm}
-            onCheckedChange={updateSettings("autoConfirm")}
-          />
-
-          <p className="text-xs text-muted-foreground">
-            Más opciones de personalización del chatbot estarán disponibles próximamente.
-          </p>
         </SettingsSection>
       </div>
 
