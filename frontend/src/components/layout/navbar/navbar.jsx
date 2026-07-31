@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet/sheet";
 import { Menu } from "lucide-react";
 import LogoPymio from "@/components/icons/logo-pymio";
+import { EXTERNAL_LINKS } from "@/lib/constants";
 import { LoginDialog } from "@/components/auth/login-dialog/login-dialog";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button/button";
@@ -52,7 +53,7 @@ export default function Navbar() {
           <LogoPymio className="w-22.5 h-11.5 lg:w-31.25 lg:h-16" />
         </Link>
 
-        <div className="hidden lg:flex items-center gap-10 text-[1rem] leading-1.5 text-menu-primary/90 font-title font-medium transition-colors tracking-wide">
+        <div className="hidden lg:flex items-center gap-14 text-[1rem] leading-1.5 text-menu-primary/90 font-title font-medium transition-colors tracking-wide">
           <a
             href="#home"
             className="text-menu-active  font-semibold hover:text-menu-active"
@@ -76,16 +77,18 @@ export default function Navbar() {
         <div className="hidden lg:flex items-center gap-[1.125rem]">
           <div className="h-[1.3125rem] w-[.0625rem] bg-[#486284]/80 mx-1" />
 
-          <Link
-            href="/registro"
+          <a
+            href={EXTERNAL_LINKS.register}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-[1rem] font-medium text-[#486284]/75 underline tracking-[-0.03em] hover:text-[#1A202C] transition-colors"
           >
             Registrarse
-          </Link>
+          </a>
 
           <Button
             onClick={() => setIsLoginDialogOpen(true)}
-            className="flex items-center justify-center bg-[#486284]  text-white hover:bg-[#486284]/90 rounded-lg w-23 h-9.5 text-[.875rem] font-medium tracking-[-0.03em] transition-colors"
+            className="flex items-center justify-center bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary))]/90 rounded-lg w-23 h-9.5 text-[.875rem] font-medium tracking-[-0.03em] transition-colors"
           >
             Ingresar
           </Button>
@@ -133,13 +136,15 @@ export default function Navbar() {
               </div>
 
               <div className="mt-6 flex flex-col gap-5 border-t text-center border-gray-100 pt-8">
-                <Link
-                  href="/registro"
+                <a
+                  href={EXTERNAL_LINKS.register}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-[1.125rem] font-medium text-[#486284]/90 underline  py-2"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Registrarse
-                </Link>
+                </a>
                 <Button
                   onClick={handleOpenLoginMobile}
                   className="flex items-center justify-center bg-[#486284] text-white rounded-[.25rem] h-[3.25rem] w-full text-[1rem] font-semibold transition-colors hover:bg-[#486284]/90 shadow-sm"

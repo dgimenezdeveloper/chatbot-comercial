@@ -21,7 +21,7 @@ export default function LandingLayout({ children }) {
       {/* Registers font CSS variables and applies theme-landing to <html> */}
       <ThemeProvider theme="theme-landing" />
       <div
-        className={`${inter.variable} ${montserrat.variable} min-h-screen flex flex-col gap-4 lg:gap-20`}
+        className={`${inter.variable} ${montserrat.variable} font-sans min-h-screen flex flex-col gap-4 lg:gap-20`}
       >
         <Navbar />
         <main className="grow">{children}</main>

@@ -61,6 +61,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
 /* =========================================
 ROOT DICTIONARY (Fallback colors)
 Shadcn defaults to easily spot missed overrides
@@ -110,6 +114,16 @@ Shadcn defaults to easily spot missed overrides
     
     --nav-active: 210 40% 96.1%;
     --nav-active-foreground: 222.2 84% 4.9%;
+
+    /* Footer */
+    --footer: 217 19% 54%;
+    --footer-foreground: 0 0% 100%;
+
+    /* Neutral text (headings, labels) #6B7280 */
+    --neutral: 220 9% 46%;
+
+    /* Alternating section background */
+    --section-alt: 220 14% 90%;
   }
   
 /* =========================================
@@ -149,6 +163,16 @@ THEME: LANDING PAGE
     --input: 214.3 31.8% 91.4%;
     --ring: 221 83% 53%;
     --radius: 0.5rem;
+
+    /* Footer */
+    --footer: 217 19% 54%;
+    --footer-foreground: 0 0% 100%;
+
+    /* Neutral text (headings, labels) #6B7280 */
+    --neutral: 220 9% 46%;
+
+    /* Alternating section background */
+    --section-alt: 220 14% 90%;
   }
 
   .dark .theme-landing {

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import RobotPymio from "@/components/icons/robot-pymio";
+import { EXTERNAL_LINKS } from "@/lib/constants";
 
 export default function Hero() {
   return (
@@ -27,12 +27,14 @@ export default function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 mt-10 lg:mt-13.5">
-          <Link
-            href="/registro"
+          <a
+            href={EXTERNAL_LINKS.register}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-center w-full sm:w-37.5 h-10.75 bg-[#ED7F3A] text-white text-[16px] font-semibold tracking-[-0.02em] rounded-[4px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] hover:bg-[#ED7F3A]/90 transition-colors"
           >
             Registrarse
-          </Link>
+          </a>
 
           <a
             href="#propuesta"
