@@ -509,33 +509,87 @@ async def execute_product_reservation(phone: str, client_name: str, user_state: 
 async def handle_view_appointment(phone: str, user_state: dict, business_id: int, db: Session):
     appointments = get_appointments_by_phone(db, business_id, phone)
     now_tz = datetime.now(timezone.utc)
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
+
     upcoming = [a for a in appointments if a.status in ["scheduled", "confirmed"] and a.scheduled_date >= now_tz]
 
     if not upcoming:
-        await send_interactive_buttons(phone=phone, body_text="👀 No tienes turnos próximos agendados.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
-    else:
-        next_appt = upcoming[0]
-        service = db.query(Service).filter(Service.id == next_appt.service_id).first()
-        tz_str = get_business_timezone(db, business_id)
-        local_dt = next_appt.scheduled_date.astimezone(zoneinfo.ZoneInfo(tz_str))
-        
-        msg = f"👀 *Tu Próximo Turno:*\n\n👤 *Cliente:* {next_appt.user_name or 'Registrado'}\n💇‍♀️ *Servicio:* {service.name if service else 'Servicio'}\n📅 *Fecha:* {local_dt.strftime('%d/%m/%Y')}\n⏰ *Hora:* {local_dt.strftime('%H:%M')} hs"
-        
         await send_interactive_buttons(
             phone=phone, 
-            body_text=msg, 
-            buttons=[
-                {"id": f"btn_mod_appt_{next_appt.id}", "title": "🔄 Modificar Turno"},
-                {"id": f"btn_confirm_cancel_{next_appt.id}", "title": "❌ Cancelar Turno"},
-                {"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}
-            ]
+            body_text="👀 No tienes turnos próximos agendados.", 
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
         )
+        await clear_user_state(phone)
+        return
+
+    upcoming.sort(key=lambda a: a.scheduled_date)
+
+    # Agrupar servicios consecutivos que corresponden a la misma visita
+    visits = []
+    for appt in upcoming:
+        service = db.query(Service).filter(Service.id == appt.service_id).first()
+        svc_name = service.name if service else f"Servicio #{appt.service_id}"
+        svc_duration = service.duration_minutes if service else 30
+        local_dt = appt.scheduled_date.astimezone(tz)
+
+        if visits:
+            last_visit = visits[-1]
+            if (last_visit["date_str"] == local_dt.strftime("%d/%m/%Y") and
+                abs((local_dt - last_visit["end_dt"]).total_seconds()) <= 300):
+                last_visit["services"].append(svc_name)
+                last_visit["appt_ids"].append(appt.id)
+                last_visit["end_dt"] = local_dt + timedelta(minutes=svc_duration)
+                last_visit["duration"] += svc_duration
+                continue
+
+        visits.append({
+            "primary_id": appt.id,
+            "appt_ids": [appt.id],
+            "client_name": appt.user_name or "Registrado",
+            "services": [svc_name],
+            "date_str": local_dt.strftime("%d/%m/%Y"),
+            "time_str": local_dt.strftime("%H:%M"),
+            "start_dt": local_dt,
+            "end_dt": local_dt + timedelta(minutes=svc_duration),
+            "duration": svc_duration
+        })
+
+    primary_visit = visits[0]
+    services_str = ", ".join(primary_visit["services"])
+
+    if len(visits) == 1:
+        msg = (
+            f"👀 *Tu Próximo Turno:*\n\n"
+            f"👤 *Cliente:* {primary_visit['client_name']}\n"
+            f"💇‍♀️ *Servicio{'s' if len(primary_visit['services']) > 1 else ''}:* {services_str}\n"
+            f"📅 *Fecha:* {primary_visit['date_str']}\n"
+            f"⏰ *Hora:* {primary_visit['time_str']} hs"
+        )
+    else:
+        msg = f"👀 *Tus Próximos Turnos:*\n\n👤 *Cliente:* {primary_visit['client_name']}\n\n"
+        for idx, v in enumerate(visits, 1):
+            s_str = ", ".join(v["services"])
+            msg += f"{idx}️⃣ *Servicio{'s' if len(v['services']) > 1 else ''}:* {s_str}\n📅 *Fecha:* {v['date_str']}\n⏰ *Hora:* {v['time_str']} hs\n\n"
+
+    await send_interactive_buttons(
+        phone=phone, 
+        body_text=msg, 
+        buttons=[
+            {"id": f"btn_mod_appt_{primary_visit['primary_id']}", "title": "🔄 Modificar Turno"},
+            {"id": f"btn_confirm_cancel_{primary_visit['primary_id']}", "title": "❌ Cancelar Turno"},
+            {"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}
+        ]
+    )
 
     await clear_user_state(phone)
 
 async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_id: int, db: Session):
     appointments = get_appointments_by_phone(db, business_id, phone)
     now_tz = datetime.now(timezone.utc)
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
+
     upcoming = [a for a in appointments if a.status in ["scheduled", "confirmed"] and a.scheduled_date >= now_tz]
 
     if not upcoming:
@@ -543,27 +597,78 @@ async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_
         await clear_user_state(phone)
         return
 
-    if len(upcoming) == 1:
-        appt = upcoming[0]
+    upcoming.sort(key=lambda a: a.scheduled_date)
+
+    visits = []
+    for appt in upcoming:
         service = db.query(Service).filter(Service.id == appt.service_id).first()
-        tz_str = get_business_timezone(db, business_id)
-        local_dt = appt.scheduled_date.astimezone(zoneinfo.ZoneInfo(tz_str))
-        
+        svc_name = service.name if service else f"Servicio #{appt.service_id}"
+        svc_duration = service.duration_minutes if service else 30
+        local_dt = appt.scheduled_date.astimezone(tz)
+
+        if visits:
+            last_visit = visits[-1]
+            if (last_visit["date_str"] == local_dt.strftime("%d/%m/%Y") and
+                abs((local_dt - last_visit["end_dt"]).total_seconds()) <= 300):
+                last_visit["services"].append(svc_name)
+                last_visit["end_dt"] = local_dt + timedelta(minutes=svc_duration)
+                continue
+
+        visits.append({
+            "primary_id": appt.id,
+            "services": [svc_name],
+            "date_str": local_dt.strftime("%d/%m/%Y"),
+            "time_str": local_dt.strftime("%H:%M"),
+            "end_dt": local_dt + timedelta(minutes=svc_duration)
+        })
+
+    if len(visits) == 1:
+        v = visits[0]
+        services_str = ", ".join(v["services"])
         await send_interactive_buttons(
             phone=phone,
-            body_text=f"⚠️ *¿Estás seguro de cancelar este turno?*\n\n💇‍♀️ *Servicio:* {service.name if service else 'Servicio'}\n📅 *Fecha:* {local_dt.strftime('%d/%m/%Y')} a las {local_dt.strftime('%H:%M')} hs",
-            buttons=[{"id": f"btn_confirm_cancel_{appt.id}", "title": "SÍ, Cancelar ❌"}, {"id": "btn_volver_menu", "title": "NO, Volver 🔙"}]
+            body_text=f"⚠️ *¿Estás seguro de cancelar tu turno?*\n\n💇‍♀️ *Servicio{'s' if len(v['services']) > 1 else ''}:* {services_str}\n📅 *Fecha:* {v['date_str']} a las {v['time_str']} hs",
+            buttons=[{"id": f"btn_confirm_cancel_{v['primary_id']}", "title": "SÍ, Cancelar ❌"}, {"id": "btn_volver_menu", "title": "NO, Volver 🔙"}]
         )
     else:
-        rows = [{"id": f"cancel_appt_{appt.id}", "title": f"Turno {appt.scheduled_date.strftime('%d/%m')}"[:24], "description": "Cancelar este turno"} for appt in upcoming[:10]]
-        await send_interactive_list(phone=phone, body_text="Tienes varios turnos agendados. Selecciona cuál deseas cancelar:", button_label="Ver Turnos 📋", sections=[{"title": "Turnos Activos"[:24], "rows": rows}])
+        rows = [
+            {
+                "id": f"cancel_appt_{v['primary_id']}",
+                "title": f"Turno {v['date_str']} {v['time_str']}"[:24],
+                "description": f"{', '.join(v['services'])}"[:72]
+            }
+            for v in visits[:10]
+        ]
+        await send_interactive_list(
+            phone=phone,
+            body_text="Tienes varios turnos agendados. Selecciona cuál deseas cancelar:",
+            button_label="Ver Turnos 📋",
+            sections=[{"title": "Turnos Activos"[:24], "rows": rows}]
+        )
 
 async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dict, business_id: int, db: Session):
     if button_id.startswith("btn_confirm_cancel_"):
         try:
             appt_id = int(button_id.replace("btn_confirm_cancel_", ""))
-            if cancel_appointment(db=db, appointment_id=appt_id, business_id=business_id, reason="Cancelado por el cliente"):
-                log_event(session_id=phone, business_id=business_id, event_type="appointment_cancelled", payload={"appointment_id": appt_id, "reason": "cancelado_por_cliente"})
+            appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+            if appt:
+                tz_str = get_business_timezone(db, business_id)
+                tz = zoneinfo.ZoneInfo(tz_str)
+                local_dt = appt.scheduled_date.astimezone(tz)
+                
+                # Buscar todos los turnos consecutivos del cliente en esa misma visita
+                client_appts = get_appointments_by_phone(db, business_id, phone)
+                group = [
+                    a for a in client_appts
+                    if a.status in ["scheduled", "confirmed"]
+                    and a.scheduled_date.astimezone(tz).date() == local_dt.date()
+                    and abs((a.scheduled_date.astimezone(tz) - local_dt).total_seconds()) < 7200
+                ]
+                
+                for a in group:
+                    cancel_appointment(db=db, appointment_id=a.id, business_id=business_id, reason="Cancelado por el cliente")
+                    log_event(session_id=phone, business_id=business_id, event_type="appointment_cancelled", payload={"appointment_id": a.id, "reason": "cancelado_por_cliente"})
+                    
                 await send_interactive_buttons(phone=phone, body_text="✅ Tu turno ha sido cancelado con éxito. El horario fue liberado.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
             else:
                 await send_interactive_buttons(phone=phone, body_text="⚠️ Ocurrió un inconveniente al cancelar tu turno.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
@@ -787,15 +892,36 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         appt_id = int(selected_id.replace("btn_mod_appt_", "").replace("rem_mod_", ""))
                         appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
                         if appt:
-                            service = db.query(Service).filter(Service.id == appt.service_id).first()
-                            cancel_appointment(db, appt_id, current_business_id, "Modificación solicitada por el cliente")
+                            tz_str = get_business_timezone(db, current_business_id)
+                            tz = zoneinfo.ZoneInfo(tz_str)
+                            local_dt = appt.scheduled_date.astimezone(tz)
+                            
+                            # Cancelar todos los servicios pertenecientes a la misma visita/sesión
+                            client_appts = get_appointments_by_phone(db, current_business_id, phone_number)
+                            group = [
+                                a for a in client_appts
+                                if a.status in ["scheduled", "confirmed"]
+                                and a.scheduled_date.astimezone(tz).date() == local_dt.date()
+                                and abs((a.scheduled_date.astimezone(tz) - local_dt).total_seconds()) < 7200
+                            ]
+                            
+                            services_list = []
+                            for a in group:
+                                svc = db.query(Service).filter(Service.id == a.service_id).first()
+                                cancel_appointment(db, a.id, current_business_id, "Modificación solicitada por el cliente")
+                                if svc:
+                                    services_list.append({
+                                        "id": svc.id,
+                                        "name": svc.name,
+                                        "duration": svc.duration_minutes or 30,
+                                        "price": float(svc.price or 0)
+                                    })
+                            
+                            if not services_list:
+                                services_list = [{"id": appt.service_id, "name": "Servicio", "duration": 30, "price": 0}]
+
                             await send_message(phone_number, "Vamos a reprogramar tu turno. Selecciona la nueva fecha:")
-                            user_state["servicios"] = [{
-                                "id": appt.service_id,
-                                "name": service.name if service else "Servicio",
-                                "duration": service.duration_minutes if service else 30,
-                                "price": float(service.price) if service else 0.0
-                            }]
+                            user_state["servicios"] = services_list
                             await show_date_selection(phone_number, user_state, current_business_id, db)
                     elif selected_id.startswith("rem_conf_"):
                         appt_id = int(selected_id.replace("rem_conf_", ""))
