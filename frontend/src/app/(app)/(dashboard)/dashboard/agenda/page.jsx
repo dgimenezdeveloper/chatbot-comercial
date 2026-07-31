@@ -24,13 +24,13 @@ const SERVICE_NAMES = {
  * Mapea los turnos devueltos por el backend al formato visual que requiere la Agenda.
  */
 function toAgendaAppointment(turno) {
-  const date = turno.date || turno.fecha || new Date().toISOString().split("T")[0];
+  const date = turno.date || turno.fecha || new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
   const startTime = turno.startTime || turno.time || turno.hora || "09:00";
   let endTime = turno.endTime;
 
   if (!endTime) {
     const [hours, minutes] = startTime.split(":").map(Number);
-    const duration = turno.durationMinutes || 45;
+    const duration = turno.durationMinutes || 30;
     const endMinutes = (minutes || 0) + duration;
     const endHours = (hours || 9) + Math.floor(endMinutes / 60);
     endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;

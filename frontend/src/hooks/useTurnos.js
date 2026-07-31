@@ -18,8 +18,8 @@ function toFrontend(t) {
     time: t.startTime || t.hora, 
     startTime: t.startTime || t.hora,
     endTime: t.endTime,
+    durationMinutes: t.durationMinutes || t.duracion_minutos || 30,
     status: t.status || t.estado,
-    // CORRECCIÓN: El backend envía 'nombre_cliente' y 'nombre_servicio'
     clientName: t.clientName || t.nombre_cliente || t.telefono || "Cliente",
     serviceName: t.serviceName || t.nombre_servicio || `Servicio #${t.servicio_id || 1}`,
     tone: t.tone || "green",
@@ -44,11 +44,8 @@ export function useTurnos() {
     select: (data) => data.map(toFrontend),
   });
 
-  // Filtrar los turnos de "Hoy" ajustando a la zona horaria local (Ej: Argentina GMT-3)
-  // para evitar que el UTC cambie de día antes de tiempo.
-  const todayDate = new Date();
-  const offset = todayDate.getTimezoneOffset() * 60000;
-  const localISOTime = new Date(todayDate.getTime() - offset).toISOString().split("T")[0];
+  // Filtrar los turnos de "Hoy" en la zona horaria local del negocio (Argentina GMT-3)
+  const localISOTime = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
   
   const todayTurnos = turnos.filter((t) => t.date === localISOTime);
 

@@ -20,3 +20,4 @@ class TurnoResponse(TurnoRequest):
     estado: str = Field(default="confirmado", description="Estado actual del turno")
     nombre_cliente: Optional[str] = Field(None, description="Nombre legible del cliente")
     nombre_servicio: Optional[str] = Field(None, description="Nombre legible del servicio")
+    duracion_minutos: Optional[int] = Field(30, description="Duración del servicio en minutos")

@@ -1,5 +1,7 @@
 """Router de configuración de negocio y gestión de clientes."""
 
+import zoneinfo
+from datetime import timezone
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from app.db.database import get_db
 from app.db.models.appointment import Appointment
 from app.db.models.business import Business
 from app.schemas.admin import NegocioRequest, NegocioResponse
+from app.services.negocio import get_business_timezone
 
 router = APIRouter()
 
@@ -70,6 +73,8 @@ async def listar_clientes(
 ):
     """Retorna la lista de clientes reales (excluyendo a los administradores de la lista blanca)."""
     business_id = current_user.get("business_id", 1)
+    tz_str = get_business_timezone(db, business_id)
+    tz = zoneinfo.ZoneInfo(tz_str)
 
     appointments = (
         db.query(
@@ -86,12 +91,19 @@ async def listar_clientes(
     client_list = []
     for idx, appt in enumerate(appointments):
         phone = appt.user_phone or "Sin teléfono"
+        last_visit_str = "Sin visitas"
+        if appt.ultimo_turno:
+            dt = appt.ultimo_turno
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            last_visit_str = dt.astimezone(tz).strftime("%d/%m/%Y")
+
         client_list.append({
             "id": str(idx + 1),
             "name": appt.user_name or f"Cliente {phone[-4:]}",
             "phone": phone,
             "appointments": appt.total_turnos,
-            "lastVisit": appt.ultimo_turno.strftime("%d/%m/%Y") if appt.ultimo_turno else "Sin visitas"
+            "lastVisit": last_visit_str
         })
 
     return client_list

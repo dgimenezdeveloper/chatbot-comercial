@@ -16,9 +16,11 @@ import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG = {
   confirmed: { label: "Confirmado", className: "bg-success/15 text-success border border-success/30" },
+  confirmado: { label: "Confirmado", className: "bg-success/15 text-success border border-success/30" },
   completed: { label: "Completado", className: "bg-primary/15 text-primary border border-primary/30" },
   scheduled: { label: "Agendado", className: "bg-warning/15 text-warning-foreground border border-warning/40" },
   cancelled: { label: "Cancelado", className: "bg-destructive/10 text-destructive border border-destructive/30" },
+  cancelado: { label: "Cancelado", className: "bg-destructive/10 text-destructive border border-destructive/30" },
 };
 
 function StatCard({ value, label }) {
@@ -68,7 +70,7 @@ export default async function DashboardPage() {
 
     if (res.ok) {
       const turnos = await res.json();
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
 
       const hoy = turnos.filter((t) => t.fecha === todayStr);
 
