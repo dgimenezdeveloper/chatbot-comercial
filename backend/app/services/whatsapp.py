@@ -82,7 +82,7 @@ async def send_interactive_buttons(phone: str, body_text: str, buttons: list) ->
         formatted_buttons.append({
             "type": "reply",
             "reply": {
-                "id": btn["id"],
+                "id": btn["id"][:256],
                 "title": btn["title"][:20]
             }
         })
@@ -129,7 +129,7 @@ async def send_interactive_list(
             total_rows += 1
             
         formatted_sections.append({
-            "title": sec.get("title", "")[:20],
+            "title": sec.get("title", "")[:24],
             "rows": section_rows
         })
 

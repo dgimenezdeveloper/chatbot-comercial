@@ -73,26 +73,17 @@ def get_business_timezone(db: Session, business_id: int) -> str:
 
 
 def get_available_slots(
-    db: Session, service_id: int, business_id: int, target_date: date
+    db: Session, duration_minutes: int, business_id: int, target_date: date
 ) -> list[datetime]:
-    """Calcula los slots disponibles para un servicio en una fecha sin superposiciones.
+    """Calcula los slots disponibles para una duración en una fecha sin superposiciones.
 
     Garantiza que un único profesional (un solo cliente a la vez) no tenga turnos solapados,
     considerando la duración del servicio solicitado y los turnos existentes.
     Además, filtra los horarios que ya pasaron en el día actual.
     """
-    service = (
-        db.query(Service)
-        .filter(Service.id == service_id, Service.business_id == business_id)
-        .first()
-    )
-    if not service:
-        return []
-
-    # Horario laboral habitual (09:00 a 20:00)
     start_hour = 9
     end_hour = 20
-    duration = service.duration_minutes or 30
+    duration = duration_minutes or 30
 
     tz_str = get_business_timezone(db, business_id)
     tz = zoneinfo.ZoneInfo(tz_str)
@@ -140,7 +131,7 @@ def get_available_slots(
     if target_date == now_local.date():
         buffer_time = now_local + timedelta(minutes=15)
         while current <= buffer_time:
-            current += timedelta(minutes=duration)
+            current += timedelta(minutes=30)
 
     # 3. Iterar cada slot posible y validar colisiones de intervalos de tiempo
     while current + timedelta(minutes=duration) <= day_end:
@@ -157,6 +148,6 @@ def get_available_slots(
         if is_free:
             slots.append(current)
 
-        current += timedelta(minutes=duration)
+        current += timedelta(minutes=30)
 
     return slots

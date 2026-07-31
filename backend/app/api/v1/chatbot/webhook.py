@@ -11,9 +11,11 @@ from app.db.database import get_db
 from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
 from app.db.models.service import Service
+from app.db.models.product import Product
 from app.db.models.user import User
 from app.db.models.business import Business
 from app.db.models.faq import FAQ
+from app.db.models.appointment import Appointment
 from app.services.whatsapp import send_message, send_interactive_buttons, send_interactive_list
 from app.services.state_manager import (
     get_user_state, set_user_state, clear_user_state,
@@ -70,8 +72,7 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
 
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
     """Valida si la opción interactiva elegida pertenece al paso conversacional activo."""
-    # Botones del Menú Principal y Volver al Menú SIEMPRE son válidos
-    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"]:
+    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"] or selected_id.startswith("rem_"):
         return True
 
     if current_step == "NUEVO":
@@ -80,8 +81,11 @@ def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
     allowed_prefixes_per_state = {
         "MENU_PRINCIPAL": ["srv_", "action_ver_turno", "action_cancelar_turno", "prod_", "faq_", "btn_hablar_humano"],
         "SELECCIONANDO_SERVICIO": ["srv_", "action_ver_turno", "action_cancelar_turno"],
-        "SELECCIONANDO_SLOT": ["slot_", "more_dates_", "date_"],
+        "CONFIRMANDO_MAS_SERVICIOS": ["btn_agregar_servicio", "btn_continuar_fecha"],
+        "SELECCIONANDO_FECHA": ["date_"],
+        "SELECCIONANDO_SLOT": ["slot_", "page_slot_", "btn_continuar_fecha"],
         "SELECCIONANDO_PRODUCTO": ["prod_"],
+        "CONFIRMANDO_MAS_PRODUCTOS": ["btn_agregar_producto", "btn_finalizar_pedido"],
         "SELECCIONANDO_FAQ": ["faq_", "btn_hablar_humano"],
         "ESPERANDO_FAQ": ["faq_", "btn_hablar_humano"],
         "CONFIRMA_CANCELACION": ["btn_confirm_cancel_"],
@@ -183,6 +187,9 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
     nombre_negocio = get_business_name(db, business_id)
 
     if button_id == "btn_turnos":
+        if user_state.get("estado") != "CONFIRMANDO_MAS_SERVICIOS":
+            user_state["servicios"] = []
+            
         services = get_active_services(db, business_id)
         if not services:
             await send_message(phone=phone, text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.")
@@ -190,12 +197,12 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
 
         rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:7]]
         sections = [
-            {"title": "Selecciona un Servicio"[:20], "rows": rows_services},
-            {"title": "Mi Cuenta"[:20], "rows": [
+            {"title": "Selecciona un Servicio"[:24], "rows": rows_services},
+            {"title": "Mi Cuenta"[:24], "rows": [
                 {"id": "action_ver_turno", "title": "👀 Ver mi próximo turno", "description": "Consulta tu reserva activa"},
                 {"id": "action_cancelar_turno", "title": "❌ Cancelar turno", "description": "Libera tu horario agendado"}
             ]},
-            {"title": "Navegación"[:20], "rows": [
+            {"title": "Navegación"[:24], "rows": [
                 {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
             ]}
         ]
@@ -205,6 +212,9 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
         await send_interactive_list(phone=phone, body_text="Selecciona el servicio para tu cita o gestiona tus turnos:", button_label="Ver Opciones 📋", sections=sections, header_text="Agenda de Turnos", footer_text=nombre_negocio)
 
     elif button_id == "btn_catalogo":
+        if user_state.get("estado") != "CONFIRMANDO_MAS_PRODUCTOS":
+            user_state["productos"] = []
+            
         products = get_products(db, business_id)
         if not products:
             await send_message(phone=phone, text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.")
@@ -212,8 +222,8 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
 
         rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:9]]
         sections = [
-            {"title": "Catálogo"[:20], "rows": rows},
-            {"title": "Navegación"[:20], "rows": [
+            {"title": "Catálogo"[:24], "rows": rows},
+            {"title": "Navegación"[:24], "rows": [
                 {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
             ]}
         ]
@@ -242,8 +252,8 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
         rows.append({"id": "btn_hablar_humano", "title": "👤 Hablar con un humano", "description": "Conectar con un representante real"})
 
         sections = [
-            {"title": "Consultas Frecuentes"[:20], "rows": rows},
-            {"title": "Navegación"[:20], "rows": [
+            {"title": "Consultas Frecuentes"[:24], "rows": rows},
+            {"title": "Navegación"[:24], "rows": [
                 {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}
             ]}
         ]
@@ -265,76 +275,129 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
         return
 
     svc_db_id = int(selected_id.replace("srv_", "")) if selected_id.startswith("srv_") else 1
-    user_state["servicio_id"] = svc_db_id
-    user_state["servicio_seleccionado"] = row_title
+    service = db.query(Service).filter(Service.id == svc_db_id).first()
+    if not service:
+        await send_message(phone, "Servicio no encontrado.")
+        return
 
-    today = date.today()
-    tomorrow = today + timedelta(days=1)
-
-    slots_today = get_available_slots(db, svc_db_id, business_id, today)
-    slots_tomorrow = get_available_slots(db, svc_db_id, business_id, tomorrow)
-
-    rows_today = [{"id": f"slot_{today.isoformat()}_{slot.strftime('%H%M')}", "title": f"Hoy {slot.strftime('%H:%M')} hs"[:24], "description": f"Turno para {row_title}"[:72]} for slot in slots_today[:4]]
-    rows_tomorrow = [{"id": f"slot_{tomorrow.isoformat()}_{slot.strftime('%H%M')}", "title": f"Mañana {slot.strftime('%H:%M')} hs"[:24], "description": f"Turno para {row_title}"[:72]} for slot in slots_tomorrow[:4]]
-
-    sections = []
-    if rows_today: sections.append({"title": "Hoy"[:20], "rows": rows_today})
-    if rows_tomorrow: sections.append({"title": "Mañana"[:20], "rows": rows_tomorrow})
-
-    sections.append({
-        "title": "Navegación"[:20],
-        "rows": [
-            {"id": f"more_dates_{svc_db_id}", "title": "📅 Elegir otra fecha", "description": "Ver disponibilidad próximos días"},
-            {"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Cambiar de servicio o volver al inicio"}
-        ]
+    servicios = user_state.get("servicios", [])
+    servicios.append({
+        "id": svc_db_id,
+        "name": service.name,
+        "duration": service.duration_minutes or 30,
+        "price": float(service.price or 0)
     })
-
-    user_state["estado"] = "SELECCIONANDO_SLOT"
+    user_state["servicios"] = servicios
+    user_state["estado"] = "CONFIRMANDO_MAS_SERVICIOS"
     await set_user_state(phone, user_state)
-    await send_interactive_list(phone=phone, body_text=f"Servicio: *{row_title}*.\nSelecciona el horario que mejor te convenga:", button_label="Ver Opciones ⏰", sections=sections)
 
-async def handle_more_dates_selection(phone: str, selected_id: str, user_state: dict, business_id: int, db: Session):
-    svc_db_id = int(selected_id.replace("more_dates_", ""))
-    user_state["servicio_id"] = svc_db_id
-    await set_user_state(phone, user_state)
-    
+    total_price = sum(s["price"] for s in servicios)
+    total_duration = sum(s["duration"] for s in servicios)
+    names = ", ".join(s["name"] for s in servicios)
+
+    body_text = f"Has seleccionado: *{names}*.\nDuración total aprox: {total_duration} min.\nTotal: ${total_price:,.0f}.\n\n¿Deseas agregar otro servicio?"
+    buttons = [
+        {"id": "btn_agregar_servicio", "title": "➕ Agregar otro"},
+        {"id": "btn_continuar_fecha", "title": "✅ Continuar"}
+    ]
+    await send_interactive_buttons(phone=phone, body_text=body_text, buttons=buttons)
+
+async def show_date_selection(phone: str, user_state: dict, business_id: int, db: Session):
     today = date.today()
     rows = []
-    for i in range(2, 9):
-        target_date = today + timedelta(days=i)
-        slots = get_available_slots(db, svc_db_id, business_id, target_date)
-        if slots:
-            rows.append({
-                "id": f"date_{target_date.isoformat()}",
-                "title": target_date.strftime("%d/%m/%Y"),
-                "description": f"{len(slots)} horarios disponibles"
-            })
     
+    servicios = user_state.get("servicios", [])
+    if not servicios:
+        await handle_main_menu_selection(phone, "btn_turnos", user_state, business_id, db)
+        return
+        
+    total_duration = sum(s["duration"] for s in servicios)
+    
+    days_checked = 0
+    current_date = today
+    
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    
+    while len(rows) < 9 and days_checked < 30:
+        slots = get_available_slots(db, total_duration, business_id, current_date)
+        if slots:
+            if current_date == today:
+                title = f"Hoy {current_date.day} de {meses[current_date.month - 1]}"
+            elif current_date == today + timedelta(days=1):
+                title = f"Mañana {current_date.day} de {meses[current_date.month - 1]}"
+            else:
+                title = f"{dias[current_date.weekday()]} {current_date.day} de {meses[current_date.month - 1]}"
+                
+            rows.append({
+                "id": f"date_{current_date.isoformat()}",
+                "title": title[:24],
+                "description": f"{len(slots)} horarios disponibles"[:72]
+            })
+        current_date += timedelta(days=1)
+        days_checked += 1
+
     if not rows:
         await send_interactive_buttons(phone=phone, body_text="No hay fechas disponibles próximamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
         return
 
     sections = [
-        {"title": "Próximos días"[:20], "rows": rows[:9]},
-        {"title": "Navegación"[:20], "rows": [{"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}]}
+        {"title": "Fechas Disponibles"[:24], "rows": rows},
+        {"title": "Navegación"[:24], "rows": [{"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}]}
     ]
-        
-    await send_interactive_list(phone=phone, body_text="Selecciona la fecha que prefieras:", button_label="Ver Fechas 📅", sections=sections)
+    
+    user_state["estado"] = "SELECCIONANDO_FECHA"
+    await set_user_state(phone, user_state)
+    await send_interactive_list(phone=phone, body_text="Selecciona la fecha para tu turno:", button_label="Ver Fechas 📅", sections=sections)
 
-async def handle_specific_date_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
-    fecha_iso = selected_id.replace("date_", "")
-    target_date = date.fromisoformat(fecha_iso)
-    svc_db_id = user_state.get("servicio_id", 1)
-    
-    slots = get_available_slots(db, svc_db_id, business_id, target_date)
-    rows = [{"id": f"slot_{fecha_iso}_{slot.strftime('%H%M')}", "title": f"{slot.strftime('%H:%M')} hs"[:24], "description": "Horario disponible"} for slot in slots[:9]]
-    
-    sections = [
-        {"title": "Horarios"[:20], "rows": rows},
-        {"title": "Navegación"[:20], "rows": [{"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"}]}
-    ]
+async def handle_date_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
+    if selected_id.startswith("date_"):
+        fecha_iso = selected_id.replace("date_", "")
+        user_state["fecha_iso"] = fecha_iso
+        page = 0
+    elif selected_id.startswith("page_slot_"):
+        page = int(selected_id.replace("page_slot_", ""))
+        fecha_iso = user_state.get("fecha_iso")
+    else:
+        fecha_iso = user_state.get("fecha_iso")
+        page = 0
         
-    await send_interactive_list(phone=phone, body_text=f"Horarios para el {row_title}:", button_label="Ver Horarios ⏰", sections=sections)
+    if not fecha_iso:
+        await show_date_selection(phone, user_state, business_id, db)
+        return
+        
+    target_date = date.fromisoformat(fecha_iso)
+    servicios = user_state.get("servicios", [])
+    total_duration = sum(s["duration"] for s in servicios)
+    
+    slots = get_available_slots(db, total_duration, business_id, target_date)
+    
+    items_per_page = 8
+    start_idx = page * items_per_page
+    end_idx = start_idx + items_per_page
+    current_slots = slots[start_idx:end_idx]
+    
+    rows = [{"id": f"slot_{fecha_iso}_{slot.strftime('%H%M')}", "title": f"{slot.strftime('%H:%M')} hs"[:24], "description": "Horario disponible"} for slot in current_slots]
+    
+    nav_rows = []
+    if end_idx < len(slots):
+        nav_rows.append({"id": f"page_slot_{page + 1}", "title": "➡️ Más horarios", "description": "Ver más horarios para este día"})
+    nav_rows.append({"id": "btn_continuar_fecha", "title": "📅 Elegir otra fecha", "description": "Volver a la selección de fecha"})
+    nav_rows.append({"id": "btn_volver_menu", "title": "🔙 Menú Principal", "description": "Volver al inicio"})
+
+    sections = [
+        {"title": "Horarios"[:24], "rows": rows},
+        {"title": "Navegación"[:24], "rows": nav_rows}
+    ]
+    
+    user_state["estado"] = "SELECCIONANDO_SLOT"
+    await set_user_state(phone, user_state)
+    
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    date_str = f"{dias[target_date.weekday()]} {target_date.day} de {meses[target_date.month - 1]}"
+    
+    await send_interactive_list(phone=phone, body_text=f"Horarios para el *{date_str}*:", button_label="Ver Horarios ⏰", sections=sections)
 
 async def handle_slot_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
     parts = selected_id.replace("slot_", "").split("_")
@@ -347,33 +410,46 @@ async def handle_slot_selection(phone: str, selected_id: str, row_title: str, us
     else:
         user_state["estado"] = "ESPERANDO_NOMBRE_TURNO"
         await set_user_state(phone, user_state)
-        await send_message(phone=phone, text=f"Elegiste *{row_title}*.\nPara confirmar, escribe tu *Nombre y Apellido* por teclado:")
+        servicios = user_state.get("servicios", [])
+        names = ", ".join(s["name"] for s in servicios)
+        await send_message(phone=phone, text=f"Elegiste *{names}* el {parts[0]} a las {user_state['hora_seleccionada']} hs.\nPara confirmar, escribe tu *Nombre y Apellido* por teclado:")
 
 async def execute_appointment_creation(phone: str, client_name: str, user_state: dict, business_id: int, db: Session):
     fecha_iso = user_state.get("fecha_iso", date.today().isoformat())
     hora_str = user_state.get("hora_seleccionada", "10:00")
-    servicio_nombre = user_state.get("servicio_seleccionado", "Servicio General")
-    servicio_id = user_state.get("servicio_id", 1)
+    servicios = user_state.get("servicios", [])
+    
+    if not servicios:
+        await send_message(phone, "Error: No hay servicios seleccionados.")
+        return
 
     tz_str = get_business_timezone(db, business_id)
     tz = zoneinfo.ZoneInfo(tz_str)
-    scheduled_date = datetime.strptime(f"{fecha_iso} {hora_str}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+    start_time = datetime.strptime(f"{fecha_iso} {hora_str}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
 
     user = get_or_create_user(db, phone, business_id, name=client_name.strip())
 
-    appt_data = {
-        "business_id": business_id, "user_id": user.id if user else None, "user_phone": phone,
-        "user_name": client_name.strip()[:200], "service_id": servicio_id, "scheduled_date": scheduled_date,
-        "status": "confirmed", "created_via": "chatbot", "session_id": phone
-    }
+    current_time = start_time
+    created_appts = []
+    for s in servicios:
+        appt_data = {
+            "business_id": business_id, "user_id": user.id if user else None, "user_phone": phone,
+            "user_name": client_name.strip()[:200], "service_id": s["id"], "scheduled_date": current_time,
+            "status": "confirmed", "created_via": "chatbot", "session_id": phone
+        }
+        try:
+            appointment = create_appointment(db, appt_data)
+            created_appts.append(appointment)
+            current_time += timedelta(minutes=s["duration"])
+        except Exception as e:
+            logger.error(f"Error creando turno para servicio {s['id']}: {e}")
 
-    try:
-        appointment = create_appointment(db, appt_data)
-        log_event(session_id=phone, business_id=business_id, event_type="appointment_created", payload={"appointment_id": appointment.id, "via_bot": True, "servicio": servicio_nombre, "fecha": fecha_iso, "hora": hora_str})
-        confirm_msg = f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicio:* {servicio_nombre}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora:* {hora_str} hs\n\nTe esperamos en nuestro local."
+    names = ", ".join(s["name"] for s in servicios)
+    if created_appts:
+        log_event(session_id=phone, business_id=business_id, event_type="appointment_created", payload={"appointment_ids": [a.id for a in created_appts], "via_bot": True, "servicios": names, "fecha": fecha_iso, "hora": hora_str})
+        confirm_msg = f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicios:* {names}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora de inicio:* {hora_str} hs\n\nTe esperamos en nuestro local."
         await send_interactive_buttons(phone=phone, body_text=confirm_msg, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
-    except Exception as e:
-        logger.error(f"Error creando turno: {e}")
+    else:
         await send_interactive_buttons(phone=phone, body_text="Error al procesar la reserva. Intenta nuevamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
     
     await clear_user_state(phone)
@@ -383,24 +459,47 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
 # =============================================================================
 
 async def handle_product_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
-    user_state["producto_seleccionado"] = row_title
-    known_name = get_existing_user_name(db, phone, business_id)
+    prod_db_id = int(selected_id.replace("prod_", ""))
+    product = db.query(Product).filter(Product.id == prod_db_id).first()
+    if not product:
+        await send_message(phone, "Producto no encontrado.")
+        return
 
-    if known_name:
-        await execute_product_reservation(phone, known_name, row_title, business_id, db)
-    else:
-        user_state["estado"] = "ESPERANDO_NOMBRE_CATALOGO"
-        await set_user_state(phone, user_state)
-        await send_message(phone=phone, text=f"Reservando: *{row_title}*.\nEscribe tu *Nombre y Apellido* para guardar tu pedido:")
+    productos = user_state.get("productos", [])
+    productos.append({
+        "id": prod_db_id,
+        "name": product.name,
+        "price": float(product.price or 0)
+    })
+    user_state["productos"] = productos
+    user_state["estado"] = "CONFIRMANDO_MAS_PRODUCTOS"
+    await set_user_state(phone, user_state)
 
-async def execute_product_reservation(phone: str, client_name: str, product_name: str, business_id: int, db: Session):
+    total_price = sum(p["price"] for p in productos)
+    names = "\n- ".join(p["name"] for p in productos)
+
+    body_text = f"Has agregado: *{product.name}*.\n\nCarrito actual:\n{names}\nTotal: ${total_price:,.0f}.\n\n¿Deseas agregar otro producto?"
+    buttons = [
+        {"id": "btn_agregar_producto", "title": "➕ Agregar otro"},
+        {"id": "btn_finalizar_pedido", "title": "✅ Finalizar pedido"}
+    ]
+    await send_interactive_buttons(phone=phone, body_text=body_text, buttons=buttons)
+
+async def execute_product_reservation(phone: str, client_name: str, user_state: dict, business_id: int, db: Session):
     user = get_or_create_user(db, phone, business_id, name=client_name.strip())
+    productos = user_state.get("productos", [])
+    total_price = sum(p["price"] for p in productos)
+    names = "\n- ".join(p["name"] for p in productos)
+    
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    horarios = biz.horarios if biz and biz.horarios else "nuestro horario de atención"
+
     await send_interactive_buttons(
         phone=phone, 
-        body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de *{product_name}* está asentada. Puedes pasar a retirarlo por el local.",
+        body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de:\n{names}\nTotal: ${total_price:,.0f}\n\nEstá asentada. Puedes pasar a retirarlo por el local en {horarios}.",
         buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
     )
-    log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "producto": product_name})
+    log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "productos": names, "total": total_price})
     await clear_user_state(phone)
 
 # =============================================================================
@@ -456,7 +555,7 @@ async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_
         )
     else:
         rows = [{"id": f"cancel_appt_{appt.id}", "title": f"Turno {appt.scheduled_date.strftime('%d/%m')}"[:24], "description": "Cancelar este turno"} for appt in upcoming[:10]]
-        await send_interactive_list(phone=phone, body_text="Tienes varios turnos agendados. Selecciona cuál deseas cancelar:", button_label="Ver Turnos 📋", sections=[{"title": "Turnos Activos"[:20], "rows": rows}])
+        await send_interactive_list(phone=phone, body_text="Tienes varios turnos agendados. Selecciona cuál deseas cancelar:", button_label="Ver Turnos 📋", sections=[{"title": "Turnos Activos"[:24], "rows": rows}])
 
 async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dict, business_id: int, db: Session):
     if button_id.startswith("btn_confirm_cancel_"):
@@ -518,10 +617,6 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
 
     await set_user_state(phone, user_state)
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
-
-def clean_phone_number(phone: str | None) -> str:
-    if not phone: return ""
-    return "".join(c for c in phone if c.isdigit())
 
 # =============================================================================
 # ENRUTADOR PRINCIPAL (WEBHOOK ENDPOINT)
@@ -619,8 +714,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif current_step == "ESPERANDO_NOMBRE_TURNO":
                     await execute_appointment_creation(phone_number, user_text, user_state, current_business_id, db)
                 elif current_step == "ESPERANDO_NOMBRE_CATALOGO":
-                    prod_name = user_state.get("producto_seleccionado", "Producto")
-                    await execute_product_reservation(phone_number, user_text, prod_name, current_business_id, db)
+                    await execute_product_reservation(phone_number, user_text, user_state, current_business_id, db)
                 elif current_step in ["ESPERANDO_FAQ", "SELECCIONANDO_FAQ"]:
                     await handle_faq_query(phone_number, user_text, user_state, current_business_id, db)
                 else:
@@ -659,10 +753,22 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         await handle_main_menu_selection(phone_number, selected_id, user_state, current_business_id, db)
                     elif selected_id.startswith("srv_") or selected_id in ["action_ver_turno", "action_cancelar_turno"]:
                         await handle_service_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
-                    elif selected_id.startswith("more_dates_"):
-                        await handle_more_dates_selection(phone_number, selected_id, user_state, current_business_id, db)
-                    elif selected_id.startswith("date_"):
-                        await handle_specific_date_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
+                    elif selected_id == "btn_agregar_servicio":
+                        await handle_main_menu_selection(phone_number, "btn_turnos", user_state, current_business_id, db)
+                    elif selected_id == "btn_continuar_fecha":
+                        await show_date_selection(phone_number, user_state, current_business_id, db)
+                    elif selected_id == "btn_agregar_producto":
+                        await handle_main_menu_selection(phone_number, "btn_catalogo", user_state, current_business_id, db)
+                    elif selected_id == "btn_finalizar_pedido":
+                        known_name = get_existing_user_name(db, phone_number, current_business_id)
+                        if known_name:
+                            await execute_product_reservation(phone_number, known_name, user_state, current_business_id, db)
+                        else:
+                            user_state["estado"] = "ESPERANDO_NOMBRE_CATALOGO"
+                            await set_user_state(phone_number, user_state)
+                            await send_message(phone=phone_number, text=f"Para finalizar tu pedido, escribe tu *Nombre y Apellido* por teclado:")
+                    elif selected_id.startswith("date_") or selected_id.startswith("page_slot_"):
+                        await handle_date_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("slot_"):
                         await handle_slot_selection(phone_number, selected_id, row_title, user_state, current_business_id, db)
                     elif selected_id.startswith("prod_"):
@@ -676,6 +782,25 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         except ValueError:
                             await send_message(phone_number, "Error al procesar la lista de cancelación.")
                             await clear_user_state(phone_number)
+                    elif selected_id.startswith("rem_conf_"):
+                        appt_id = int(selected_id.replace("rem_conf_", ""))
+                        appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+                        if appt:
+                            appt.no_show_status = "confirmed_yes"
+                            db.commit()
+                        await send_message(phone_number, "¡Gracias por confirmar! Te esperamos.")
+                    elif selected_id.startswith("rem_mod_"):
+                        appt_id = int(selected_id.replace("rem_mod_", ""))
+                        appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+                        if appt:
+                            cancel_appointment(db, appt_id, current_business_id, "Modificación desde recordatorio")
+                            await send_message(phone_number, "Vamos a reprogramar tu turno. Selecciona la nueva fecha:")
+                            user_state["servicios"] = [{"id": appt.service_id, "name": "Servicio", "duration": 30, "price": 0}]
+                            await show_date_selection(phone_number, user_state, current_business_id, db)
+                    elif selected_id.startswith("rem_canc_"):
+                        appt_id = int(selected_id.replace("rem_canc_", ""))
+                        cancel_appointment(db, appt_id, current_business_id, "Cancelado desde recordatorio")
+                        await send_message(phone_number, "Tu turno ha sido cancelado. ¡Gracias por avisar!")
 
     except Exception as e:
         logger.error(f"Error procesando webhook: {str(e)}")

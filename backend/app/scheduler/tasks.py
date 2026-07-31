@@ -16,7 +16,7 @@ from app.db.models.events import Event
 from app.db.models.reminder_log import ReminderLog
 from app.scheduler.config import celery_app
 from app.services.metrics_types import EventType
-from app.services.whatsapp import send_message
+from app.services.whatsapp import send_message, send_interactive_buttons
 from app.services.event_logger import log_event
 
 logger = logging.getLogger(__name__)
@@ -202,9 +202,14 @@ async def _process_reminders(db, appointments) -> dict:
 
                 # Nivel 2: Ventana 24h
                 elif _within_24h_window(db, appt):
-                    await send_message(
+                    await send_interactive_buttons(
                         phone=appt.user_phone,
-                        text=f"Recordatorio: tenés un turno mañana a las {appt.scheduled_date.strftime('%H:%M')}.",
+                        body_text=f"Recordatorio: tenés un turno mañana a las {appt.scheduled_date.strftime('%H:%M')}.\n¿Podrás asistir?",
+                        buttons=[
+                            {"id": f"rem_conf_{appt.id}", "title": "✅ Confirmar"},
+                            {"id": f"rem_mod_{appt.id}", "title": "🔄 Modificar"},
+                            {"id": f"rem_canc_{appt.id}", "title": "❌ Cancelar"}
+                        ]
                     )
                     log_entry.status = "sent"
                     log_entry.channel = "whatsapp_text"
@@ -350,3 +355,56 @@ async def _send_template_reminder(appointment, business) -> None:
         phone=appointment.user_phone,
         text=f"Recordatorio: {business.name} te espera mañana a las {appointment.scheduled_date.strftime('%H:%M')}.",
     )
+
+
+@celery_app.task(name="app.scheduler.tasks.send_reminders_2h")
+def send_reminders_2h() -> dict:
+    """Envía un recordatorio 2 horas antes del turno."""
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        target_start = now + timedelta(hours=2)
+        target_end = target_start + timedelta(minutes=15)
+
+        appointments = (
+            db.query(Appointment)
+            .filter(
+                Appointment.scheduled_date >= target_start,
+                Appointment.scheduled_date < target_end,
+                Appointment.status.in_(["scheduled", "confirmed"]),
+            )
+            .all()
+        )
+        
+        to_send = []
+        for appt in appointments:
+            log = db.query(ReminderLog).filter(
+                ReminderLog.appointment_id == appt.id,
+                ReminderLog.channel == "whatsapp_text",
+                ReminderLog.error_reason == "2h_reminder"
+            ).first()
+            if not log:
+                to_send.append(appt)
+
+        if to_send:
+            asyncio.run(_process_2h_reminders(db, to_send))
+        
+        db.commit()
+        return {"sent": len(to_send)}
+    finally:
+        db.close()
+
+async def _process_2h_reminders(db, appointments):
+    for appt in appointments:
+        await send_message(
+            phone=appt.user_phone,
+            text=f"⏳ ¡Aviso! Te recordamos que tu turno es en 2 horas (a las {appt.scheduled_date.strftime('%H:%M')}). ¡Te esperamos!"
+        )
+        log_entry = ReminderLog(
+            appointment_id=appt.id,
+            business_id=appt.business_id,
+            status="sent",
+            channel="whatsapp_text",
+            error_reason="2h_reminder"
+        )
+        db.add(log_entry)
