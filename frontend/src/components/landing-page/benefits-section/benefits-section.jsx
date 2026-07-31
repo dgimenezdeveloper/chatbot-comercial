@@ -119,7 +119,7 @@ export default function BenefitsSection() {
               </div>
 
               {/* Slide 2 — Dashboard */}
-              <div className="w-full shrink-0 flex flex-col md:flex-row items-center gap-7.5 min-h-90 mr-[5%]">
+              <div className="w-full shrink-0 flex flex-col md:flex-row items-stretch gap-7.5 min-h-90 mr-[5%]">
                 <div className="md:w-[70%] shrink-0 flex items-stretch">
                   <Image
                     src="/dashboard.png"
