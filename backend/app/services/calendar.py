@@ -109,14 +109,14 @@ def get_appointment(
 def get_appointments_by_phone(
     db: Session, business_id: int, user_phone: str
 ) -> list[Appointment]:
-    """Lista todos los turnos de un cliente por su teléfono."""
+    """Lista todos los turnos de un cliente por su teléfono ordenados cronológicamente."""
     return (
         db.query(Appointment)
         .filter(
             Appointment.business_id == business_id,
             Appointment.user_phone == user_phone,
         )
-        .order_by(Appointment.scheduled_date.desc())
+        .order_by(Appointment.scheduled_date.asc())
         .all()
     )
 

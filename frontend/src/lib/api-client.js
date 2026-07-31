@@ -1,8 +1,8 @@
 /**
- * Axios instance configured for the chatbot-comercial backend.
+ * Cliente HTTP Axios configurado para el backend de chatbot-comercial.
  *
- * Auth token injection is handled per-request via getSession() from next-auth.
- * This file is imported by service modules and hooks.
+ * Sanitiza automáticamente el protocolo HTTPS para evitar errores de Mixed Content
+ * e inyecta el token JWT firmado de NextAuth en cada petición.
  *
  * @module lib/api-client
  */
@@ -10,18 +10,41 @@
 import axios from "axios";
 import { getSession } from "next-auth/react";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+/**
+ * Resuelve y sanitiza la URL base de la API garantizando HTTPS en producción.
+ */
+const getBaseUrl = () => {
+  let url = process.env.NEXT_PUBLIC_API_URL || "https://pymebot.azurewebsites.net/api/v1";
+
+  if (typeof window !== "undefined") {
+    // Si la página se carga sobre HTTPS, forzamos la API a HTTPS (evita bloqueos de Mixed Content)
+    if (window.location.protocol === "https:" && url.startsWith("http://") && !url.includes("localhost")) {
+      url = url.replace("http://", "https://");
+    }
+  }
+  return url;
+};
 
 const apiClient = axios.create({
-  baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request interceptor: inject backend access token from NextAuth session
+// Interceptor de petición: sanitiza la URL base e inyecta el Bearer Token de NextAuth
 apiClient.interceptors.request.use(async (config) => {
+  config.baseURL = getBaseUrl();
+
+  // Garantía estricta en tiempo de ejecución
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    config.baseURL.startsWith("http://") &&
+    !config.baseURL.includes("localhost")
+  ) {
+    config.baseURL = config.baseURL.replace("http://", "https://");
+  }
+
   const session = await getSession();
 
   if (session?.backendAccessToken) {
@@ -31,7 +54,7 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response interceptor: normalize errors
+// Interceptor de respuesta: normalización de errores
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {

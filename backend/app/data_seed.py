@@ -5,8 +5,9 @@ Modo básico (default): Crea datos de prueba: negocios (1 y 2), usuarios de la l
     Seguro para ejecutar múltiples veces (idempotente).
 
 Modo enriquecido (--enriched): Genera 30 días de datos realistas (~500 conversaciones,
-    ~350 turnos, ~60 fallbacks, ~50 feedbacks, ~100 recordatorios) para probar TODAS
-    las métricas del dashboard. TRUNCA tablas transaccionales antes de insertar.
+    ~120 turnos con nombres humanos reales y sin superposiciones, ~60 fallbacks,
+    ~50 feedbacks, ~100 recordatorios) para probar TODAS las métricas del dashboard.
+    TRUNCA tablas transaccionales antes de insertar.
 
 Uso:
     cd repositorio/backend
@@ -17,6 +18,7 @@ Uso:
 import logging
 import random
 import sys
+import zoneinfo
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, or_
@@ -40,6 +42,15 @@ logger = logging.getLogger(__name__)
 random.seed(42)
 NOW = datetime.now(timezone.utc)
 
+# Lista de nombres reales de clientes para poblar la demo con realismo
+REAL_CLIENT_NAMES = [
+    "Sofía Quintana", "Carlos Méndez", "Facundo Torres", "Ana García",
+    "Valentina López", "Martín Ruiz", "Lucía Fernández", "Diego Herrera",
+    "Gonzalo Pérez", "Mariana Gómez", "Camila Rodríguez", "Mateo Sosa",
+    "Joaquín Álvarez", "Isabella Acosta", "Nicolás Benítez", "Florencia Díaz",
+    "Santiago Flores", "Micaela Romero", "Tomás Medina", "Rocío Ramírez"
+]
+
 # Lista blanca oficial del Equipo 10 -> Inquilino 1 (Peluquería)
 TEAM_MEMBERS_BUSINESS_1 = [
     ("Dario Sebastian Gimenez", "dgimenez.developer@gmail.com"),
@@ -50,7 +61,7 @@ TEAM_MEMBERS_BUSINESS_1 = [
     ("Veronica Ledezma", "chibi.viky@gmail.com"),
     ("Feliangela Garcia", "fgfscg@gmail.com"),
     ("Dana Stornello", "stornellodana@gmail.com"),
-    ("Yanina Nabel", "yaninanabel@hotmail.com"),
+    ("Yanina Nabel", "yanina.email2024@gmail.com"),
     ("Ariadna Arias", "ariasari.7066@gmail.com"),
     ("Matias Joaquin Lobos", "matiasjoaquinlobos@gmail.com"),
     ("Victor Villamizar", "vmvillamar@gmail.com"),
@@ -128,7 +139,6 @@ def seed_businesses(db) -> tuple[Business, Business]:
 
 def seed_admin_users(db, b1_id: int, b2_id: int):
     """Siembra los usuarios autorizados de la lista blanca en la DB."""
-    # 1. Miembros del Equipo -> Inquilino 1 (Peluquería)
     for name, email in TEAM_MEMBERS_BUSINESS_1:
         user = db.query(User).filter(User.email == email).first()
         if not user:
@@ -145,7 +155,6 @@ def seed_admin_users(db, b1_id: int, b2_id: int):
             db.add(user)
             logger.info("Usuario Lista Blanca 1 creado: %s (%s)", name, email)
 
-    # 2. Admin Barbería -> Inquilino 2 (Barbería)
     u2 = db.query(User).filter(User.email == "barberia.demo26@gmail.com").first()
     if not u2:
         u2 = User(
@@ -328,12 +337,20 @@ def run_basic_seed(db):
 # =====================================================================
 
 def truncate_transactional_tables(db):
-    """Limpia todas las tablas de datos transaccionales preservando schema."""
-    tables = [Event, Feedback, ReminderLog, ChatSession, Appointment]
-    for table in tables:
-        db.execute(table.__table__.delete())
-    db.commit()
-    logger.info("Tablas truncadas: events, feedbacks, reminder_logs, sessions, appointments")
+    """Limpia todas las tablas de datos transaccionales de forma instantánea con TRUNCATE CASCADE."""
+    from sqlalchemy import text
+    try:
+        db.execute(text("TRUNCATE TABLE event, feedback, reminder_log, session, appointment RESTART IDENTITY CASCADE;"))
+        db.commit()
+        logger.info("Tablas truncadas instantáneamente con TRUNCATE CASCADE")
+        logger.warning("Nota: Los eventos en Google Calendar NO se truncan automáticamente para evitar borrar datos personales.")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Fallback a delete individual por: {e}")
+        tables = [Event, Feedback, ReminderLog, ChatSession, Appointment]
+        for table in tables:
+            db.execute(table.__table__.delete())
+        db.commit()
 
 
 def generate_random_date(days_ago: int) -> datetime:
@@ -375,7 +392,7 @@ def generate_sessions(db, business_id: int, user: User, count: int = 500) -> lis
         s = ChatSession(
             business_id=business_id,
             session_id=f"wa-enriched-{business_id}-{i:04d}",
-            user_id=user.id if user else None,
+            user_id=None,
             user_phone=f"54911{random.randint(20000000, 99999999)}",
             status=status,
             n_messages_total=n_messages,
@@ -498,72 +515,107 @@ def generate_events(db, business_id: int, sessions: list[ChatSession]) -> list[E
 
 
 def generate_appointments(db, business_id: int, user: User, services: list[Service]) -> list[Appointment]:
-    """Crea turnos reales en la tabla appointment con distribución realista."""
+    """Crea turnos reales en la tabla appointment y los sincroniza con Google Calendar."""
+    from app.services.google_calendar import create_event
+    
     appointments = []
     service_ids = [s.id for s in services] if services else [1]
+    svc_map = {s.id: s for s in services} if services else {}
 
-    def random_hour(nocturnal):
-        if nocturnal:
-            return random.choice(list(range(0, 8)) + list(range(20, 24)))
-        return random.randint(8, 19)
+    occupied_by_date = {}
+    
+    business = db.query(Business).filter(Business.id == business_id).first()
+    gcal_id = business.google_calendar_id if business else None
+    tz_str = business.timezone if business and business.timezone else "America/Argentina/Buenos_Aires"
+    tz = zoneinfo.ZoneInfo(tz_str)
 
-    for _ in range(200):
-        days_ago = random.randint(0, 29)
-        nocturnal = random.random() < 0.4
-        hour = random_hour(nocturnal)
-        scheduled = NOW - timedelta(days=days_ago)
-        scheduled = scheduled.replace(hour=hour, minute=random.choice([0, 15, 30, 45]), second=0, microsecond=0)
+    for _ in range(120):
+        # Generar turnos desde hace 30 días hasta 15 días en el futuro
+        days_ago = random.randint(-15, 29)
+        svc_id = random.choice(service_ids)
+        duration = svc_map[svc_id].duration_minutes if svc_id in svc_map else 30
+        
+        scheduled = None
+        for _attempt in range(25):
+            base_date = (NOW - timedelta(days=days_ago)).date()
+            hour = random.randint(9, 18)
+            minute = random.choice([0, 15, 30, 45])
+            
+            # Crear fecha con zona horaria local correcta
+            cand_start = datetime.combine(base_date, datetime.min.time()).replace(
+                hour=hour, minute=minute, tzinfo=tz
+            )
+            cand_end = cand_start + timedelta(minutes=duration)
 
-        status = random.choices(["scheduled", "confirmed", "completed", "cancelled"], weights=[5, 10, 70, 15])[0]
+            day_intervals = occupied_by_date.get(base_date, [])
+            overlap = False
+            for o_start, o_end in day_intervals:
+                if (cand_start < o_end) and (cand_end > o_start):
+                    overlap = True
+                    break
+            
+            if not overlap:
+                scheduled = cand_start
+                occupied_by_date.setdefault(base_date, []).append((cand_start, cand_end))
+                break
+
+        if not scheduled:
+            continue
+
+        # Lógica de estado realista: si es futuro, no puede estar completado
+        if scheduled > datetime.now(tz):
+            status = random.choices(["scheduled", "confirmed", "cancelled"], weights=[40, 50, 10])[0]
+        else:
+            status = random.choices(["scheduled", "confirmed", "completed", "cancelled"], weights=[5, 10, 70, 15])[0]
+
         no_show = None
         if status == "completed" and random.random() < 0.1:
             no_show = "confirmed_no"
         elif status == "completed":
             no_show = "confirmed_yes"
 
-        created_via = random.choices(["chatbot", "web"], weights=[85, 15])[0]
+        full_name = random.choice(REAL_CLIENT_NAMES)
+        phone = f"54911{random.randint(20000000, 99999999)}"
 
         a = Appointment(
             business_id=business_id,
-            user_id=user.id if user else None,
-            user_phone=f"54911{random.randint(20000000, 99999999)}",
-            user_name=f"Cliente {random.randint(1, 500)}",
-            service_id=random.choice(service_ids),
+            user_id=None,
+            user_phone=phone,
+            user_name=full_name,
+            service_id=svc_id,
             scheduled_date=scheduled,
             status=status,
             no_show_status=no_show,
-            created_via=created_via,
+            created_via=random.choices(["chatbot", "web"], weights=[85, 15])[0],
             session_id=f"wa-enriched-{business_id}-{random.randint(0, 499):04d}",
             created_at=scheduled - timedelta(days=random.randint(1, 7)),
         )
-        db.add(a)
-        appointments.append(a)
+        
+        # Sincronizar con Google Calendar
+        if gcal_id and status in ["scheduled", "confirmed", "completed"]:
+            try:
+                svc_name = svc_map[svc_id].name if svc_id in svc_map else "Servicio"
+                end_time = scheduled + timedelta(minutes=duration)
+                summary = f"Turno: {full_name} - {svc_name}"
+                desc = f"Teléfono: {phone}\nServicio: {svc_name}\nGenerado por Pymebot Seed"
+                
+                event_id = create_event(
+                    calendar_id=gcal_id,
+                    summary=summary,
+                    description=desc,
+                    start_time=scheduled,
+                    end_time=end_time
+                )
+                if event_id:
+                    a.google_event_id = event_id
+            except Exception as e:
+                logger.error(f"Error al sincronizar turno seed con Google Calendar: {e}")
 
-    for _ in range(80):
-        days_ahead = random.randint(0, 13)
-        nocturnal = random.random() < 0.4
-        hour = random_hour(nocturnal)
-        scheduled = NOW + timedelta(days=days_ahead)
-        scheduled = scheduled.replace(hour=hour, minute=random.choice([0, 15, 30, 45]), second=0, microsecond=0)
-
-        a = Appointment(
-            business_id=business_id,
-            user_id=user.id if user else None,
-            user_phone=f"54911{random.randint(20000000, 99999999)}",
-            user_name=f"Cliente Futuro {random.randint(1, 100)}",
-            service_id=random.choice(service_ids),
-            scheduled_date=scheduled,
-            status=random.choices(["scheduled", "confirmed"], weights=[30, 70])[0],
-            no_show_status=None,
-            created_via=random.choices(["chatbot", "web"], weights=[80, 20])[0],
-            session_id=f"wa-enriched-{business_id}-{random.randint(0, 499):04d}",
-            created_at=NOW - timedelta(hours=random.randint(1, 48)),
-        )
         db.add(a)
         appointments.append(a)
 
     db.commit()
-    logger.info("Creados %d turnos enriquecidos", len(appointments))
+    logger.info("Creados %d turnos enriquecidos y sincronizados con Google Calendar", len(appointments))
     return appointments
 
 

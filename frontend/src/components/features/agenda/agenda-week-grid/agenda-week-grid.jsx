@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const HOUR_START = 9;
-const HOUR_END = 17;
+const HOUR_END = 20;
 const ROW_HEIGHT = 64;
 
 function buildHourLabels() {

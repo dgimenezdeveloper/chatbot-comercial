@@ -1,24 +1,33 @@
-from fastapi import APIRouter, status
+"""Router de servicios de catálogo — conectado a PostgreSQL."""
+
 from typing import List
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.core.security import get_current_user
+from app.db.database import get_db
 from app.schemas.catalog import ServicioRequest, ServicioResponse
+from app.services.catalog import get_services
 
 router = APIRouter()
 
+
 @router.get("/", response_model=List[ServicioResponse], status_code=status.HTTP_200_OK)
-async def listar_servicios():
+async def listar_servicios(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retorna los servicios activos de PostgreSQL para el negocio autenticado."""
+    business_id = current_user.get("business_id", 1)
+    services_db = get_services(db, business_id=business_id)
+    
     return [
-        ServicioResponse(id=1, nombre="Corte Clásico", descripcion="Corte de cabello tradicional", duracion_minutos=30, precio=1500.0),
-        ServicioResponse(id=2, nombre="Perfilado de Barba", descripcion="Arreglo y perfilado", duracion_minutos=20, precio=800.0)
+        ServicioResponse(
+            id=s.id,
+            nombre=s.name,
+            descripcion=s.description or "",
+            duracion_minutos=s.duration_minutes or 30,
+            precio=float(s.price or 0.0)
+        )
+        for s in services_db
     ]
-
-@router.post("/", response_model=ServicioResponse, status_code=status.HTTP_201_CREATED)
-async def crear_servicio(payload: ServicioRequest):
-    return ServicioResponse(id=3, **payload.model_dump())
-
-@router.put("/{servicio_id}", response_model=ServicioResponse, status_code=status.HTTP_200_OK)
-async def actualizar_servicio(servicio_id: int, payload: ServicioRequest):
-    return ServicioResponse(id=servicio_id, **payload.model_dump())
-
-@router.delete("/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar_servicio(servicio_id: int):
-    return None
