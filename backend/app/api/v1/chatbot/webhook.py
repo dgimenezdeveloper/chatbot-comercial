@@ -497,7 +497,8 @@ async def execute_product_reservation(phone: str, client_name: str, user_state: 
     await send_interactive_buttons(
         phone=phone, 
         body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de:\n{names}\nTotal: ${total_price:,.0f}\n\nEstá asentada. Puedes pasar a retirarlo por el local en {horarios}.",
-        buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+    )
     log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "productos": names, "total": total_price})
     await clear_user_state(phone)
 
@@ -801,7 +802,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
 
-                # --- NUEVO: INTERCEPCIÓN DE MENSAJES DEL DUEÑO AL CLIENTE ---
+                # --- INTERCEPCIÓN DE MENSAJES DEL DUEÑO AL CLIENTE (PROXY) ---
                 parts = user_text.split(" ", 1)
                 if len(parts) >= 1 and parts[0].isdigit():
                     short_id = parts[0]
@@ -825,12 +826,28 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         return {"status": "success"}
                 # ------------------------------------------------------------
 
+                # Comandos de reseteo de demo
                 if user_text.lower() == "/reset_demo estetica":
                     await _reset_demo_tenant(db, phone_number, 1, "Peluquería")
                     return {"status": "success"}
                 elif user_text.lower() == "/reset_demo barberia":
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
                     return {"status": "success"}
+
+                # --- NUEVO: COMANDO PARA ABRIR VENTANA 24H DEL DUEÑO ---
+                biz = db.query(Business).filter(Business.id == current_business_id).first()
+                owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
+
+                if owner_phone and is_same_phone(phone_number, owner_phone):
+                    if user_text.lower() in ["/activar", "activar", "/admin", "admin"]:
+                        await send_message(
+                            phone_number, 
+                            "👨‍💻 *Modo Administrador*\n\n"
+                            "✅ Sesión de 24hs activada. Estás listo para recibir alertas y derivaciones.\n\n"
+                            "👉 _Si deseas probar el bot como cliente, escribe_ *Hola*"
+                        )
+                        return {"status": "success"}
+                # ------------------------------------------------------------
 
                 if any(k in user_text.lower() for k in ["humano", "persona", "agente", "representante", "atencion manual"]):
                     await trigger_human_escalation(phone_number, user_text, user_state, current_business_id, db, reason="keyword_trigger")
