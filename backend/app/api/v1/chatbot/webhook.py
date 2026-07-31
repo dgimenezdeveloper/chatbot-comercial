@@ -31,13 +31,13 @@ router = APIRouter()
 MOCK_BUSINESS_ID = 1
 
 BOTONES_PRINCIPALES = [
-    {"id": "btn_turnos", "title": "📅 Reservar Turno"},
+    {"id": "btn_turnos", "title": "📅 Gestión de Turnos"},
     {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
     {"id": "btn_faq", "title": "❓ Consultas"}
 ]
 
 # =============================================================================
-# HELPERS DE TELÉFONO Y NEGOCIO
+# HELPERS DE TELÉFONO, NEGOCIO Y VALIDACIÓN DE ESTADO
 # =============================================================================
 
 def get_business_name(db: Session, business_id: int) -> str:
@@ -69,13 +69,16 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
     return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
 
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
-    """Valida si la opción interactiva elegida pertenece ÚNICAMENTE al paso conversacional activo."""
-    if selected_id == "btn_volver_menu":
+    """Valida si la opción interactiva elegida pertenece al paso conversacional activo."""
+    # Botones del Menú Principal y Volver al Menú SIEMPRE son válidos
+    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"]:
+        return True
+
+    if current_step == "NUEVO":
         return True
 
     allowed_prefixes_per_state = {
-        "NUEVO": [],
-        "MENU_PRINCIPAL": ["btn_turnos", "btn_catalogo", "btn_faq"],
+        "MENU_PRINCIPAL": ["srv_", "action_ver_turno", "action_cancelar_turno", "prod_", "faq_", "btn_hablar_humano"],
         "SELECCIONANDO_SERVICIO": ["srv_", "action_ver_turno", "action_cancelar_turno"],
         "SELECCIONANDO_SLOT": ["slot_", "more_dates_", "date_"],
         "SELECCIONANDO_PRODUCTO": ["prod_"],
@@ -115,33 +118,50 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
         session_id=phone,
         business_id=business_id,
         event_type="escalation_to_human",
-        payload={"reason": reason, "initial_text": user_text, "owner_phone": owner_phone},
+        payload={"reason": reason, "initial_text": user_text, "owner_phone": raw_owner_phone},
     )
 
-    # 1. Avisar al Cliente
-    await send_interactive_buttons(
-        phone=phone,
-        body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
-        buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
-    )
-
-    # 2. Notificar al WhatsApp personal del dueño (si no es el mismo número del cliente)
-    if owner_phone and not is_same_phone(owner_phone, phone):
-        short_id = await create_human_proxy(business_id, phone)
-        known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
-
-        owner_msg = (
-            f"🚨 *Atención Requerida [#{short_id}]*\n\n"
-            f"👤 *Cliente:* {known_name}\n"
-            f"📞 *Teléfono:* {phone}\n"
-            f"💬 *Mensaje:* \"{user_text}\"\n\n"
-            f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
-            f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
+    if not owner_phone or is_same_phone(raw_owner_phone, phone):
+        logger.warning(f"[HANDOVER] Owner phone no configurado o idéntico al cliente ({phone}). Retornando al menú.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="En este momento nuestros representantes no están disponibles. ¿En qué más podemos ayudarte?",
+            buttons=BOTONES_PRINCIPALES
         )
-        sent_to_owner = await send_message(owner_phone, owner_msg)
-        if sent_to_owner:
-            user_state["estado"] = "HUMAN_ESCALATION"
-            await set_user_state(phone, user_state)
+        await clear_user_state(phone)
+        return
+
+    short_id = await create_human_proxy(business_id, phone)
+    known_name = get_existing_user_name(db, phone, business_id) or f"Cliente ({phone[-4:]})"
+
+    owner_msg = (
+        f"🚨 *Atención Requerida [#{short_id}]*\n\n"
+        f"👤 *Cliente:* {known_name}\n"
+        f"📞 *Teléfono:* {phone}\n"
+        f"💬 *Mensaje:* \"{user_text}\"\n\n"
+        f"👉 *Para responder:* Escribe `{short_id} tu respuesta`\n"
+        f"🔒 *Para cerrar chat:* Escribe `{short_id} #fin`"
+    )
+
+    sent_to_owner = await send_message(owner_phone, owner_msg)
+
+    if sent_to_owner:
+        user_state["estado"] = "HUMAN_ESCALATION"
+        await set_user_state(phone, user_state)
+
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="Te estamos transfiriendo con un representante humano. Te responderemos por este medio a la brevedad.",
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Cancelar y Volver"}]
+        )
+    else:
+        logger.error(f"[HANDOVER] Falló la notificación al dueño ({owner_phone}). Desplegando menú principal al cliente.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="En este momento nuestros representantes no están disponibles. ¿En qué podemos ayudarte?",
+            buttons=BOTONES_PRINCIPALES
+        )
+        await clear_user_state(phone)
 
 # =============================================================================
 # FLUJOS PRINCIPALES
@@ -500,7 +520,6 @@ async def handle_text_fallback(phone: str, user_text: str, user_state: dict, bus
     await send_message(phone=phone, text="Por favor selecciona una opción del menú o escribe *Menú* para reiniciar.")
 
 def clean_phone_number(phone: str | None) -> str:
-    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
@@ -556,7 +575,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
 
-                    # Comandos universales de reinicio
                     if user_text.lower() in ["hola", "menu", "menú", "comenzar", "salir", "reiniciar", "cancelar"]:
                         await handle_welcome_flow(phone_number, current_business_id, db)
                         return {"status": "success"}
@@ -624,7 +642,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     row_title = interactive_data.get("list_reply", {}).get("title", "")
 
                 if selected_id:
-                    # GUARDIÁN DE ESTADO: Bloquea clics en mensajes anteriores
                     if not is_action_valid_for_state(selected_id, current_step):
                         logger.warning(f"Opción caducada presionada: '{selected_id}' en estado '{current_step}' para {phone_number}")
                         await send_interactive_buttons(
@@ -634,7 +651,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         )
                         return {"status": "success"}
 
-                    # PROCESAMIENTO DE OPCIONES VÁLIDAS
                     if selected_id == "btn_volver_menu":
                         await handle_welcome_flow(phone_number, current_business_id, db)
                     elif selected_id.startswith("btn_confirm_cancel_"):

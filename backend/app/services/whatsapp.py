@@ -4,6 +4,32 @@ from app.core.settings import settings
 
 logger = logging.getLogger(__name__)
 
+def get_whatsapp_phone_variants(phone: str) -> list[str]:
+    """Genera las 3 variantes de formato de Argentina para garantizar la entrega en Meta Sandbox o Producción."""
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return []
+    
+    if not digits.startswith("54"):
+        return [digits]
+
+    # Extraer base local (últimos 8 dígitos)
+    if len(digits) >= 10:
+        local_8 = digits[-8:]
+        area = digits[-10:-8] # ej: "11"
+        
+        base_no_15 = local_8
+        
+        variants = [
+            digits,                                # El original (ej: 5491169695436)
+            f"54{area}{base_no_15}",               # Formato sin 9 (ej: 541169695436)
+            f"541115{base_no_15}" if area == "11" else f"54{area}15{base_no_15}", # Formato Sandbox Meta con 15 (ej: 54111569695436)
+            f"549{area}{base_no_15}",              # Formato Prod con 9
+        ]
+        return list(dict.fromkeys(variants))
+    
+    return [digits]
+
 async def _send_whatsapp_payload(payload: dict) -> bool:
     """Helper interno para despachar payloads JSON de forma asíncrona a la API de Meta."""
     url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
@@ -12,47 +38,25 @@ async def _send_whatsapp_payload(payload: dict) -> bool:
         "Authorization": f"Bearer {settings.WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
+
+    original_to = str(payload.get("to", ""))
+    variants = get_whatsapp_phone_variants(original_to)
     
-    # Formato limpio de número E.164 (solo dígitos)
-    to_phone = "".join(c for c in str(payload.get("to", "")) if c.isdigit())
-    payload["to"] = to_phone
-
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(url, json=payload, headers=headers)
-            
-            if response.status_code == 200:
-                logger.info(f"Mensaje de WhatsApp despachado con éxito a {to_phone}")
-                return True
-            else:
-                response_json = response.json()
-                logger.error(f"Error enviando WhatsApp a {to_phone}. Estatus: {response.status_code}. Respuesta: {response_json}")
-                
-                # =====================================================================
-                # REINTENTO AUTOMÁTICO PARA SANDBOX DE META EN ARGENTINA
-                # Si enviamos con '549' y Meta Sandbox lo tiene guardado como '54' (sin el 9),
-                # reintentamos alternando el formato.
-                # =====================================================================
-                alt_to = None
-                if to_phone.startswith("549"):
-                    alt_to = "54" + to_phone[3:]
-                elif to_phone.startswith("54") and not to_phone.startswith("549"):
-                    alt_to = "549" + to_phone[2:]
+        for target_phone in variants:
+            payload["to"] = target_phone
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    logger.info(f"Mensaje de WhatsApp despachado con éxito a {target_phone}")
+                    return True
+                else:
+                    logger.warning(f"Intento de envío a {target_phone} falló ({response.status_code}): {response.json().get('error', {}).get('message')}")
+            except Exception as e:
+                logger.error(f"Excepción enviando a {target_phone}: {e}")
 
-                if alt_to:
-                    logger.info(f"Reintentando envío con formato alternativo para Meta Sandbox: {alt_to}")
-                    payload["to"] = alt_to
-                    alt_response = await client.post(url, json=payload, headers=headers)
-                    if alt_response.status_code == 200:
-                        logger.info(f"Mensaje despachado con éxito en reintento a {alt_to}")
-                        return True
-                    else:
-                        logger.error(f"Reintento a {alt_to} falló ({alt_response.status_code}): {alt_response.json()}")
-
-                return False
-        except Exception as e:
-            logger.error(f"Excepción al conectar con la API de Meta: {str(e)}")
-            return False
+        logger.error(f"Todos los intentos de envío fallaron para el número base {original_to}")
+        return False
 
 async def send_message(phone: str, text: str) -> bool:
     """Envía un mensaje de texto plano estándar."""
