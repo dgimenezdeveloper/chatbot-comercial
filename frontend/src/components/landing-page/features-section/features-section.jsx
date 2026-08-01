@@ -1,17 +1,17 @@
-import { Bot, ImageIcon } from "lucide-react";
+import Image from "next/image";
 
 export default function FeaturesSection() {
   return (
-    <section className="max-w-300 px-5 mx-auto w-full grid lg:grid-cols-2 gap-16 border-t border-slate-100 bg-white">
+    <section id="propuesta" className="max-w-300 px-5 mx-auto w-full grid lg:grid-cols-2 gap-16 border-t border-slate-100 bg-white">
       {/* Left Column */}
       <div className="flex flex-col gap-6">
-        <span className="text-sm font-medium text-slate-400 underline underline-offset-4 uppercase">
-          Propuesta
-        </span>
-        <h2 className="text-3xl  font-medium text-[#456189] leading-snug">
+        <h2 className="text-[32px] font-normal text-neutral leading-[160%] tracking-[2%]">
+          <span className="underline underline-offset-3 decoration-2">Propuesta</span>
+        </h2>
+        <h3 className="text-2xl md:text-3xl font-medium text-[#456189] leading-snug">
           ¿Tienes problemas para gestionar todas las solicitudes de turnos o tu
           agenda?
-        </h2>
+        </h3>
         <p className="text-slate-500 leading-relaxed">
           Te sucede que te llegan mensajes al WhatsApp y no podes contestar
           porque estas trabajando, por lo que perdes nuevos clientes para tu
@@ -38,39 +38,16 @@ export default function FeaturesSection() {
         </div>
       </div>
 
-      {/* Right Column (Feature Blocks) */}
-      <div className="flex flex-col gap-12 justify-center">
-        {/* Feature 1 */}
-        <div className="flex items-center gap-6 justify-end">
-          <span className="text-right text-sm font-medium text-slate-700 max-w-[120px]">
-            Saludo amigable personalizado
-          </span>
-          <div className="w-40 h-32 bg-slate-300 rounded-tr-[3rem] rounded-bl-[3rem] rounded-tl-lg rounded-br-lg flex items-center justify-center text-slate-50 relative overflow-hidden">
-            <ImageIcon size={48} className="text-slate-100" />
-            <div className="absolute top-0 right-0 w-16 h-16 bg-slate-400 rounded-bl-full opacity-50"></div>
-          </div>
-        </div>
-
-        {/* Feature 2 */}
-        <div className="flex items-center gap-6 justify-start">
-          <span className="text-left text-sm font-medium text-slate-700 max-w-[120px]">
-            Contestador automatico con opciones
-          </span>
-          <div className="w-40 h-32 bg-slate-200 rounded-tl-[3rem] rounded-br-[3rem] rounded-tr-lg rounded-bl-lg flex items-center justify-center text-slate-50">
-            <Bot size={48} className="text-slate-400" />
-          </div>
-        </div>
-
-        {/* Feature 3 */}
-        <div className="flex items-center gap-6 justify-end">
-          <span className="text-right text-sm font-medium text-slate-700 max-w-[140px]">
-            Agenda practica para el cliente y sincronizada a tu calendario.
-          </span>
-          <div className="w-40 h-32 bg-slate-300 rounded-tr-[3rem] rounded-bl-[3rem] rounded-tl-lg rounded-br-lg flex items-center justify-center text-slate-50 relative overflow-hidden">
-            <ImageIcon size={48} className="text-slate-100" />
-            <div className="absolute top-0 right-0 w-16 h-16 bg-slate-400 rounded-bl-full opacity-50"></div>
-          </div>
-        </div>
+      {/* Right Column — Features image */}
+      <div className="flex items-center justify-center">
+        <Image
+          src="/features.webp"
+          alt="Funcionalidades de Pymio: saludo personalizado, contestador automático y agenda sincronizada"
+          width={500}
+          height={500}
+          className="w-full max-w-120 h-auto object-contain"
+          priority
+        />
       </div>
     </section>
   );
