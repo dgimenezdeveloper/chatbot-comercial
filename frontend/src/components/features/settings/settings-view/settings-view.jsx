@@ -224,7 +224,8 @@ export default function SettingsView() {
           enableFaqs: res.enable_faqs ?? prev.enableFaqs,
         }));
       }
-
+      queryClient.invalidateQueries({ queryKey: ["negocio"] });
+      
       setSaveMessage("Cambios guardados correctamente en la base de datos.");
     } catch {
       setSaveMessage("Error al guardar en el servidor.");

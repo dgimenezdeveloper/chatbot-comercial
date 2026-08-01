@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package } from "lucide-react";
+import { HelpCircle, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
@@ -12,28 +13,42 @@ import { PanelIcon } from "@/components/icons/PanelIcon";
 import { ServiciosIcon } from "@/components/icons/ServiciosIcon";
 import { AppSidebarShell } from "@/components/layout/sidebar/app-sidebar-shell";
 import { cn } from "@/lib/utils";
-
-const menuItems = [
-  { label: "Panel",         href: "/dashboard",               icon: PanelIcon,        exact: true },
-  { label: "Agenda",        href: "/dashboard/agenda",        icon: AgendaIcon        },
-  { label: "Clientes",      href: "/dashboard/clientes",      icon: ClientesIcon      },
-  { label: "Métricas",      href: "/dashboard/metrics",       icon: MetricasIcon      },
-  { label: "Servicios",     href: "/dashboard/servicios",     icon: ServiciosIcon     },
-  { label: "Productos",     href: "/dashboard/productos",     icon: Package           },
-  { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
-];
-
-function isActiveRoute(pathname, href, exact = false) {
-  return exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-}
+import { fetchNegocio } from "@/services/negocio-api";
 
 export function Sidebar({ userFooter, onNavigate }) {
   const pathname = usePathname();
 
+  const { data: business } = useQuery({
+    queryKey: ["negocio"],
+    queryFn: fetchNegocio,
+    staleTime: 30 * 1000,
+  });
+
+  const enableServices = business?.enable_services ?? true;
+  const enableProducts = business?.enable_products ?? true;
+  const enableFaqs = business?.enable_faqs ?? true;
+
+  const menuItems = [
+    { label: "Panel",         href: "/dashboard",               icon: PanelIcon,        exact: true, show: true },
+    { label: "Agenda",        href: "/dashboard/agenda",        icon: AgendaIcon,       show: true },
+    { label: "Clientes",      href: "/dashboard/clientes",      icon: ClientesIcon,     show: true },
+    { label: "Métricas",      href: "/dashboard/metrics",       icon: MetricasIcon,     show: true },
+    { label: "Servicios",     href: "/dashboard/servicios",     icon: ServiciosIcon,    show: enableServices },
+    { label: "Productos",     href: "/dashboard/productos",     icon: Package,          show: enableProducts },
+    { label: "Preguntas Frecuentes", href: "/dashboard/faq",    icon: HelpCircle,       show: enableFaqs },
+    { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon, show: true },
+  ];
+
+  const visibleItems = menuItems.filter((item) => item.show);
+
+  function isActiveRoute(currentPath, href, exact = false) {
+    return exact ? currentPath === href : currentPath === href || currentPath.startsWith(`${href}/`);
+  }
+
   return (
     <AppSidebarShell footer={userFooter}>
       <nav className="space-y-1">
-        {menuItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const active = isActiveRoute(pathname, item.href, item.exact);
 
@@ -50,7 +65,7 @@ export function Sidebar({ userFooter, onNavigate }) {
               )}
             >
               <Icon className="size-5" />
-              <span>{item.label}</span>
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
