@@ -1,4 +1,4 @@
-"""Router de configuración de negocio y gestión de clientes."""
+"""Router de configuración de negocio y gestión de clientes — Versión defensiva."""
 
 import zoneinfo
 from datetime import timezone
@@ -27,12 +27,19 @@ async def obtener_negocio(
     if biz:
         return NegocioResponse(
             id=biz.id,
-            nombre=biz.name,
-            descripcion=biz.description or "Sin descripción",
-            categoria=biz.category or "",
-            horarios=biz.horarios or "Lunes a Sábados de 09:00 a 20:00",
-            contacto=biz.contacto or f"Tel: {biz.owner_phone or 'Sin teléfono'}",
-            owner_phone=biz.owner_phone or "",
+            nombre=getattr(biz, 'name', f"Comercio ID {business_id}"),
+            descripcion=getattr(biz, 'description', "Sin descripción") or "Sin descripción",
+            categoria=getattr(biz, 'category', "") or "",
+            direccion=getattr(biz, 'address', "") or "",
+            telefono=getattr(biz, 'phone', "") or "",
+            email=getattr(biz, 'email', "") or "",
+            website=getattr(biz, 'website', "") or "",
+            instagram=getattr(biz, 'instagram', "") or "",
+            facebook=getattr(biz, 'facebook', "") or "",
+            horarios=getattr(biz, 'horarios', "Lunes a Sábados de 09:00 a 20:00") or "Lunes a Sábados de 09:00 a 20:00",
+            contacto=getattr(biz, 'contacto', "Tel: Sin teléfono") or "Sin definir",
+            owner_phone=getattr(biz, 'owner_phone', "") or "",
+            google_calendar_id=getattr(biz, 'google_calendar_id', "") or "",
             enable_services=getattr(biz, 'enable_services', True),
             enable_products=getattr(biz, 'enable_products', True),
             enable_faqs=getattr(biz, 'enable_faqs', True)
@@ -43,9 +50,16 @@ async def obtener_negocio(
         nombre=f"Comercio ID {business_id}",
         descripcion="Comercio registrado",
         categoria="",
+        direccion="",
+        telefono="",
+        email="",
+        website="",
+        instagram="",
+        facebook="",
         horarios="Sin definir",
         contacto="Sin definir",
         owner_phone="",
+        google_calendar_id="",
         enable_services=True,
         enable_products=True,
         enable_faqs=True
@@ -63,16 +77,24 @@ async def actualizar_negocio(
     if biz:
         biz.name = payload.nombre
         biz.description = payload.descripcion
-        if payload.categoria is not None:
-            biz.category = payload.categoria
+        
+        if hasattr(biz, 'category') and payload.categoria is not None: biz.category = payload.categoria
+        if hasattr(biz, 'address') and payload.direccion is not None: biz.address = payload.direccion
+        if hasattr(biz, 'phone') and payload.telefono is not None: biz.phone = payload.telefono
+        if hasattr(biz, 'email') and payload.email is not None: biz.email = payload.email
+        if hasattr(biz, 'website') and payload.website is not None: biz.website = payload.website
+        if hasattr(biz, 'instagram') and payload.instagram is not None: biz.instagram = payload.instagram
+        if hasattr(biz, 'facebook') and payload.facebook is not None: biz.facebook = payload.facebook
+        if hasattr(biz, 'google_calendar_id') and payload.google_calendar_id is not None: biz.google_calendar_id = payload.google_calendar_id
+        
         biz.horarios = payload.horarios
         biz.contacto = payload.contacto
         if payload.owner_phone is not None:
             biz.owner_phone = payload.owner_phone
             
-        biz.enable_services = payload.enable_services
-        biz.enable_products = payload.enable_products
-        biz.enable_faqs = payload.enable_faqs
+        if hasattr(biz, 'enable_services'): biz.enable_services = payload.enable_services
+        if hasattr(biz, 'enable_products'): biz.enable_products = payload.enable_products
+        if hasattr(biz, 'enable_faqs'): biz.enable_faqs = payload.enable_faqs
         
         db.commit()
         db.refresh(biz)
@@ -86,7 +108,6 @@ async def listar_clientes(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retorna la lista de clientes reales (excluyendo a los administradores de la lista blanca)."""
     business_id = current_user.get("business_id", 1)
     tz_str = get_business_timezone(db, business_id)
     tz = zoneinfo.ZoneInfo(tz_str)

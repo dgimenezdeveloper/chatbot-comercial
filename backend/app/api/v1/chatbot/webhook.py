@@ -835,6 +835,10 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif user_text.lower() == "/reset_demo barberia":
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
                     return {"status": "success"}
+                elif user_text.lower() in ["/reset_demo odontologia", "/reset_demo odontología", "/reset_demo centro odontologico"]:
+                    await _reset_demo_tenant(db, phone_number, 3, "Centro Odontológico")
+                    return {"status": "success"}
+                
 
                 # Comando para abrir ventana de 24hs del dueño sin activar menú de cliente
                 biz = db.query(Business).filter(Business.id == current_business_id).first()

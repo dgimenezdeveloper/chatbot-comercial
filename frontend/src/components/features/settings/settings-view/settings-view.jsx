@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Building2, CreditCard, Globe, Settings, Smartphone } from "lucide-react";
+import { Bell, Building2, Calendar, CreditCard, Globe, Settings, Smartphone } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button/button";
@@ -98,12 +98,16 @@ export default function SettingsView() {
     address: "",
     phone: "",
     email: "",
+    website: "",
+    instagram: "",
+    facebook: "",
   });
 
   const [settings, setSettings] = useState({
     timezone: "America/Argentina/Buenos_Aires",
     currency: "ARS",
     ownerPhone: "",
+    googleCalendarId: "",
     useWhatsappTemplates: false,
     smsEnabled: false,
     emailEnabled: false,
@@ -127,13 +131,17 @@ export default function SettingsView() {
           setBusiness({
             name: data.nombre || "",
             description: data.descripcion || "",
-            address: "",
-            phone: "",
-            email: "",
+            address: data.direccion || "",
+            phone: data.telefono || "",
+            email: data.email || "",
+            website: data.website || "",
+            instagram: data.instagram || "",
+            facebook: data.facebook || "",
           });
           setSettings((prev) => ({
             ...prev,
             ownerPhone: data.owner_phone || "",
+            googleCalendarId: data.google_calendar_id || "",
             enableServices: data.enable_services ?? true,
             enableProducts: data.enable_products ?? true,
             enableFaqs: data.enable_faqs ?? true,
@@ -163,6 +171,13 @@ export default function SettingsView() {
       const res = await updateNegocio({
         nombre: business.name.trim(),
         descripcion: business.description.trim(),
+        direccion: business.address.trim(),
+        telefono: business.phone.trim(),
+        email: business.email.trim(),
+        website: business.website.trim(),
+        instagram: business.instagram.trim(),
+        facebook: business.facebook.trim(),
+        google_calendar_id: settings.googleCalendarId.trim(),
         horarios: "Lunes a Sábados de 09:00 a 20:00",
         contacto: [business.email, business.phone].filter(Boolean).join(" | "),
         owner_phone: settings.ownerPhone.trim(),
@@ -176,10 +191,17 @@ export default function SettingsView() {
           ...prev,
           name: res.nombre || prev.name,
           description: res.descripcion || prev.description,
+          address: res.direccion || prev.address,
+          phone: res.telefono || prev.phone,
+          email: res.email || prev.email,
+          website: res.website || prev.website,
+          instagram: res.instagram || prev.instagram,
+          facebook: res.facebook || prev.facebook,
         }));
         setSettings((prev) => ({
           ...prev,
           ownerPhone: res.owner_phone || prev.ownerPhone,
+          googleCalendarId: res.google_calendar_id || prev.googleCalendarId,
           enableServices: res.enable_services ?? prev.enableServices,
           enableProducts: res.enable_products ?? prev.enableProducts,
           enableFaqs: res.enable_faqs ?? prev.enableFaqs,
@@ -239,7 +261,7 @@ export default function SettingsView() {
             />
           </FieldRow>
 
-          <FieldRow label="Teléfono" htmlFor="biz-phone">
+          <FieldRow label="Teléfono comercial" htmlFor="biz-phone">
             <Input
               id="biz-phone"
               type="tel"
@@ -250,13 +272,24 @@ export default function SettingsView() {
             />
           </FieldRow>
 
-          <FieldRow label="Email" htmlFor="biz-email">
+          <FieldRow label="Email comercial" htmlFor="biz-email">
             <Input
               id="biz-email"
               type="email"
               value={business.email}
               onChange={updateBusiness("email")}
               placeholder="tu@mail.com"
+              className="h-10"
+            />
+          </FieldRow>
+
+          <FieldRow label="Sitio web" htmlFor="biz-website">
+            <Input
+              id="biz-website"
+              type="url"
+              value={business.website}
+              onChange={updateBusiness("website")}
+              placeholder="https://www.tunegocio.com"
               className="h-10"
             />
           </FieldRow>
@@ -290,6 +323,57 @@ export default function SettingsView() {
             description="Muestra información del local (horarios, ubicación, medios de pago)."
             checked={settings.enableFaqs}
             onCheckedChange={updateSettings("enableFaqs")}
+          />
+        </SettingsSection>
+
+        {/* ── Integración Google Calendar ──────────────────────────────────── */}
+        <SettingsSection
+          icon={Calendar}
+          title="Google Calendar"
+          description="Sincronización bidireccional de citas."
+        >
+          <FieldRow
+            label="ID de Calendario Dedicado"
+            htmlFor="gcal-id"
+            hint="Ingresa el ID del calendario secundario de Google para este negocio (ej: c_12345@group.calendar.google.com o 'primary')."
+          >
+            <Input
+              id="gcal-id"
+              placeholder="primary"
+              value={settings.googleCalendarId}
+              onChange={(e) => updateSettings("googleCalendarId")(e.target.value)}
+              className="h-10 font-mono text-xs"
+            />
+          </FieldRow>
+        </SettingsSection>
+
+        {/* ── Recordatorios ────────────────────────────────────────────────── */}
+        <SettingsSection
+          icon={Bell}
+          title="Recordatorios & Handover"
+          description="Canales de notificación para turnos y atención humana."
+        >
+          <FieldRow
+            label="WhatsApp del dueño / Administrador"
+            htmlFor="owner-phone"
+            hint="Número en formato E.164 (+54911...) que recibirá notificaciones y respuestas del chatbot para atención manual."
+          >
+            <Input
+              id="owner-phone"
+              type="tel"
+              placeholder="+5491112345678"
+              value={settings.ownerPhone}
+              onChange={(e) => updateSettings("ownerPhone")(e.target.value)}
+              className="h-10"
+            />
+          </FieldRow>
+
+          <SwitchRow
+            id="whatsapp-templates"
+            label="Templates de WhatsApp"
+            description="Usa plantillas oficiales de Meta para recordatorios fuera de la ventana de 24 h."
+            checked={settings.useWhatsappTemplates}
+            onCheckedChange={updateSettings("useWhatsappTemplates")}
           />
         </SettingsSection>
 
@@ -336,73 +420,6 @@ export default function SettingsView() {
               </SelectContent>
             </Select>
           </FieldRow>
-        </SettingsSection>
-
-        {/* ── Recordatorios ────────────────────────────────────────────────── */}
-        <SettingsSection
-          icon={Bell}
-          title="Recordatorios"
-          description="Canales de notificación para turnos y alertas."
-        >
-          <FieldRow
-            label="WhatsApp del dueño"
-            htmlFor="owner-phone"
-            hint="Recibís alertas cuando falle un recordatorio o cuando un cliente solicite atención humana."
-          >
-            <Input
-              id="owner-phone"
-              type="tel"
-              placeholder="+54 9 11 1234-5678"
-              value={settings.ownerPhone}
-              onChange={(e) => updateSettings("ownerPhone")(e.target.value)}
-              className="h-10"
-            />
-          </FieldRow>
-
-          <SwitchRow
-            id="whatsapp-templates"
-            label="Templates de WhatsApp"
-            description="Usa plantillas oficiales de Meta para recordatorios fuera de la ventana de 24 h."
-            checked={settings.useWhatsappTemplates}
-            onCheckedChange={updateSettings("useWhatsappTemplates")}
-          />
-
-          <SwitchRow
-            id="sms-enabled"
-            label="SMS como canal alternativo"
-            description="Envía recordatorios por SMS si WhatsApp no está disponible."
-            checked={settings.smsEnabled}
-            onCheckedChange={updateSettings("smsEnabled")}
-          />
-
-          <SwitchRow
-            id="email-enabled"
-            label="Email como canal alternativo"
-            description="Envía confirmaciones y recordatorios por correo electrónico."
-            checked={settings.emailEnabled}
-            onCheckedChange={updateSettings("emailEnabled")}
-          />
-        </SettingsSection>
-
-        {/* ── Métodos de pago ───────────────────────────────────────────────── */}
-        <SettingsSection
-          icon={CreditCard}
-          title="Métodos de pago"
-          description="Opciones que el chatbot puede informar a tus clientes."
-        >
-          <SwitchRow
-            id="accept-cards"
-            label="Tarjetas de crédito y débito"
-            checked={settings.acceptCards}
-            onCheckedChange={updateSettings("acceptCards")}
-          />
-
-          <SwitchRow
-            id="accepts-cash"
-            label="Efectivo"
-            checked={settings.acceptsCash}
-            onCheckedChange={updateSettings("acceptsCash")}
-          />
         </SettingsSection>
       </div>
 
