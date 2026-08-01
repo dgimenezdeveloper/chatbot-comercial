@@ -28,6 +28,10 @@ class Business(Base):
         Text, nullable=True,
         comment="Descripción breve del negocio",
     )
+    category = Column(
+        String(50), nullable=True,
+        comment="Macro-categoría del negocio (salud, belleza, retail, etc.)",
+    )
     active = Column(
         Boolean, default=True,
         comment="Negocio activo en el sistema",

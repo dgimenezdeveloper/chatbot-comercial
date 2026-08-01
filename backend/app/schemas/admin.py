@@ -6,6 +6,7 @@ class NegocioRequest(BaseModel):
 
     nombre: str = Field(..., description="Nombre comercial del negocio")
     descripcion: str = Field(..., description="Descripción del negocio")
+    categoria: Optional[str] = Field(None, description="Macro-categoría del negocio")
     horarios: str = Field(..., description="Horarios de atención al público")
     contacto: str = Field(..., description="Información de contacto (teléfono, email, etc.)")
     owner_phone: Optional[str] = Field(None, description="WhatsApp del dueño para notificaciones y atención humana")

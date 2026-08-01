@@ -53,11 +53,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true
     },
 
-    async jwt({ token, account }) {
+    async jwt({ token, account, trigger, session }) {
       if (account?.backendData) {
         token.backendAccessToken = account.backendData.access_token
         token.user = account.backendData.user
       }
+      
+      if (trigger === "update" && session) {
+        token.user = { ...token.user, ...session }
+      }
+      
       return token
     },
 

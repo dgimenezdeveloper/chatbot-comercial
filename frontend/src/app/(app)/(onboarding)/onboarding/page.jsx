@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react"; // <-- IMPORT AGREGADO
 import { useOnboarding } from "@/components/features/onboarding/shared/onboarding-context/onboarding-context";
 
 import BusinessStep from "@/components/features/onboarding/business/business-step/business-step";
@@ -127,6 +128,7 @@ const DAY_LABELS = {
 export default function OnboardingPage() {
   const { step, setStep } = useOnboarding();
   const router = useRouter();
+  const { update } = useSession(); // <-- HOOK AGREGADO
 
   const [businessData, setBusinessDataState] = useState(initialBusinessData);
   const [scheduleData, setScheduleData] = useState(initialScheduleData);
@@ -189,6 +191,7 @@ export default function OnboardingPage() {
       await updateNegocio({
         nombre: businessData.name.trim(),
         descripcion: businessData.description.trim(),
+        categoria: businessData.category,
         horarios: horariosStr,
         contacto: contactoStr,
       });
@@ -215,9 +218,14 @@ export default function OnboardingPage() {
       // Mark onboarding as completed
       markOnboardingCompleted();
 
+      // <-- ACTUALIZACIÓN DE SESIÓN AGREGADA -->
+      await update({ onboarding_completed: true });
+
       // Redirect to dashboard
       router.replace("/dashboard");
     } catch (error) {
+      console.error("Error al guardar el negocio:", error);
+      
       // Even if backend call fails, save locally for demo purposes
       const fullData = {
         name: businessData.name.trim(),
@@ -237,6 +245,10 @@ export default function OnboardingPage() {
       }
 
       markOnboardingCompleted();
+
+      // <-- ACTUALIZACIÓN DE SESIÓN AGREGADA -->
+      await update({ onboarding_completed: true });
+
       router.replace("/dashboard");
     } finally {
       setIsSubmitting(false);

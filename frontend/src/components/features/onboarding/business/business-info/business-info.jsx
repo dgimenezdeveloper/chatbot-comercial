@@ -15,11 +15,14 @@ import { Textarea } from "@/components/ui/textarea/textarea";
 import FieldError from "@/components/features/onboarding/shared/field-error/field-error";
 
 const CATEGORIES = [
-  { value: "hair-salon", label: "Peluquería" },
-  { value: "barbershop", label: "Barbería" },
-  { value: "beauty-center", label: "Centro de estética" },
-  { value: "nail-salon", label: "Salón de uñas" },
-  { value: "spa", label: "Spa" },
+  { value: "salud", label: "Salud y Medicina (Odontología, Clínicas)" },
+  { value: "belleza", label: "Belleza y Estética (Peluquería, Spa)" },
+  { value: "retail", label: "Comercio / Tienda (Ropa, Electrónica)" },
+  { value: "gastronomia", label: "Gastronomía (Restaurantes, Cafés)" },
+  { value: "servicios_profesionales", label: "Servicios Profesionales (Abogados, Contadores)" },
+  { value: "mantenimiento", label: "Talleres y Mantenimiento (Mecánica, Plomería)" },
+  { value: "educacion", label: "Educación y Clases (Tutorías, Gimnasios)" },
+  { value: "otro", label: "Otro rubro" },
 ];
 
 export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
@@ -33,7 +36,7 @@ export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
           icon={<Store className="size-4" />}
           value={data.name}
           onChange={(e) => onFieldChange("name", e.target.value)}
-          placeholder="Ej. Salón Marilyn"
+          placeholder="Ej. Salón Pyme"
           className="mt-2 h-11"
           aria-invalid={Boolean(errors.name)}
         />

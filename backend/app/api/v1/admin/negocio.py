@@ -29,18 +29,26 @@ async def obtener_negocio(
             id=biz.id,
             nombre=biz.name,
             descripcion=biz.description or "Sin descripción",
+            categoria=biz.category or "",
             horarios=biz.horarios or "Lunes a Sábados de 09:00 a 20:00",
             contacto=biz.contacto or f"Tel: {biz.owner_phone or 'Sin teléfono'}",
-            owner_phone=biz.owner_phone or ""
+            owner_phone=biz.owner_phone or "",
+            enable_services=getattr(biz, 'enable_services', True),
+            enable_products=getattr(biz, 'enable_products', True),
+            enable_faqs=getattr(biz, 'enable_faqs', True)
         )
     
     return NegocioResponse(
         id=business_id,
         nombre=f"Comercio ID {business_id}",
         descripcion="Comercio registrado",
+        categoria="",
         horarios="Sin definir",
         contacto="Sin definir",
-        owner_phone=""
+        owner_phone="",
+        enable_services=True,
+        enable_products=True,
+        enable_faqs=True
     )
 
 
@@ -55,10 +63,17 @@ async def actualizar_negocio(
     if biz:
         biz.name = payload.nombre
         biz.description = payload.descripcion
+        if payload.categoria is not None:
+            biz.category = payload.categoria
         biz.horarios = payload.horarios
         biz.contacto = payload.contacto
         if payload.owner_phone is not None:
             biz.owner_phone = payload.owner_phone
+            
+        biz.enable_services = payload.enable_services
+        biz.enable_products = payload.enable_products
+        biz.enable_faqs = payload.enable_faqs
+        
         db.commit()
         db.refresh(biz)
         return NegocioResponse(id=biz.id, **payload.model_dump())
