@@ -19,8 +19,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-Base.metadata.create_all(bind=engine)
-
 # Configuración de CORS habilitando el frontend de Azure y localhost
 ORIGINS = [
     "http://localhost:3000",
