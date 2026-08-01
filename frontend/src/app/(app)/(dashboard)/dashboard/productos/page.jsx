@@ -28,10 +28,14 @@ export default function ProductosPage() {
     deleteProduct,
     isCreating,
     isUpdating,
+    isDeleting,
   } = useProductos();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  const [deletingProduct, setDeletingProduct] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -65,6 +69,25 @@ export default function ProductosPage() {
         active: prod.active ?? true,
       });
       setIsModalOpen(true);
+    }
+  };
+
+  const handleOpenDelete = (productId) => {
+    const prod = products.find((p) => String(p.id) === String(productId));
+    if (prod) {
+      setDeletingProduct(prod);
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingProduct) {
+      deleteProduct(deletingProduct.id, {
+        onSuccess: () => {
+          setIsDeleteModalOpen(false);
+          setDeletingProduct(null);
+        },
+      });
     }
   };
 
@@ -114,10 +137,11 @@ export default function ProductosPage() {
         onRetry={refetch}
         onAddProduct={handleOpenAdd}
         onEditProduct={handleOpenEdit}
-        onDeleteProduct={(id) => deleteProduct(id)}
+        onDeleteProduct={handleOpenDelete}
         onToggleStatus={handleToggleStatus}
       />
 
+      {/* Modal de Crear / Editar Producto */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -203,6 +227,35 @@ export default function ProductosPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmación de Desactivación */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>¿Desactivar Producto?</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm text-muted-foreground leading-relaxed">
+            El producto <strong className="text-foreground">&quot;{deletingProduct?.name}&quot;</strong> pasará a estar inactivo. Dejará de mostrarse en el catálogo del chatbot de WhatsApp.
+          </div>
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Desactivando..." : "Desactivar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardPageLayout>

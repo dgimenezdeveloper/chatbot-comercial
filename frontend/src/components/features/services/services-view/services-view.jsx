@@ -43,7 +43,7 @@ function FilterTab({ active, count, label, onClick }) {
 }
 
 export default function ServicesView({
-  services,
+  services = [],
   isLoading,
   isError,
   error,
@@ -155,13 +155,23 @@ export default function ServicesView({
                   </TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onEditService?.(service.id)} aria-label={`Editar ${service.name}`}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEditService?.(service.id)}
+                        aria-label={`Editar ${service.name}`}
+                        title="Editar servicio"
+                      >
                         <Pencil />
                       </Button>
                       <Button
-                        type="button" variant="ghost" size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => handleDelete(service.id)}
-                        aria-label={`Eliminar ${service.name}`}
+                        aria-label={`Desactivar ${service.name}`}
+                        title="Desactivar servicio"
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <X />

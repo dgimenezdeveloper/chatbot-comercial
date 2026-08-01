@@ -154,13 +154,23 @@ export default function ProductsView({
                   </TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onEditProduct?.(product.id)} aria-label={`Editar ${product.name}`}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEditProduct?.(product.id)}
+                        aria-label={`Editar ${product.name}`}
+                        title="Editar producto"
+                      >
                         <Pencil />
                       </Button>
                       <Button
-                        type="button" variant="ghost" size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => onDeleteProduct?.(product.id)}
-                        aria-label={`Eliminar ${product.name}`}
+                        aria-label={`Desactivar ${product.name}`}
+                        title="Desactivar producto"
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <X />

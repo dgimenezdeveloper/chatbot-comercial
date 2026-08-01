@@ -28,10 +28,14 @@ export default function ServiciosPage() {
     deleteService,
     isCreating,
     isUpdating,
+    isDeleting,
   } = useServicios();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
+
+  const [deletingService, setDeletingService] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -62,6 +66,25 @@ export default function ServiciosPage() {
         basePrice: svc.basePrice || 0,
       });
       setIsModalOpen(true);
+    }
+  };
+
+  const handleOpenDelete = (serviceId) => {
+    const svc = services.find((s) => String(s.id) === String(serviceId));
+    if (svc) {
+      setDeletingService(svc);
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingService) {
+      deleteService(deletingService.id, {
+        onSuccess: () => {
+          setIsDeleteModalOpen(false);
+          setDeletingService(null);
+        },
+      });
     }
   };
 
@@ -111,10 +134,11 @@ export default function ServiciosPage() {
         onRetry={refetch}
         onAddService={handleOpenAdd}
         onEditService={handleOpenEdit}
-        onDeleteService={(id) => deleteService(id)}
+        onDeleteService={handleOpenDelete}
         onToggleStatus={handleToggleStatus}
       />
 
+      {/* Modal de Crear / Editar Servicio */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -201,6 +225,35 @@ export default function ServiciosPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmación de Desactivación */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>¿Desactivar Servicio?</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm text-muted-foreground leading-relaxed">
+            El servicio <strong className="text-foreground">&quot;{deletingService?.name}&quot;</strong> pasará a estar inactivo. Dejará de aparecer en el menú del chatbot de WhatsApp y no podrá ser reservado por tus clientes.
+          </div>
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Desactivando..." : "Desactivar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardPageLayout>
