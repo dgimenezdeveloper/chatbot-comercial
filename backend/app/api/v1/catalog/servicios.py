@@ -23,9 +23,9 @@ async def listar_servicios(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retorna los servicios activos de PostgreSQL para el negocio autenticado."""
+    """Retorna los servicios de PostgreSQL para el negocio autenticado."""
     business_id = current_user.get("business_id", 1)
-    services_db = get_services(db, business_id=business_id)
+    services_db = get_services(db, business_id=business_id, include_inactive=True)
     
     return [
         ServicioResponse(
@@ -33,7 +33,8 @@ async def listar_servicios(
             nombre=s.name,
             descripcion=s.description or "",
             duracion_minutos=s.duration_minutes or 30,
-            precio=float(s.price or 0.0)
+            precio=float(s.price or 0.0),
+            activo=s.is_active if s.is_active is not None else True
         )
         for s in services_db
     ]
@@ -45,10 +46,8 @@ async def crear_servicio(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Crea un nuevo servicio para el negocio autenticado."""
     business_id = current_user.get("business_id", 1)
     
-    # Generar un slug único por comercio evitando colisiones
     raw_slug = payload.nombre.lower().replace(" ", "-").replace("/", "-")
     clean_slug = "".join(c for c in raw_slug if c.isalnum() or c == "-")
     unique_slug = f"{clean_slug[:60]}-{business_id}-{uuid.uuid4().hex[:6]}"
@@ -61,7 +60,7 @@ async def crear_servicio(
         "category": "otros",
         "price": payload.precio,
         "duration_minutes": payload.duracion_minutos,
-        "is_active": True,
+        "is_active": payload.activo if payload.activo is not None else True,
     }
 
     new_svc = create_service(db, data)
@@ -70,7 +69,8 @@ async def crear_servicio(
         nombre=new_svc.name,
         descripcion=new_svc.description or "",
         duracion_minutos=new_svc.duration_minutes or 30,
-        precio=float(new_svc.price or 0.0)
+        precio=float(new_svc.price or 0.0),
+        activo=new_svc.is_active if new_svc.is_active is not None else True
     )
 
 
@@ -81,7 +81,6 @@ async def actualizar_servicio_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Actualiza un servicio existente."""
     business_id = current_user.get("business_id", 1)
 
     data = {
@@ -89,6 +88,7 @@ async def actualizar_servicio_endpoint(
         "description": payload.descripcion,
         "price": payload.precio,
         "duration_minutes": payload.duracion_minutos,
+        "is_active": payload.activo if payload.activo is not None else True,
     }
 
     updated = update_service(db, service_id=servicio_id, business_id=business_id, data=data)
@@ -103,7 +103,8 @@ async def actualizar_servicio_endpoint(
         nombre=updated.name,
         descripcion=updated.description or "",
         duracion_minutos=updated.duration_minutes or 30,
-        precio=float(updated.price or 0.0)
+        precio=float(updated.price or 0.0),
+        activo=updated.is_active if updated.is_active is not None else True
     )
 
 
@@ -113,7 +114,6 @@ async def eliminar_servicio_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Elimina (desactiva) un servicio por ID."""
     business_id = current_user.get("business_id", 1)
     success = delete_service(db, service_id=servicio_id, business_id=business_id)
     if not success:

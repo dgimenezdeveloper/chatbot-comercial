@@ -23,9 +23,8 @@ async def listar_productos(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Retorna los productos activos de PostgreSQL para el negocio autenticado."""
     business_id = current_user.get("business_id", 1)
-    products_db = get_products(db, business_id=business_id)
+    products_db = get_products(db, business_id=business_id, include_inactive=True)
     
     return [
         ProductoResponse(
@@ -46,7 +45,6 @@ async def crear_producto_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Crea un nuevo producto en el catálogo."""
     business_id = current_user.get("business_id", 1)
 
     raw_slug = payload.nombre.lower().replace(" ", "-").replace("/", "-")
@@ -60,7 +58,7 @@ async def crear_producto_endpoint(
         "description": payload.descripcion,
         "price": payload.precio,
         "stock_quantity": payload.stock,
-        "is_active": payload.activo,
+        "is_active": payload.activo if payload.activo is not None else True,
     }
 
     new_prod = create_product(db, data)
@@ -81,7 +79,6 @@ async def actualizar_producto_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Actualiza un producto existente."""
     business_id = current_user.get("business_id", 1)
 
     data = {
@@ -89,7 +86,7 @@ async def actualizar_producto_endpoint(
         "description": payload.descripcion,
         "price": payload.precio,
         "stock_quantity": payload.stock,
-        "is_active": payload.activo,
+        "is_active": payload.activo if payload.activo is not None else True,
     }
 
     updated = update_product(db, product_id=producto_id, business_id=business_id, data=data)
@@ -115,7 +112,6 @@ async def eliminar_producto_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Elimina (desactiva) un producto."""
     business_id = current_user.get("business_id", 1)
     success = delete_product(db, product_id=producto_id, business_id=business_id)
     if not success:

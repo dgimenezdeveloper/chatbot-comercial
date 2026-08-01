@@ -51,6 +51,7 @@ export default function ProductsView({
   onAddProduct,
   onEditProduct,
   onDeleteProduct,
+  onToggleStatus,
 }) {
   const [filter, setFilter] = useState(FILTERS.ALL);
 
@@ -142,7 +143,10 @@ export default function ProductsView({
                   <TableCell className="px-5 py-4 text-muted-foreground">{formatCurrency(product.price)}</TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-2">
-                      <Switch checked={product.active} disabled />
+                      <Switch
+                        checked={product.active}
+                        onCheckedChange={(checked) => onToggleStatus?.(product.id, checked)}
+                      />
                       <span className={cn("text-xs font-semibold uppercase", product.active ? "text-foreground" : "text-muted-foreground")}>
                         {product.active ? "ON" : "OFF"}
                       </span>

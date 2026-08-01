@@ -68,13 +68,27 @@ export default function ProductosPage() {
     }
   };
 
+  const handleToggleStatus = (productId, newActive) => {
+    const prod = products.find((p) => String(p.id) === String(productId));
+    if (prod) {
+      updateProduct({
+        id: prod.id,
+        name: prod.name,
+        description: prod.description,
+        price: prod.price,
+        stock: prod.stock,
+        active: newActive,
+      });
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
     if (editingProduct) {
       updateProduct(
-        { id: editingProduct.id, ...formData },
+        { id: editingProduct.id, ...formData, active: editingProduct.active },
         {
           onSuccess: () => {
             setIsModalOpen(false);
@@ -101,6 +115,7 @@ export default function ProductosPage() {
         onAddProduct={handleOpenAdd}
         onEditProduct={handleOpenEdit}
         onDeleteProduct={(id) => deleteProduct(id)}
+        onToggleStatus={handleToggleStatus}
       />
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -133,7 +148,7 @@ export default function ProductosPage() {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-                placeholder="Detalle breve del producto..."
+                placeholder="Detalle del producto..."
                 className="resize-none"
               />
             </div>

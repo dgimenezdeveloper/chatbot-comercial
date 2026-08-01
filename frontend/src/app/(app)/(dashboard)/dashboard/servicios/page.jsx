@@ -65,13 +65,27 @@ export default function ServiciosPage() {
     }
   };
 
+  const handleToggleStatus = (serviceId, newActive) => {
+    const svc = services.find((s) => String(s.id) === String(serviceId));
+    if (svc) {
+      updateService({
+        id: svc.id,
+        name: svc.name,
+        description: svc.description,
+        durationMinutes: svc.durationMinutes,
+        basePrice: svc.basePrice,
+        active: newActive,
+      });
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
     if (editingService) {
       updateService(
-        { id: editingService.id, ...formData },
+        { id: editingService.id, ...formData, active: editingService.active },
         {
           onSuccess: () => {
             setIsModalOpen(false);
@@ -98,9 +112,9 @@ export default function ServiciosPage() {
         onAddService={handleOpenAdd}
         onEditService={handleOpenEdit}
         onDeleteService={(id) => deleteService(id)}
+        onToggleStatus={handleToggleStatus}
       />
 
-      {/* Modal Interactivo para Crear / Editar Servicio */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

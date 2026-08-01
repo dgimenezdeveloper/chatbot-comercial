@@ -78,7 +78,6 @@ export default function ServicesView({
     onDeleteService?.(serviceId);
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <section className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
@@ -88,7 +87,6 @@ export default function ServicesView({
     );
   }
 
-  // Error state
   if (isError) {
     return (
       <section className="flex flex-1 flex-col">
@@ -110,7 +108,6 @@ export default function ServicesView({
         }
       />
 
-      {/* Filter tabs */}
       <div className="mb-6 flex gap-2">
         <FilterTab label="Todos" count={counts.all} active={filter === FILTERS.ALL} onClick={() => setFilter(FILTERS.ALL)} />
         <FilterTab label="Activos" count={counts.active} active={filter === FILTERS.ACTIVE} onClick={() => setFilter(FILTERS.ACTIVE)} />
@@ -149,7 +146,7 @@ export default function ServicesView({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={service.active}
-                        disabled
+                        onCheckedChange={(checked) => handleToggleStatus(service.id, checked)}
                       />
                       <span className={cn("text-xs font-semibold uppercase", service.active ? "text-foreground" : "text-muted-foreground")}>
                         {service.active ? "ON" : "OFF"}

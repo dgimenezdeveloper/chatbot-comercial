@@ -1,8 +1,4 @@
-"""Servicio CRUD para catálogo — productos y servicios.
-
-Operaciones contra PostgreSQL usando SQLAlchemy Session.
-Reemplaza los mocks de los endpoints de catalog.
-"""
+"""Servicio CRUD para catálogo — productos y servicios."""
 
 import logging
 from typing import Optional
@@ -13,11 +9,6 @@ from app.db.models.product import Product
 from app.db.models.service import Service
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Whitelists de campos actualizables — evitan sobrescritura de id, business_id,
-# created_at y atributos inexistentes.
-# ---------------------------------------------------------------------------
 
 SERVICE_ALLOWED_FIELDS = {
     'name', 'slug', 'description', 'category', 'subcategory',
@@ -31,22 +22,15 @@ PRODUCT_ALLOWED_FIELDS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Servicios
-# ---------------------------------------------------------------------------
-
-def get_services(db: Session, business_id: int) -> list[Service]:
-    """Lista todos los servicios activos de un negocio."""
-    return (
-        db.query(Service)
-        .filter(Service.business_id == business_id, Service.is_active.is_(True))
-        .order_by(Service.category, Service.name)
-        .all()
-    )
+def get_services(db: Session, business_id: int, include_inactive: bool = True) -> list[Service]:
+    """Lista los servicios de un negocio."""
+    query = db.query(Service).filter(Service.business_id == business_id)
+    if not include_inactive:
+        query = query.filter(Service.is_active.is_(True))
+    return query.order_by(Service.category, Service.name).all()
 
 
 def get_service(db: Session, service_id: int, business_id: int) -> Optional[Service]:
-    """Obtiene un servicio por ID, validando pertenencia al negocio."""
     return (
         db.query(Service)
         .filter(Service.id == service_id, Service.business_id == business_id)
@@ -55,7 +39,6 @@ def get_service(db: Session, service_id: int, business_id: int) -> Optional[Serv
 
 
 def create_service(db: Session, data: dict) -> Service:
-    """Crea un nuevo servicio y lo persiste."""
     service = Service(**data)
     db.add(service)
     db.commit()
@@ -65,7 +48,6 @@ def create_service(db: Session, data: dict) -> Service:
 
 
 def update_service(db: Session, service_id: int, business_id: int, data: dict) -> Optional[Service]:
-    """Actualiza un servicio existente. Retorna None si no existe."""
     service = get_service(db, service_id, business_id)
     if not service:
         return None
@@ -79,7 +61,6 @@ def update_service(db: Session, service_id: int, business_id: int, data: dict) -
 
 
 def delete_service(db: Session, service_id: int, business_id: int) -> bool:
-    """Soft-delete: desactiva el servicio (is_active=False)."""
     service = get_service(db, service_id, business_id)
     if not service:
         return False
@@ -89,22 +70,15 @@ def delete_service(db: Session, service_id: int, business_id: int) -> bool:
     return True
 
 
-# ---------------------------------------------------------------------------
-# Productos
-# ---------------------------------------------------------------------------
-
-def get_products(db: Session, business_id: int) -> list[Product]:
-    """Lista todos los productos activos de un negocio."""
-    return (
-        db.query(Product)
-        .filter(Product.business_id == business_id, Product.is_active.is_(True))
-        .order_by(Product.name)
-        .all()
-    )
+def get_products(db: Session, business_id: int, include_inactive: bool = True) -> list[Product]:
+    """Lista los productos de un negocio."""
+    query = db.query(Product).filter(Product.business_id == business_id)
+    if not include_inactive:
+        query = query.filter(Product.is_active.is_(True))
+    return query.order_by(Product.name).all()
 
 
 def get_product(db: Session, product_id: int, business_id: int) -> Optional[Product]:
-    """Obtiene un producto por ID, validando pertenencia al negocio."""
     return (
         db.query(Product)
         .filter(Product.id == product_id, Product.business_id == business_id)
@@ -113,7 +87,6 @@ def get_product(db: Session, product_id: int, business_id: int) -> Optional[Prod
 
 
 def create_product(db: Session, data: dict) -> Product:
-    """Crea un nuevo producto y lo persiste."""
     product = Product(**data)
     db.add(product)
     db.commit()
@@ -123,7 +96,6 @@ def create_product(db: Session, data: dict) -> Product:
 
 
 def update_product(db: Session, product_id: int, business_id: int, data: dict) -> Optional[Product]:
-    """Actualiza un producto existente. Retorna None si no existe."""
     product = get_product(db, product_id, business_id)
     if not product:
         return None
@@ -137,7 +109,6 @@ def update_product(db: Session, product_id: int, business_id: int, data: dict) -
 
 
 def delete_product(db: Session, product_id: int, business_id: int) -> bool:
-    """Soft-delete: desactiva el producto (is_active=False)."""
     product = get_product(db, product_id, business_id)
     if not product:
         return False
