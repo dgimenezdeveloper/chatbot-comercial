@@ -1,4 +1,4 @@
-"""Router de configuración de negocio y gestión de clientes — Versión defensiva."""
+"""Router de configuración de negocio y gestión de clientes."""
 
 import zoneinfo
 from datetime import timezone
@@ -36,13 +36,18 @@ async def obtener_negocio(
             website=getattr(biz, 'website', "") or "",
             instagram=getattr(biz, 'instagram', "") or "",
             facebook=getattr(biz, 'facebook', "") or "",
+            tiktok=getattr(biz, 'tiktok', "") or "",
+            twitter=getattr(biz, 'twitter', "") or "",
             horarios=getattr(biz, 'horarios', "Lunes a Sábados de 09:00 a 20:00") or "Lunes a Sábados de 09:00 a 20:00",
             contacto=getattr(biz, 'contacto', "Tel: Sin teléfono") or "Sin definir",
             owner_phone=getattr(biz, 'owner_phone', "") or "",
             google_calendar_id=getattr(biz, 'google_calendar_id', "") or "",
             enable_services=getattr(biz, 'enable_services', True),
             enable_products=getattr(biz, 'enable_products', True),
-            enable_faqs=getattr(biz, 'enable_faqs', True)
+            enable_faqs=getattr(biz, 'enable_faqs', True),
+            use_whatsapp_templates=getattr(biz, 'use_whatsapp_templates', False),
+            sms_enabled=getattr(biz, 'sms_enabled', False),
+            email_enabled=getattr(biz, 'email_enabled', False)
         )
     
     return NegocioResponse(
@@ -56,13 +61,18 @@ async def obtener_negocio(
         website="",
         instagram="",
         facebook="",
+        tiktok="",
+        twitter="",
         horarios="Sin definir",
         contacto="Sin definir",
         owner_phone="",
         google_calendar_id="",
         enable_services=True,
         enable_products=True,
-        enable_faqs=True
+        enable_faqs=True,
+        use_whatsapp_templates=False,
+        sms_enabled=False,
+        email_enabled=False
     )
 
 
@@ -85,16 +95,21 @@ async def actualizar_negocio(
         if hasattr(biz, 'website') and payload.website is not None: biz.website = payload.website
         if hasattr(biz, 'instagram') and payload.instagram is not None: biz.instagram = payload.instagram
         if hasattr(biz, 'facebook') and payload.facebook is not None: biz.facebook = payload.facebook
+        if hasattr(biz, 'tiktok') and payload.tiktok is not None: biz.tiktok = payload.tiktok
+        if hasattr(biz, 'twitter') and payload.twitter is not None: biz.twitter = payload.twitter
         if hasattr(biz, 'google_calendar_id') and payload.google_calendar_id is not None: biz.google_calendar_id = payload.google_calendar_id
         
         biz.horarios = payload.horarios
         biz.contacto = payload.contacto
-        if payload.owner_phone is not None:
-            biz.owner_phone = payload.owner_phone
+        if payload.owner_phone is not None: biz.owner_phone = payload.owner_phone
             
         if hasattr(biz, 'enable_services'): biz.enable_services = payload.enable_services
         if hasattr(biz, 'enable_products'): biz.enable_products = payload.enable_products
         if hasattr(biz, 'enable_faqs'): biz.enable_faqs = payload.enable_faqs
+        
+        if hasattr(biz, 'use_whatsapp_templates') and payload.use_whatsapp_templates is not None: biz.use_whatsapp_templates = payload.use_whatsapp_templates
+        if hasattr(biz, 'sms_enabled') and payload.sms_enabled is not None: biz.sms_enabled = payload.sms_enabled
+        if hasattr(biz, 'email_enabled') and payload.email_enabled is not None: biz.email_enabled = payload.email_enabled
         
         db.commit()
         db.refresh(biz)

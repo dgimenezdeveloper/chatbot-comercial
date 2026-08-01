@@ -13,6 +13,8 @@ class NegocioRequest(BaseModel):
     website: Optional[str] = Field(None, description="Sitio web")
     instagram: Optional[str] = Field(None, description="Instagram")
     facebook: Optional[str] = Field(None, description="Facebook")
+    tiktok: Optional[str] = Field(None, description="TikTok")
+    twitter: Optional[str] = Field(None, description="X (Twitter)")
     horarios: str = Field(..., description="Horarios de atención al público")
     contacto: str = Field(..., description="Información de contacto compilada")
     owner_phone: Optional[str] = Field(None, description="WhatsApp del dueño para notificaciones")
@@ -22,6 +24,11 @@ class NegocioRequest(BaseModel):
     enable_services: Optional[bool] = Field(True, description="Activar módulo de turnos")
     enable_products: Optional[bool] = Field(True, description="Activar módulo de catálogo")
     enable_faqs: Optional[bool] = Field(True, description="Activar módulo de consultas")
+
+    # Recordatorios alternativos
+    use_whatsapp_templates: Optional[bool] = Field(False, description="Templates oficiales Meta")
+    sms_enabled: Optional[bool] = Field(False, description="SMS como canal alternativo")
+    email_enabled: Optional[bool] = Field(False, description="Email como canal alternativo")
 
 class NegocioResponse(NegocioRequest):
     model_config = ConfigDict(from_attributes=True)

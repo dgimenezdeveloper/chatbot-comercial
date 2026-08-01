@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Package } from "lucide-react";
 
 import { AgendaIcon } from "@/components/icons/AgendaIcon";
 import { ClientesIcon } from "@/components/icons/ClientesIcon";
@@ -18,6 +19,7 @@ const menuItems = [
   { label: "Clientes",      href: "/dashboard/clientes",      icon: ClientesIcon      },
   { label: "Métricas",      href: "/dashboard/metrics",       icon: MetricasIcon      },
   { label: "Servicios",     href: "/dashboard/servicios",     icon: ServiciosIcon     },
+  { label: "Productos",     href: "/dashboard/productos",     icon: Package           },
   { label: "Configuración", href: "/dashboard/configuracion", icon: ConfiguracionIcon },
 ];
 
@@ -25,17 +27,6 @@ function isActiveRoute(pathname, href, exact = false) {
   return exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/**
- * Sidebar receives the pre-rendered `userFooter` as a prop so this Client
- * Component doesn't need to call `auth()` directly (which requires a Server
- * Component context). The footer is built in DashboardLayout as a Server
- * Component and passed down.
- *
- * Props:
- *   userFooter   — pre-rendered Server Component node
- *   onNavigate   — optional callback fired when a nav link is clicked
- *                  (used by MobileTopBar to close the Sheet)
- */
 export function Sidebar({ userFooter, onNavigate }) {
   const pathname = usePathname();
 

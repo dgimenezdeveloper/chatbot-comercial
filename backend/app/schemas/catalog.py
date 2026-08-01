@@ -18,6 +18,7 @@ class ProductoRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     nombre: str = Field(..., description="Nombre del producto")
+    descripcion: Optional[str] = Field(None, description="Descripción detallada del producto")
     precio: float = Field(..., description="Precio de venta")
     stock: int = Field(..., description="Cantidad disponible en inventario")
     activo: bool = Field(True, description="Indica si el producto está activo para la venta")

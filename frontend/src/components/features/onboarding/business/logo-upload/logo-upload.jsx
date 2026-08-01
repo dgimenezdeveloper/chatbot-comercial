@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button/button";
 import StoreIcon from "@/components/icons/dashboard/store";
@@ -19,23 +19,24 @@ export default function LogoUpload({
   onChange,
 }) {
   const inputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
   const [localError, setLocalError] = useState("");
 
-  useEffect(() => {
-    if (!value) {
-      setPreviewUrl(null);
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(value);
-
-    setPreviewUrl(objectUrl);
-
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
+  // Derivación sincrónica con useMemo: elimina la necesidad de useState y evita llamar a setState en un efecto
+  const previewUrl = useMemo(() => {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (value instanceof Blob) return URL.createObjectURL(value);
+    return null;
   }, [value]);
+
+  // Limpieza de memoria del blob URL cuando el componente se desmonta o cambia de archivo
+  useEffect(() => {
+    return () => {
+      if (previewUrl && typeof previewUrl === "string" && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleOpenFilePicker = () => {
     inputRef.current?.click();

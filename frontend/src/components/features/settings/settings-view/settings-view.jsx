@@ -101,6 +101,8 @@ export default function SettingsView() {
     website: "",
     instagram: "",
     facebook: "",
+    tiktok: "",
+    twitter: "",
   });
 
   const [settings, setSettings] = useState({
@@ -137,11 +139,16 @@ export default function SettingsView() {
             website: data.website || "",
             instagram: data.instagram || "",
             facebook: data.facebook || "",
+            tiktok: data.tiktok || "",
+            twitter: data.twitter || "",
           });
           setSettings((prev) => ({
             ...prev,
             ownerPhone: data.owner_phone || "",
             googleCalendarId: data.google_calendar_id || "",
+            useWhatsappTemplates: data.use_whatsapp_templates ?? false,
+            smsEnabled: data.sms_enabled ?? false,
+            emailEnabled: data.email_enabled ?? false,
             enableServices: data.enable_services ?? true,
             enableProducts: data.enable_products ?? true,
             enableFaqs: data.enable_faqs ?? true,
@@ -177,6 +184,8 @@ export default function SettingsView() {
         website: business.website.trim(),
         instagram: business.instagram.trim(),
         facebook: business.facebook.trim(),
+        tiktok: business.tiktok.trim(),
+        twitter: business.twitter.trim(),
         google_calendar_id: settings.googleCalendarId.trim(),
         horarios: "Lunes a Sábados de 09:00 a 20:00",
         contacto: [business.email, business.phone].filter(Boolean).join(" | "),
@@ -184,6 +193,9 @@ export default function SettingsView() {
         enable_services: settings.enableServices,
         enable_products: settings.enableProducts,
         enable_faqs: settings.enableFaqs,
+        use_whatsapp_templates: settings.useWhatsappTemplates,
+        sms_enabled: settings.smsEnabled,
+        email_enabled: settings.emailEnabled,
       });
 
       if (res) {
@@ -197,11 +209,16 @@ export default function SettingsView() {
           website: res.website || prev.website,
           instagram: res.instagram || prev.instagram,
           facebook: res.facebook || prev.facebook,
+          tiktok: res.tiktok || prev.tiktok,
+          twitter: res.twitter || prev.twitter,
         }));
         setSettings((prev) => ({
           ...prev,
           ownerPhone: res.owner_phone || prev.ownerPhone,
           googleCalendarId: res.google_calendar_id || prev.googleCalendarId,
+          useWhatsappTemplates: res.use_whatsapp_templates ?? prev.useWhatsappTemplates,
+          smsEnabled: res.sms_enabled ?? prev.smsEnabled,
+          emailEnabled: res.email_enabled ?? prev.emailEnabled,
           enableServices: res.enable_services ?? prev.enableServices,
           enableProducts: res.enable_products ?? prev.enableProducts,
           enableFaqs: res.enable_faqs ?? prev.enableFaqs,
@@ -314,6 +331,26 @@ export default function SettingsView() {
                 className="h-10"
               />
             </FieldRow>
+
+            <FieldRow label="TikTok" htmlFor="biz-tiktok">
+              <Input
+                id="biz-tiktok"
+                value={business.tiktok}
+                onChange={updateBusiness("tiktok")}
+                placeholder="@tunegocio"
+                className="h-10"
+              />
+            </FieldRow>
+
+            <FieldRow label="X (Twitter)" htmlFor="biz-twitter">
+              <Input
+                id="biz-twitter"
+                value={business.twitter}
+                onChange={updateBusiness("twitter")}
+                placeholder="@tunegocio"
+                className="h-10"
+              />
+            </FieldRow>
           </div>
         </SettingsSection>
 
@@ -369,7 +406,7 @@ export default function SettingsView() {
           </FieldRow>
         </SettingsSection>
 
-        {/* ── Recordatorios ────────────────────────────────────────────────── */}
+        {/* ── Recordatorios & Handover ──────────────────────────────────────── */}
         <SettingsSection
           icon={Bell}
           title="Recordatorios & Handover"
@@ -396,6 +433,22 @@ export default function SettingsView() {
             description="Usa plantillas oficiales de Meta para recordatorios fuera de la ventana de 24 h."
             checked={settings.useWhatsappTemplates}
             onCheckedChange={updateSettings("useWhatsappTemplates")}
+          />
+
+          <SwitchRow
+            id="sms-enabled"
+            label="SMS como canal alternativo"
+            description="Envía recordatorios por SMS si WhatsApp no está disponible."
+            checked={settings.smsEnabled}
+            onCheckedChange={updateSettings("smsEnabled")}
+          />
+
+          <SwitchRow
+            id="email-enabled"
+            label="Email como canal alternativo"
+            description="Envía confirmaciones y recordatorios por correo electrónico."
+            checked={settings.emailEnabled}
+            onCheckedChange={updateSettings("emailEnabled")}
           />
         </SettingsSection>
 
