@@ -1,9 +1,6 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-base), ui-sans-serif, system-ui, sans-serif;
-  --font-title: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -38,6 +35,11 @@
 
   --color-menu-active: hsl(var(--menu-active));
   --color-menu-primary: hsl(var(--menu-primary));
+
+  --color-section-alt: hsl(var(--section-alt));
+
+  --color-footer: hsl(var(--footer));
+  --color-footer-foreground: hsl(var(--footer-foreground));
 
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
@@ -125,7 +127,7 @@ Shadcn defaults to easily spot missed overrides
     --neutral: 220 9% 46%;
 
     /* Alternating section background */
-    --section-alt: 220 14% 90%;
+    --section-alt: 213 29% 87%;
   }
   
 /* =========================================
@@ -134,6 +136,11 @@ THEME: LANDING PAGE
   .theme-landing {
     --font-base: var(--font-inter);
     --font-heading: var(--font-montserrat);
+
+    --font-sans: var(--font-inter, ui-sans-serif, system-ui, sans-serif);
+    --font-title: var(--font-montserrat, ui-sans-serif, system-ui, sans-serif);
+
+
     --background: 0 0% 100%;
     --foreground: 210 33% 4%;
 
@@ -167,14 +174,15 @@ THEME: LANDING PAGE
     --radius: 0.5rem;
 
     /* Footer */
-    --footer: 217 19% 54%;
+    --footer: 213 26% 54%;
     --footer-foreground: 0 0% 100%;
 
     /* Neutral text (headings, labels) #6B7280 */
     --neutral: 220 9% 46%;
 
     /* Alternating section background */
-    --section-alt: 220 14% 90%;
+    --section-alt: 213 29% 87%;
+
   }
 
   /* TO-DO: Colors for landing dark mode 
@@ -188,6 +196,10 @@ THEME: APP (Dashboard & Onboarding)
   .theme-app {
     --font-base: var(--font-geist-sans);
     --font-heading: var(--font-geist-sans);
+
+    --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+    --font-title: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+
     --background: 0 0% 100%;
     --foreground: 222 47% 11%;
 
@@ -242,15 +254,11 @@ THEME: APP (Dashboard & Onboarding)
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-title font-semibold;
-  }
+  h1, h2, h3, h4, h5, h6 {
+  @apply font-semibold;
+  font-family: var(--font-title);
+}
 }

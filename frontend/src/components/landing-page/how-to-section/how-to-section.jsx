@@ -2,11 +2,8 @@ export default function HowToSection() {
   return (
     <section id="indicaciones" className="w-full px-6 bg-white">
       <div className="mx-auto max-w-6xl">
-        {/* Title */}
-        <h2 className="font-title text-[32px] font-semibold text-neutral mb-10">
-          <span className="border-b-2 border-neutral pb-1">
-            Instrucciones
-          </span>
+        <h2 className="text-[32px] font-medium text-neutral leading-[160%] tracking-[2%] mb-5">
+          <span className="underline underline-offset-3 decoration-2">Instrucciones</span>
         </h2>
 
         {/* Two-column content */}

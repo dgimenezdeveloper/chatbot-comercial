@@ -10,7 +10,7 @@ export const metadata = {
 // to <html> via ThemeProvider so CSS variables resolve correctly.
 export default function RootLayout({ children }) {
   return (
-    <html lang="es" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="es" className="h-full antialiased" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

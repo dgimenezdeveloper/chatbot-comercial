@@ -17,9 +17,14 @@ const geistMono = Geist_Mono({
 export default function AppLayout({ children }) {
   return (
     <>
-      {/* Applies theme-app class to <html> so CSS vars override :root fallbacks */}
       <ThemeProvider theme="theme-app" />
-      <div className={`${geistSans.variable} ${geistMono.variable}`}>
+      <div 
+        className={`${geistSans.variable} ${geistMono.variable}`}
+        style={{
+          fontFamily: "var(--font-geist-sans)",
+          "--font-title": "var(--font-geist-sans)"
+        }}
+      >
         <QueryProvider>{children}</QueryProvider>
       </div>
     </>

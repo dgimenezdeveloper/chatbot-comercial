@@ -53,7 +53,7 @@ export default function Navbar() {
           <LogoPymio className="w-22.5 h-11.5 lg:w-31.25 lg:h-16" />
         </Link>
 
-        <div className="hidden lg:flex items-center gap-14 text-[1rem] leading-1.5 text-menu-primary/90 font-title font-medium transition-colors tracking-wide">
+        <div className="hidden lg:flex items-center gap-14 text-[1rem] leading-1.5 text-menu-primary/90 font-medium transition-colors tracking-wide">
           <a
             href="#home"
             className="text-menu-active  font-semibold hover:text-menu-active"

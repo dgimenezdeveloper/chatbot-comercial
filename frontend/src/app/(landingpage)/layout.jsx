@@ -12,16 +12,19 @@ const inter = Inter({
 const montserrat = Montserrat({
   subsets: ["latin"],
   variable: "--font-montserrat",
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export default function LandingLayout({ children }) {
   return (
     <>
-      {/* Registers font CSS variables and applies theme-landing to <html> */}
       <ThemeProvider theme="theme-landing" />
       <div
-        className={`${inter.variable} ${montserrat.variable} font-sans min-h-screen flex flex-col gap-4 lg:gap-20`}
+        className={`${inter.variable} ${montserrat.variable} min-h-screen flex flex-col gap-4 lg:gap-20`}
+        style={{
+          fontFamily: "var(--font-inter)",
+          "--font-title": "var(--font-montserrat)"
+        }}
       >
         <Navbar />
         <main className="grow">{children}</main>

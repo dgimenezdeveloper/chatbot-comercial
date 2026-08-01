@@ -77,12 +77,12 @@ export default function BenefitsSection() {
       <div className="relative w-full px-6 pb-12.5">
         <div className="mx-auto max-w-6xl flex flex-col">
           {/* Section title */}
-          <h2 className="font-title text-[32px] font-normal text-white">
-            <span className="border-b-2 border-white pb-1">Beneficios</span>
+          <h2 className="text-[32px] font-normal text-white leading-[160%] tracking-[2%]">
+            <span className="underline underline-offset-3 decoration-2">Beneficios</span>
           </h2>
 
           {/* 2nd title */}
-          <p className="font-title text-[32px] font-semibold text-white uppercase mt-1.25">
+          <p className="text-[32px] font-semibold text-white uppercase leading-[121.2%] mt-1.25">
             Experimentá una nueva forma de conectarte con tus clientes
           </p>
 
@@ -107,7 +107,7 @@ export default function BenefitsSection() {
                   />
                 </div>
                 <div className="flex flex-col justify-center flex-1">
-                  <p className="font-sans text-[24px] font-medium text-foreground leading-[160%]">
+                  <p className="text-[24px] font-medium text-foreground leading-[160%]">
                     Con Pymio tus mañanas, tardes y semanas están programadas,
                     organizadas y accesibles según tus necesidades particulares.
                     Él se encarga de contestar todas las consultas, y cargar las
@@ -130,10 +130,10 @@ export default function BenefitsSection() {
                   />
                 </div>
                 <div className="flex flex-col justify-start pt-2 flex-1 md:w-[30%]">
-                  <h3 className="font-title text-[20px] font-normal text-neutral mb-4">
+                  <h3 className="text-[20px] font-normal text-neutral mb-4">
                     Versión de prueba gratuita.
                   </h3>
-                  <p className="font-sans text-[24px] font-medium text-foreground leading-snug tracking-[-.48]">
+                  <p className="text-[24px] font-medium text-foreground leading-snug tracking-[-.48]">
                     Al registrarte te facilitaremos un número de prueba gratuito
                     que te permitirá jugar con el bot, cargar tu catálogo y
                     chatear con él desde celulares autorizados para prueba.
@@ -153,7 +153,7 @@ export default function BenefitsSection() {
                   />
                 </div>
                 <div className="flex flex-col justify-center flex-1">
-                  <p className="font-sans text-[24px] font-medium text-foreground leading-[160%]">
+                  <p className="text-[24px] font-medium text-foreground leading-[160%]">
                     Con Pymio tus mañanas, tardes y semanas están programadas,
                     organizadas y accesibles según tus necesidades particulares.
                     Él se encarga de contestar todas las consultas, y cargar las

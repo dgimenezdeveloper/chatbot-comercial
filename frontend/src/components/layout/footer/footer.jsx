@@ -15,11 +15,11 @@ const LEGAL_LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="w-full bg-[hsl(var(--footer))] text-[hsl(var(--footer-foreground))] py-10 px-6">
+    <footer className="w-full bg-footer text-footer-foreground py-10 h-58 px-6">
       <div className="mx-auto max-w-4xl flex flex-col items-center gap-4">
         {/* Divider with social icons */}
-        <div className="flex w-full items-center gap-4">
-          <span className="h-px flex-1 bg-white/40" />
+        <div className="flex w-full items-center gap-30">
+          <span className="h-0.5 flex-1 bg-white" />
           <nav aria-label="Redes sociales" className="flex items-center gap-5">
             {SOCIAL_LINKS.map(({ href, label, icon: Icon }) => (
               <a
@@ -32,12 +32,12 @@ export default function Footer() {
               </a>
             ))}
           </nav>
-          <span className="h-px flex-1 bg-white/40" />
+          <span className="h-0.5 flex-1 bg-white" />
         </div>
 
         {/* Brand */}
-        <p className="font-title text-lg font-bold tracking-wide uppercase">
-          PYME-BOT
+        <p className="text-lg font-bold tracking-wide uppercase">
+          PYMIO
         </p>
 
         {/* Legal links */}

@@ -30,11 +30,10 @@ const FAQ_ITEMS = [
 
 export default function FaqSection() {
   return (
-    <section id="consultas" className="w-full px-6 py-15 bg-[hsl(var(--section-alt))]">
+    <section id="consultas" className="w-full px-6 py-15 bg-section-alt">
       <div className="mx-auto max-w-6xl">
-        {/* Title */}
-        <h2 className="font-title text-[32px] font-semibold text-[hsl(var(--neutral))] mb-10 md:mb-14">
-          <span className="border-b-2 border-[hsl(var(--neutral))] pb-1">Consultas</span>
+        <h2 className="text-[32px] font-medium text-neutral leading-[160%] tracking-[2%] mb-5">
+          <span className="underline underline-offset-3 decoration-2">Consultas</span>
         </h2>
 
         {/* Content grid: accordion card (smaller) + robot image (larger) */}

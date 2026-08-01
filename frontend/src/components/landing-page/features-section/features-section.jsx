@@ -5,10 +5,8 @@ export default function FeaturesSection() {
     <section id="propuesta" className="max-w-300 px-5 mx-auto w-full grid lg:grid-cols-2 gap-16 border-t border-slate-100 bg-white">
       {/* Left Column */}
       <div className="flex flex-col gap-6">
-        <h2 className="font-title text-[32px] font-semibold text-[hsl(var(--neutral))]">
-          <span className="border-b-2 border-[hsl(var(--neutral))] pb-1">
-            Propuesta
-          </span>
+        <h2 className="text-[32px] font-normal text-neutral leading-[160%] tracking-[2%]">
+          <span className="underline underline-offset-3 decoration-2">Propuesta</span>
         </h2>
         <h3 className="text-2xl md:text-3xl font-medium text-[#456189] leading-snug">
           ¿Tienes problemas para gestionar todas las solicitudes de turnos o tu
@@ -47,7 +45,7 @@ export default function FeaturesSection() {
           alt="Funcionalidades de Pymio: saludo personalizado, contestador automático y agenda sincronizada"
           width={500}
           height={500}
-          className="w-full max-w-[480px] h-auto object-contain"
+          className="w-full max-w-120 h-auto object-contain"
           priority
         />
       </div>
