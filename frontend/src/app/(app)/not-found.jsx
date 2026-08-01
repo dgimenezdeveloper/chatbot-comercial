@@ -20,11 +20,11 @@ export default function AppNotFound() {
 
         {/* Left — text */}
         <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
-          <h1 className="font-title text-7xl font-bold text-primary sm:text-8xl">
+          <h1 className="text-7xl font-bold text-primary sm:text-8xl">
             404
           </h1>
 
-          <h2 className="mt-3 font-title text-xl font-bold text-foreground sm:text-2xl">
+          <h2 className="mt-3 text-xl font-bold text-foreground sm:text-2xl">
             Ups... esta pagina se tomo un descanso
           </h2>
 

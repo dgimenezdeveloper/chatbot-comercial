@@ -32,15 +32,27 @@ router = APIRouter()
 
 MOCK_BUSINESS_ID = 1
 
-BOTONES_PRINCIPALES = [
-    {"id": "btn_turnos", "title": "📅 Gestión de Turnos"},
-    {"id": "btn_catalogo", "title": "🛍️ Catálogo"},
-    {"id": "btn_faq", "title": "❓ Consultas"}
-]
-
 # =============================================================================
 # HELPERS DE TELÉFONO, NEGOCIO Y VALIDACIÓN DE ESTADO
 # =============================================================================
+
+def get_dynamic_menu(db: Session, business_id: int) -> list:
+    """Construye el menú principal dinámicamente según los módulos activos del negocio."""
+    biz = db.query(Business).filter(Business.id == business_id).first()
+    buttons = []
+    
+    if biz and getattr(biz, 'enable_services', True):
+        buttons.append({"id": "btn_turnos", "title": "📅 Gestión de Turnos"})
+    if biz and getattr(biz, 'enable_products', True):
+        buttons.append({"id": "btn_catalogo", "title": "🛍️ Catálogo"})
+    if biz and getattr(biz, 'enable_faqs', True):
+        buttons.append({"id": "btn_faq", "title": "❓ Consultas"})
+        
+    # Fallback de seguridad por si desactivan todo
+    if not buttons:
+        buttons.append({"id": "btn_faq", "title": "❓ Consultas"})
+        
+    return buttons
 
 def get_business_name(db: Session, business_id: int) -> str:
     business = db.query(Business).filter(Business.id == business_id).first()
@@ -53,17 +65,14 @@ def get_existing_user_name(db: Session, phone: str, business_id: int) -> str | N
     return None
 
 def format_phone_for_meta(phone: str | None) -> str | None:
-    """Extrae solo dígitos para enviar a Meta Cloud API (E.164 puro)."""
     if not phone: return None
     return "".join(c for c in phone if c.isdigit())
 
 def clean_phone_number(phone: str | None) -> str:
-    """Limpia el número dejando solo dígitos."""
     if not phone: return ""
     return "".join(c for c in phone if c.isdigit())
 
 def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
-    """Compara dos teléfonos por sus últimos 8 dígitos."""
     if not phone1 or not phone2: return False
     p1 = format_phone_for_meta(phone1)
     p2 = format_phone_for_meta(phone2)
@@ -71,7 +80,6 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
     return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
 
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
-    """Valida si la opción interactiva elegida pertenece al paso conversacional activo."""
     if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"] or selected_id.startswith("rem_") or selected_id.startswith("btn_mod_appt_") or selected_id.startswith("btn_confirm_cancel_"):
         return True
 
@@ -127,10 +135,11 @@ async def trigger_human_escalation(phone: str, user_text: str, user_state: dict,
 
     if not owner_phone or is_same_phone(raw_owner_phone, phone):
         logger.warning(f"[HANDOVER] Owner phone no configurado o idéntico al cliente ({phone}). Retornando al menú.")
+        botones_dinamicos = get_dynamic_menu(db, business_id)
         await send_interactive_buttons(
             phone=phone,
             body_text="En este momento nuestros representantes no están disponibles. ¿En qué más podemos ayudarte?",
-            buttons=BOTONES_PRINCIPALES
+            buttons=botones_dinamicos
         )
         await clear_user_state(phone)
         return
@@ -174,7 +183,9 @@ async def handle_welcome_flow(phone: str, business_id: int, db: Session):
     known_name = get_existing_user_name(db, phone, business_id)
     greeting = f"¡Hola {known_name}! " if known_name else "¡Hola! "
     
-    await send_interactive_buttons(phone=phone, body_text=f"{greeting}Bienvenido a *{nombre_negocio}*. ¿Qué deseas realizar?", buttons=BOTONES_PRINCIPALES)
+    botones_dinamicos = get_dynamic_menu(db, business_id)
+    
+    await send_interactive_buttons(phone=phone, body_text=f"{greeting}Bienvenido a *{nombre_negocio}*. ¿Qué deseas realizar?", buttons=botones_dinamicos)
 
 async def handle_main_menu_selection(phone: str, button_id: str, user_state: dict, business_id: int, db: Session):
     log_event(session_id=phone, business_id=business_id, event_type="menu_option_selected", payload={"option_name": button_id})
@@ -767,10 +778,12 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         if len(parts) > 1 and parts[1].strip().lower() == "#fin":
                             await close_human_proxy(current_business_id, short_id)
                             await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para el cliente.")
+                            
+                            botones_dinamicos = get_dynamic_menu(db, current_business_id)
                             await send_interactive_buttons(
                                 phone=client_phone,
                                 body_text="👨‍💻 El asistente virtual vuelve a estar activo. ¿En qué más puedo ayudarte?",
-                                buttons=BOTONES_PRINCIPALES
+                                buttons=botones_dinamicos
                             )
                             await clear_user_state(client_phone)
                         else:
@@ -781,7 +794,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
 
             # -----------------------------------------------------------------
             # 3. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
-            # (EL BOT PERMANECE 100% SILENCIOSO. TODO TEXTO SE REENVÍA AL DUEÑO)
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
                 if message_type == "interactive":
@@ -823,6 +835,10 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif user_text.lower() == "/reset_demo barberia":
                     await _reset_demo_tenant(db, phone_number, 2, "Barbería")
                     return {"status": "success"}
+                elif user_text.lower() in ["/reset_demo odontologia", "/reset_demo odontología", "/reset_demo centro odontologico"]:
+                    await _reset_demo_tenant(db, phone_number, 3, "Centro Odontológico")
+                    return {"status": "success"}
+                
 
                 # Comando para abrir ventana de 24hs del dueño sin activar menú de cliente
                 biz = db.query(Business).filter(Business.id == current_business_id).first()
@@ -923,7 +939,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                             tz = zoneinfo.ZoneInfo(tz_str)
                             local_dt = appt.scheduled_date.astimezone(tz)
                             
-                            # Cancelar todos los servicios pertenecientes a la misma visita/sesión
                             client_appts = get_appointments_by_phone(db, current_business_id, phone_number)
                             group = [
                                 a for a in client_appts

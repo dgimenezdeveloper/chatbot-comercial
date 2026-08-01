@@ -1,15 +1,22 @@
-export default function FacebookIcon(props) {
-  return (
-    <svg
-      viewBox="0 0 33.6 33.6"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <path
-        d="M16.8 0C7.5215 0 0 7.5215 0 16.8C0 26.0785 7.5215 33.6 16.8 33.6C26.0785 33.6 33.6 26.0785 33.6 16.8C33.6 7.5215 26.0785 0 16.8 0ZM20.7795 11.6095H18.2543C17.955 11.6095 17.6225 12.0033 17.6225 12.5265V14.35H20.7813L20.3035 16.9505H17.6225V24.7573H14.6423V16.9505H11.9385V14.35H14.6423V12.8205C14.6423 10.626 16.1648 8.84275 18.2543 8.84275H20.7795V11.6095Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
+import * as React from "react";
+
+const SvgIcon = (props) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    xmlSpace="preserve"
+    id="Layer_1"
+    width="16"
+    height="16"
+    fill="#fff"
+    stroke="#fff"
+    version="1.1"
+    viewBox="-337 273 123.5 256"
+  >
+    <path
+      id="SVGRepo_iconCarrier"
+      d="M-260.9 327.8c0-10.3 9.2-14 19.5-14s21.3 3.2 21.3 3.2l6.6-39.2s-14-4.8-47.4-4.8c-20.5 0-32.4 7.8-41.1 19.3-8.2 10.9-8.5 28.4-8.5 39.7v25.7H-337V396h26.5v133h49.6V396h39.3l2.9-38.3h-42.2z"
+    ></path>
+  </svg>
+);
+
+export default SvgIcon;

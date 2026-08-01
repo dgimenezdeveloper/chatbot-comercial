@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useOnboarding } from "@/components/features/onboarding/shared/onboarding-context/onboarding-context";
 
 import BusinessStep from "@/components/features/onboarding/business/business-step/business-step";
@@ -127,6 +128,7 @@ const DAY_LABELS = {
 export default function OnboardingPage() {
   const { step, setStep } = useOnboarding();
   const router = useRouter();
+  const { update } = useSession();
 
   const [businessData, setBusinessDataState] = useState(initialBusinessData);
   const [scheduleData, setScheduleData] = useState(initialScheduleData);
@@ -176,24 +178,27 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
 
     try {
-      // Build the horarios string for the backend
       const daysStr = scheduleData.days.map((d) => DAY_LABELS[d]).join(", ");
       const horariosStr = `${daysStr} de ${scheduleData.open} a ${scheduleData.close}`;
 
-      // Build contacto string
       const contactParts = [businessData.email, businessData.phone];
       if (businessData.website) contactParts.push(businessData.website);
       const contactoStr = contactParts.join(" | ");
 
-      // Call backend (demonstrates integration, backend echoes back)
       await updateNegocio({
         nombre: businessData.name.trim(),
         descripcion: businessData.description.trim(),
+        categoria: businessData.category,
+        direccion: businessData.address.trim(),
+        telefono: businessData.phone.trim(),
+        email: businessData.email.trim(),
+        website: businessData.website.trim(),
+        instagram: businessData.social?.instagram?.trim() || "",
+        facebook: businessData.social?.facebook?.trim() || "",
         horarios: horariosStr,
         contacto: contactoStr,
       });
 
-      // Persist to localStorage
       const fullData = {
         name: businessData.name.trim(),
         description: businessData.description.trim(),
@@ -207,18 +212,18 @@ export default function OnboardingPage() {
       };
       setBusinessData(fullData);
 
-      // Save logo if uploaded
       if (businessData.logo) {
         await saveLogoFromFile(businessData.logo);
       }
 
-      // Mark onboarding as completed
       markOnboardingCompleted();
 
-      // Redirect to dashboard
+      await update({ onboarding_completed: true });
+
       router.replace("/dashboard");
     } catch (error) {
-      // Even if backend call fails, save locally for demo purposes
+      console.error("Error al guardar el negocio:", error);
+      
       const fullData = {
         name: businessData.name.trim(),
         description: businessData.description.trim(),
@@ -237,6 +242,9 @@ export default function OnboardingPage() {
       }
 
       markOnboardingCompleted();
+
+      await update({ onboarding_completed: true });
+
       router.replace("/dashboard");
     } finally {
       setIsSubmitting(false);
