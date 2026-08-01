@@ -10,11 +10,6 @@ import {
 
 const SERVICIOS_KEY = ["servicios"];
 
-/**
- * Normalizes backend service shape to the frontend model.
- * Backend: { id, nombre, descripcion, duracion_minutos, precio }
- * Frontend: { id, name, description, durationMinutes, basePrice, active }
- */
 function toFrontend(s) {
   return {
     id: s.id,
@@ -22,45 +17,24 @@ function toFrontend(s) {
     description: s.descripcion || "",
     durationMinutes: s.duracion_minutos,
     basePrice: s.precio,
-    // Backend doesn't have active/category yet — default to true / "General"
     active: s.activo ?? true,
     category: s.categoria || "General",
   };
 }
 
-/**
- * Normalizes frontend shape to backend payload.
- */
 function toBackend(s) {
   return {
     nombre: s.name,
     descripcion: s.description || null,
     duracion_minutos: s.durationMinutes,
     precio: s.basePrice,
+    activo: s.active ?? true,
   };
 }
 
-/**
- * TanStack Query hook for Servicios CRUD.
- *
- * @returns {{
- *   services: Array,
- *   isLoading: boolean,
- *   isError: boolean,
- *   error: Error|null,
- *   refetch: Function,
- *   createService: Function,
- *   updateService: Function,
- *   deleteService: Function,
- *   isCreating: boolean,
- *   isUpdating: boolean,
- *   isDeleting: boolean,
- * }}
- */
 export function useServicios() {
   const queryClient = useQueryClient();
 
-  // --- Query ---
   const {
     data: services = [],
     isLoading,
@@ -73,7 +47,6 @@ export function useServicios() {
     select: (data) => data.map(toFrontend),
   });
 
-  // --- Mutations ---
   const createMutation = useMutation({
     mutationFn: (serviceData) => createServicio(toBackend(serviceData)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: SERVICIOS_KEY }),

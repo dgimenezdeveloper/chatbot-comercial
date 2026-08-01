@@ -11,7 +11,7 @@ export function SidebarLogout({ className }) {
       type="button"
       onClick={() => signOut({ redirectTo: "/" })}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-background hover:text-foreground",
+        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-background hover:text-foreground cursor-pointer",
         className,
       )}
     >

@@ -61,10 +61,6 @@
 }
 
 @layer base {
-/* =========================================
-ROOT DICTIONARY (Fallback colors)
-Shadcn defaults to easily spot missed overrides
-========================================= */
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -87,13 +83,11 @@ Shadcn defaults to easily spot missed overrides
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
 
-    /* Fallbacks custom vars */
     --cta: 222.2 47.4% 11.2%;
     --cta-foreground: 210 40% 98%;
     --menu-active: 210 40% 96.1%;
     --menu-primary: 215.4 16.3% 46.9%;
 
-    /* Status tokens — fallback */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -112,9 +106,6 @@ Shadcn defaults to easily spot missed overrides
     --nav-active-foreground: 222.2 84% 4.9%;
   }
   
-/* =========================================
-THEME: LANDING PAGE
-========================================= */
   .theme-landing {
     --font-base: var(--font-inter);
     --font-heading: var(--font-montserrat);
@@ -151,13 +142,6 @@ THEME: LANDING PAGE
     --radius: 0.5rem;
   }
 
-  .dark .theme-landing {
-  /* TO-DO: Colors for landing dark mode */
-  }
-
-/* =========================================
-THEME: APP (Dashboard & Onboarding)
-========================================= */
   .theme-app {
     --font-base: var(--font-geist-sans);
     --font-heading: var(--font-geist-sans);
@@ -182,7 +166,6 @@ THEME: APP (Dashboard & Onboarding)
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Status tokens */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -205,16 +188,17 @@ THEME: APP (Dashboard & Onboarding)
     --nav-active-foreground: 221 83% 53%;
   }
 
-  .dark .theme-app {
-  /* TO-DO: Colors for app dark mode */
-  }
-
   *{
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  /* Garantizar cursor-pointer en todos los elementos interactivos */
+  button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"] {
+    cursor: pointer;
   }
 
   h1,
