@@ -11,7 +11,7 @@ export default function ContactInfo({ data, errors = {}, onFieldChange }) {
     <div className="space-y-5">
       {/* Teléfono */}
       <div>
-        <Label htmlFor="business-phone">Teléfono</Label>
+        <Label htmlFor="business-phone">Teléfono de contacto</Label>
         <InputWithIcon
           id="business-phone"
           type="tel"
@@ -27,7 +27,7 @@ export default function ContactInfo({ data, errors = {}, onFieldChange }) {
 
       {/* Email */}
       <div>
-        <Label htmlFor="business-email">Email de contacto</Label>
+        <Label htmlFor="business-email">Email comercial</Label>
         <InputWithIcon
           id="business-email"
           type="email"

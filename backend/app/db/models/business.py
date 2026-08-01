@@ -1,8 +1,4 @@
-"""Modelo de negocio — entidad raíz multi-tenant del sistema.
-
-Cada registro representa un cliente del chatbot (peluquería, salón, barbería, etc.).
-Todas las tablas de negocio referencian ``business.id`` como FK para aislamiento de datos.
-"""
+"""Modelo de negocio — entidad raíz multi-tenant del sistema."""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
@@ -28,10 +24,29 @@ class Business(Base):
         Text, nullable=True,
         comment="Descripción breve del negocio",
     )
+    category = Column(
+        String(50), nullable=True,
+        comment="Macro-categoría del negocio (salud, belleza, retail, etc.)",
+    )
     active = Column(
         Boolean, default=True,
         comment="Negocio activo en el sistema",
     )
+
+    # Módulos Dinámicos Multiempresa
+    enable_services = Column(Boolean, default=True, comment="Módulo de Turnos/Citas")
+    enable_products = Column(Boolean, default=True, comment="Módulo de Catálogo")
+    enable_faqs = Column(Boolean, default=True, comment="Módulo de Preguntas Frecuentes")
+
+    # Configuración de Contacto y Redes
+    address = Column(String(255), nullable=True, comment="Dirección física del negocio")
+    phone = Column(String(50), nullable=True, comment="Teléfono comercial de contacto")
+    email = Column(String(255), nullable=True, comment="Email comercial de contacto")
+    website = Column(String(255), nullable=True, comment="Sitio web del negocio")
+    instagram = Column(String(100), nullable=True, comment="Usuario de Instagram")
+    facebook = Column(String(100), nullable=True, comment="Usuario de Facebook")
+    tiktok = Column(String(100), nullable=True, comment="Usuario de TikTok")
+    twitter = Column(String(100), nullable=True, comment="Usuario de X (Twitter)")
 
     # Configuración WhatsApp
     whatsapp_phone_id = Column(
@@ -71,14 +86,14 @@ class Business(Base):
         comment="Acepta efectivo",
     )
 
-    # NUEVOS CAMPOS: Sincronización con el Dashboard (FAQ Dinámico)
+    # Horarios y Contacto compilados
     horarios = Column(
         String(255), nullable=True, 
         comment="Horarios de atención"
     )
     contacto = Column(
         String(255), nullable=True, 
-        comment="Información de contacto"
+        comment="Información de contacto resumida"
     )
 
     # Configuración de recordatorios
@@ -88,7 +103,7 @@ class Business(Base):
     )
     owner_phone = Column(
         String(50), nullable=True,
-        comment="WhatsApp del dueño para notificaciones de fallo de recordatorio",
+        comment="WhatsApp del dueño para notificaciones de fallo de recordatorio y handover",
     )
 
     # Canales alternativos de notificación

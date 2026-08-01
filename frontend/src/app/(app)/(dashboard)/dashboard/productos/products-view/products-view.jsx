@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Scissors, X } from "lucide-react";
+import { Loader2, Package, Pencil, Plus, X } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge/badge";
@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table/table";
-import { formatCurrency, formatDuration } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const FILTERS = {
@@ -42,47 +42,38 @@ function FilterTab({ active, count, label, onClick }) {
   );
 }
 
-export default function ServicesView({
-  services = [],
+export default function ProductsView({
+  products = [],
   isLoading,
   isError,
   error,
   onRetry,
-  onAddService,
-  onEditService,
-  onDeleteService,
-  onToggleStatus,
+  onAddProduct,
+  onEditProduct,
+  onDeleteProduct,
 }) {
   const [filter, setFilter] = useState(FILTERS.ALL);
 
   const counts = useMemo(
     () => ({
-      all: services.length,
-      active: services.filter((s) => s.active).length,
-      inactive: services.filter((s) => !s.active).length,
+      all: products.length,
+      active: products.filter((p) => p.active).length,
+      inactive: products.filter((p) => !p.active).length,
     }),
-    [services],
+    [products],
   );
 
-  const filteredServices = useMemo(() => {
-    if (filter === FILTERS.ACTIVE) return services.filter((s) => s.active);
-    if (filter === FILTERS.INACTIVE) return services.filter((s) => !s.active);
-    return services;
-  }, [filter, services]);
-
-  const handleToggleStatus = (serviceId, active) => {
-    onToggleStatus?.(serviceId, active);
-  };
-
-  const handleDelete = (serviceId) => {
-    onDeleteService?.(serviceId);
-  };
+  const filteredProducts = useMemo(() => {
+    if (filter === FILTERS.ACTIVE) return products.filter((p) => p.active);
+    if (filter === FILTERS.INACTIVE) return products.filter((p) => !p.active);
+    return products;
+  }, [filter, products]);
 
   if (isLoading) {
     return (
       <section className="flex flex-1 flex-col items-center justify-center gap-3 py-20">
         <Loader2 className="size-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Cargando servicios...</p>
+        <p className="text-sm text-muted-foreground">Cargando productos...</p>
       </section>
     );
   }
@@ -98,12 +89,12 @@ export default function ServicesView({
   return (
     <section className="flex flex-1 flex-col">
       <PageHeader
-        icon={<Scissors className="size-5" />}
-        title="Mis Servicios"
+        icon={<Package className="size-5" />}
+        title="Catálogo de Productos"
         action={
-          <Button type="button" onClick={onAddService} className="h-10 px-4">
+          <Button type="button" onClick={onAddProduct} className="h-10 px-4">
             <Plus data-icon="inline-start" />
-            Agregar servicio
+            Agregar producto
           </Button>
         }
       />
@@ -118,60 +109,54 @@ export default function ServicesView({
         <Table>
           <TableHeader>
             <TableRow className="border-border bg-muted/50 hover:bg-muted/50">
-              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Servicio</TableHead>
-              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Categoría</TableHead>
-              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Duración</TableHead>
-              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Precio Base</TableHead>
+              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Producto</TableHead>
+              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Stock</TableHead>
+              <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Precio</TableHead>
               <TableHead className="px-5 text-xs font-semibold tracking-wide text-muted-foreground">Estado</TableHead>
               <TableHead className="px-5 text-right text-xs font-semibold tracking-wide text-muted-foreground">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredServices.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="px-5 py-10 text-center text-muted-foreground">
-                  No hay servicios en esta categoría.
+                <TableCell colSpan={5} className="px-5 py-10 text-center text-muted-foreground">
+                  No hay productos en este catálogo.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredServices.map((service) => (
-                <TableRow key={service.id} className="border-border hover:bg-muted/30">
-                  <TableCell className="px-5 py-4 font-medium text-foreground">{service.name}</TableCell>
-                  <TableCell className="px-5 py-4">
-                    <Badge variant="secondary">{service.category}</Badge>
+              filteredProducts.map((product) => (
+                <TableRow key={product.id} className="border-border hover:bg-muted/30">
+                  <TableCell className="px-5 py-4 font-medium text-foreground">
+                    <div>
+                      <p>{product.name}</p>
+                      {product.description && (
+                        <p className="text-xs text-muted-foreground">{product.description}</p>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell className="px-5 py-4 text-muted-foreground">{formatDuration(service.durationMinutes)}</TableCell>
-                  <TableCell className="px-5 py-4 text-muted-foreground">{formatCurrency(service.basePrice)}</TableCell>
+                  <TableCell className="px-5 py-4">
+                    <Badge variant={product.stock > 0 ? "secondary" : "destructive"}>
+                      {product.stock} unidades
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-5 py-4 text-muted-foreground">{formatCurrency(product.price)}</TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center gap-2">
-                      <Switch
-                        checked={service.active}
-                        onCheckedChange={(checked) => handleToggleStatus(service.id, checked)}
-                      />
-                      <span className={cn("text-xs font-semibold uppercase", service.active ? "text-foreground" : "text-muted-foreground")}>
-                        {service.active ? "ON" : "OFF"}
+                      <Switch checked={product.active} disabled />
+                      <span className={cn("text-xs font-semibold uppercase", product.active ? "text-foreground" : "text-muted-foreground")}>
+                        {product.active ? "ON" : "OFF"}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onEditService?.(service.id)}
-                        aria-label={`Editar ${service.name}`}
-                        title="Editar servicio"
-                      >
+                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onEditProduct?.(product.id)} aria-label={`Editar ${product.name}`}>
                         <Pencil />
                       </Button>
                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(service.id)}
-                        aria-label={`Eliminar ${service.name}`}
-                        title="Eliminar servicio"
+                        type="button" variant="ghost" size="icon-sm"
+                        onClick={() => onDeleteProduct?.(product.id)}
+                        aria-label={`Eliminar ${product.name}`}
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <X />

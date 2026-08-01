@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import ServicesView from "@/components/features/services/services-view/services-view";
+import ProductsView from "@/components/features/products/products-view/products-view";
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
-import { useServicios } from "@/hooks/useServicios";
+import { useProductos } from "@/hooks/useProductos";
 import {
   Dialog,
   DialogContent,
@@ -16,87 +16,90 @@ import { Input } from "@/components/ui/input/input";
 import { Label } from "@/components/ui/label/label";
 import { Textarea } from "@/components/ui/textarea/textarea";
 
-export default function ServiciosPage() {
+export default function ProductosPage() {
   const {
-    services,
+    products,
     isLoading,
     isError,
     error,
     refetch,
-    createService,
-    updateService,
-    deleteService,
+    createProduct,
+    updateProduct,
+    deleteProduct,
     isCreating,
     isUpdating,
     isDeleting,
-  } = useServicios();
+  } = useProductos();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
 
-  const [deletingService, setDeletingService] = useState(null);
+  const [deletingProduct, setDeletingProduct] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    durationMinutes: 30,
-    basePrice: 5000,
+    price: 3500,
+    stock: 10,
+    active: true,
   });
 
   const handleOpenAdd = () => {
-    setEditingService(null);
+    setEditingProduct(null);
     setFormData({
       name: "",
       description: "",
-      durationMinutes: 30,
-      basePrice: 5000,
+      price: 3500,
+      stock: 10,
+      active: true,
     });
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (serviceId) => {
-    const svc = services.find((s) => String(s.id) === String(serviceId));
-    if (svc) {
-      setEditingService(svc);
+  const handleOpenEdit = (productId) => {
+    const prod = products.find((p) => String(p.id) === String(productId));
+    if (prod) {
+      setEditingProduct(prod);
       setFormData({
-        name: svc.name,
-        description: svc.description || "",
-        durationMinutes: svc.durationMinutes || 30,
-        basePrice: svc.basePrice || 0,
+        name: prod.name,
+        description: prod.description || "",
+        price: prod.price || 0,
+        stock: prod.stock || 0,
+        active: prod.active ?? true,
       });
       setIsModalOpen(true);
     }
   };
 
-  const handleOpenDelete = (serviceId) => {
-    const svc = services.find((s) => String(s.id) === String(serviceId));
-    if (svc) {
-      setDeletingService(svc);
+  const handleOpenDelete = (productId) => {
+    const prod = products.find((p) => String(p.id) === String(productId));
+    if (prod) {
+      setDeletingProduct(prod);
       setIsDeleteModalOpen(true);
     }
   };
 
   const handleConfirmDelete = () => {
-    if (deletingService) {
-      deleteService(deletingService.id, {
+    if (deletingProduct) {
+      deleteProduct(deletingProduct.id, {
         onSuccess: () => {
           setIsDeleteModalOpen(false);
-          setDeletingService(null);
+          setDeletingProduct(null);
         },
       });
     }
   };
 
-  const handleToggleStatus = (serviceId, newActive) => {
-    const svc = services.find((s) => String(s.id) === String(serviceId));
-    if (svc) {
-      updateService({
-        id: svc.id,
-        name: svc.name,
-        description: svc.description,
-        durationMinutes: svc.durationMinutes,
-        basePrice: svc.basePrice,
+  const handleToggleStatus = (productId, newActive) => {
+    const prod = products.find((p) => String(p.id) === String(productId));
+    if (prod) {
+      updateProduct({
+        id: prod.id,
+        name: prod.name,
+        description: prod.description,
+        price: prod.price,
+        stock: prod.stock,
         active: newActive,
       });
     }
@@ -106,9 +109,9 @@ export default function ServiciosPage() {
     e.preventDefault();
     if (!formData.name.trim()) return;
 
-    if (editingService) {
-      updateService(
-        { id: editingService.id, ...formData, active: editingService.active },
+    if (editingProduct) {
+      updateProduct(
+        { id: editingProduct.id, ...formData, active: editingProduct.active },
         {
           onSuccess: () => {
             setIsModalOpen(false);
@@ -116,7 +119,7 @@ export default function ServiciosPage() {
         }
       );
     } else {
-      createService(formData, {
+      createProduct(formData, {
         onSuccess: () => {
           setIsModalOpen(false);
         },
@@ -126,67 +129,67 @@ export default function ServiciosPage() {
 
   return (
     <DashboardPageLayout>
-      <ServicesView
-        services={services}
+      <ProductsView
+        products={products}
         isLoading={isLoading}
         isError={isError}
         error={error}
         onRetry={refetch}
-        onAddService={handleOpenAdd}
-        onEditService={handleOpenEdit}
-        onDeleteService={handleOpenDelete}
+        onAddProduct={handleOpenAdd}
+        onEditProduct={handleOpenEdit}
+        onDeleteProduct={handleOpenDelete}
         onToggleStatus={handleToggleStatus}
       />
 
-      {/* Modal de Crear / Editar Servicio */}
+      {/* Modal de Crear / Editar Producto */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>
-              {editingService ? "Editar Servicio" : "Nuevo Servicio"}
+              {editingProduct ? "Editar Producto" : "Nuevo Producto"}
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label htmlFor="svc-name">Nombre del servicio</Label>
+              <Label htmlFor="prod-name">Nombre del producto</Label>
               <Input
-                id="svc-name"
+                id="prod-name"
                 value={formData.name}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, name: e.target.value }))
                 }
-                placeholder="Ej. Limpieza Dental / Consulta"
+                placeholder="Ej. Pasta Dental Especial / Cepillo"
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="svc-desc">Descripción (opcional)</Label>
+              <Label htmlFor="prod-desc">Descripción (opcional)</Label>
               <Textarea
-                id="svc-desc"
+                id="prod-desc"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-                placeholder="Detalle breve del servicio..."
+                placeholder="Detalle del producto..."
                 className="resize-none"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="svc-duration">Duración (min)</Label>
+                <Label htmlFor="prod-price">Precio ($)</Label>
                 <Input
-                  id="svc-duration"
+                  id="prod-price"
                   type="number"
-                  min={5}
-                  step={5}
-                  value={formData.durationMinutes}
+                  min={0}
+                  step={100}
+                  value={formData.price}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      durationMinutes: Number(e.target.value),
+                      price: Number(e.target.value),
                     }))
                   }
                   required
@@ -194,17 +197,16 @@ export default function ServiciosPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="svc-price">Precio ($)</Label>
+                <Label htmlFor="prod-stock">Stock disponible</Label>
                 <Input
-                  id="svc-price"
+                  id="prod-stock"
                   type="number"
                   min={0}
-                  step={100}
-                  value={formData.basePrice}
+                  value={formData.stock}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      basePrice: Number(e.target.value),
+                      stock: Number(e.target.value),
                     }))
                   }
                   required
@@ -232,10 +234,10 @@ export default function ServiciosPage() {
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>¿Eliminar Servicio?</DialogTitle>
+            <DialogTitle>¿Eliminar Producto?</DialogTitle>
           </DialogHeader>
           <div className="py-2 text-sm text-muted-foreground leading-relaxed">
-            ¿Estás seguro de que deseas eliminar el servicio <strong className="text-foreground">&quot;{deletingService?.name}&quot;</strong>? Se eliminará de tu catálogo y dejará de estar disponible.
+            ¿Estás seguro de que deseas eliminar el producto <strong className="text-foreground">&quot;{deletingProduct?.name}&quot;</strong>? Se eliminará de tu catálogo y dejará de mostrarse en el chatbot de WhatsApp.
           </div>
           <DialogFooter className="pt-2">
             <Button
