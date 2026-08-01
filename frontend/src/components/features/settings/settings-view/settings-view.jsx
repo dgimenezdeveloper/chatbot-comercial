@@ -293,6 +293,28 @@ export default function SettingsView() {
               className="h-10"
             />
           </FieldRow>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FieldRow label="Instagram" htmlFor="biz-instagram">
+              <Input
+                id="biz-instagram"
+                value={business.instagram}
+                onChange={updateBusiness("instagram")}
+                placeholder="@tunegocio"
+                className="h-10"
+              />
+            </FieldRow>
+
+            <FieldRow label="Facebook" htmlFor="biz-facebook">
+              <Input
+                id="biz-facebook"
+                value={business.facebook}
+                onChange={updateBusiness("facebook")}
+                placeholder="/tunegocio"
+                className="h-10"
+              />
+            </FieldRow>
+          </div>
         </SettingsSection>
 
         {/* ── Módulos del Chatbot ──────────────────────────────────────────── */}

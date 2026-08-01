@@ -1,4 +1,3 @@
-
 "use client";
 
 import Image from "next/image";
@@ -23,10 +22,6 @@ export default function LogoUpload({
   const [previewUrl, setPreviewUrl] = useState(null);
   const [localError, setLocalError] = useState("");
 
-  /**
-   * Crea una URL temporal para mostrar la imagen.
-   * También limpia la URL anterior para evitar fugas de memoria.
-   */
   useEffect(() => {
     if (!value) {
       setPreviewUrl(null);
@@ -67,10 +62,6 @@ export default function LogoUpload({
 
     onChange(file);
 
-    /**
-     * Limpiamos el valor del input para permitir
-     * seleccionar nuevamente el mismo archivo.
-     */
     event.target.value = "";
   };
 

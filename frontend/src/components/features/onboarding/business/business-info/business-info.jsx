@@ -85,7 +85,7 @@ export default function BusinessInfo({ data, errors = {}, onFieldChange }) {
 
       {/* Dirección */}
       <div>
-        <Label htmlFor="business-address">Dirección</Label>
+        <Label htmlFor="business-address">Dirección física</Label>
         <InputWithIcon
           id="business-address"
           icon={<MapPin className="size-4" />}
