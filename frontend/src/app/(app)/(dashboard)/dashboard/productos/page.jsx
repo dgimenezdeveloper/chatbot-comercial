@@ -230,14 +230,14 @@ export default function ProductosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmación de Desactivación */}
+      {/* Modal de Confirmación de Eliminación */}
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>¿Desactivar Producto?</DialogTitle>
+            <DialogTitle>¿Eliminar Producto?</DialogTitle>
           </DialogHeader>
           <div className="py-2 text-sm text-muted-foreground leading-relaxed">
-            El producto <strong className="text-foreground">&quot;{deletingProduct?.name}&quot;</strong> pasará a estar inactivo. Dejará de mostrarse en el catálogo del chatbot de WhatsApp.
+            ¿Estás seguro de que deseas eliminar el producto <strong className="text-foreground">&quot;{deletingProduct?.name}&quot;</strong>? Se eliminará de tu catálogo y dejará de mostrarse en el chatbot de WhatsApp.
           </div>
           <DialogFooter className="pt-2">
             <Button
@@ -253,7 +253,7 @@ export default function ProductosPage() {
               onClick={handleConfirmDelete}
               disabled={isDeleting}
             >
-              {isDeleting ? "Desactivando..." : "Desactivar"}
+              {isDeleting ? "Eliminando..." : "Eliminar"}
             </Button>
           </DialogFooter>
         </DialogContent>

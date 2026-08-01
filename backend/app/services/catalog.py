@@ -61,12 +61,21 @@ def update_service(db: Session, service_id: int, business_id: int, data: dict) -
 
 
 def delete_service(db: Session, service_id: int, business_id: int) -> bool:
+    """Elimina un servicio. Si posee turnos asociados, se desactiva para preservar el historial."""
     service = get_service(db, service_id, business_id)
     if not service:
         return False
-    service.is_active = False
-    db.commit()
-    logger.info("Servicio desactivado: id=%s", service.id)
+    try:
+        db.delete(service)
+        db.commit()
+        logger.info("Servicio eliminado de la base de datos: id=%s", service_id)
+    except Exception:
+        db.rollback()
+        service = get_service(db, service_id, business_id)
+        if service:
+            service.is_active = False
+            db.commit()
+            logger.info("Servicio desactivado por integridad referencial con turnos: id=%s", service_id)
     return True
 
 
@@ -109,10 +118,11 @@ def update_product(db: Session, product_id: int, business_id: int, data: dict) -
 
 
 def delete_product(db: Session, product_id: int, business_id: int) -> bool:
+    """Elimina un producto de la base de datos."""
     product = get_product(db, product_id, business_id)
     if not product:
         return False
-    product.is_active = False
+    db.delete(product)
     db.commit()
-    logger.info("Producto desactivado: id=%s", product.id)
+    logger.info("Producto eliminado de la base de datos: id=%s", product_id)
     return True

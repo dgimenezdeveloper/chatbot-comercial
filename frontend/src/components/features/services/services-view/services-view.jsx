@@ -170,8 +170,8 @@ export default function ServicesView({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleDelete(service.id)}
-                        aria-label={`Desactivar ${service.name}`}
-                        title="Desactivar servicio"
+                        aria-label={`Eliminar ${service.name}`}
+                        title="Eliminar servicio"
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <X />

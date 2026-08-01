@@ -228,14 +228,14 @@ export default function ServiciosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmación de Desactivación */}
+      {/* Modal de Confirmación de Eliminación */}
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>¿Desactivar Servicio?</DialogTitle>
+            <DialogTitle>¿Eliminar Servicio?</DialogTitle>
           </DialogHeader>
           <div className="py-2 text-sm text-muted-foreground leading-relaxed">
-            El servicio <strong className="text-foreground">&quot;{deletingService?.name}&quot;</strong> pasará a estar inactivo. Dejará de aparecer en el menú del chatbot de WhatsApp y no podrá ser reservado por tus clientes.
+            ¿Estás seguro de que deseas eliminar el servicio <strong className="text-foreground">&quot;{deletingService?.name}&quot;</strong>? Se eliminará de tu catálogo y dejará de estar disponible.
           </div>
           <DialogFooter className="pt-2">
             <Button
@@ -251,7 +251,7 @@ export default function ServiciosPage() {
               onClick={handleConfirmDelete}
               disabled={isDeleting}
             >
-              {isDeleting ? "Desactivando..." : "Desactivar"}
+              {isDeleting ? "Eliminando..." : "Eliminar"}
             </Button>
           </DialogFooter>
         </DialogContent>

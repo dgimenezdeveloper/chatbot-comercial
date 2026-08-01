@@ -169,8 +169,8 @@ export default function ProductsView({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => onDeleteProduct?.(product.id)}
-                        aria-label={`Desactivar ${product.name}`}
-                        title="Desactivar producto"
+                        aria-label={`Eliminar ${product.name}`}
+                        title="Eliminar producto"
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <X />
