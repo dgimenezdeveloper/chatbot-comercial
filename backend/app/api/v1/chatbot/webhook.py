@@ -7,11 +7,12 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.settings import settings
-from app.db.database import get_db
+from app.db.database import get_db, Base, engine
 from app.db.models.sessions import ChatSession
 from app.db.models.feedback import Feedback
 from app.db.models.service import Service
 from app.db.models.product import Product
+from app.db.models.product_order import ProductOrder
 from app.db.models.user import User
 from app.db.models.business import Business
 from app.db.models.faq import FAQ
@@ -48,7 +49,6 @@ def get_dynamic_menu(db: Session, business_id: int) -> list:
     if biz and getattr(biz, 'enable_faqs', True):
         buttons.append({"id": "btn_faq", "title": "❓ Consultas"})
         
-    # Fallback de seguridad por si desactivan todo
     if not buttons:
         buttons.append({"id": "btn_faq", "title": "❓ Consultas"})
         
@@ -80,7 +80,11 @@ def is_same_phone(phone1: str | None, phone2: str | None) -> bool:
     return p1[-8:] == p2[-8:] if len(p1) >= 8 and len(p2) >= 8 else p1 == p2
 
 def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
-    if selected_id in ["btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq"] or selected_id.startswith("rem_") or selected_id.startswith("btn_mod_appt_") or selected_id.startswith("btn_confirm_cancel_"):
+    global_allowed = [
+        "btn_volver_menu", "btn_turnos", "btn_catalogo", "btn_faq",
+        "btn_finalizar_pedido", "btn_agregar_producto", "btn_agregar_servicio", "btn_continuar_fecha"
+    ]
+    if selected_id in global_allowed or selected_id.startswith("rem_") or selected_id.startswith("btn_mod_appt_") or selected_id.startswith("btn_confirm_cancel_"):
         return True
 
     if current_step == "NUEVO":
@@ -491,21 +495,53 @@ async def handle_product_selection(phone: str, selected_id: str, row_title: str,
     await send_interactive_buttons(phone=phone, body_text=body_text, buttons=buttons)
 
 async def execute_product_reservation(phone: str, client_name: str, user_state: dict, business_id: int, db: Session):
-    user = get_or_create_user(db, phone, business_id, name=client_name.strip())
-    productos = user_state.get("productos", [])
-    total_price = sum(p["price"] for p in productos)
-    names = "\n- ".join(p["name"] for p in productos)
-    
-    biz = db.query(Business).filter(Business.id == business_id).first()
-    horarios = biz.horarios if biz and biz.horarios else "nuestro horario de atención"
+    try:
+        # Asegurar creación automática de la tabla si no existe
+        Base.metadata.create_all(bind=engine)
 
-    await send_interactive_buttons(
-        phone=phone, 
-        body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de:\n{names}\nTotal: ${total_price:,.0f}\n\nEstá asentada. Puedes pasar a retirarlo por el local en {horarios}.",
-        buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
-    )
-    log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "productos": names, "total": total_price})
-    await clear_user_state(phone)
+        user = get_or_create_user(db, phone, business_id, name=client_name.strip())
+        productos = user_state.get("productos", [])
+        if not productos:
+            last_prod = db.query(Product).filter(Product.business_id == business_id, Product.is_active.is_(True)).first()
+            if last_prod:
+                productos = [{"id": last_prod.id, "name": last_prod.name, "price": float(last_prod.price or 0)}]
+
+        total_price = float(sum(p["price"] for p in productos))
+        names = "\n- ".join(p["name"] for p in productos)
+        
+        nueva_orden = ProductOrder(
+            business_id=business_id,
+            user_name=client_name.strip(),
+            user_phone=phone,
+            items_json=productos,
+            total_price=total_price,
+            status="pendiente"
+        )
+        db.add(nueva_orden)
+        db.commit()
+        db.refresh(nueva_orden)
+        
+        logger.info(f"✅ ORDEN REGISTRADA OK: ID={nueva_orden.id}, Cliente={client_name}, Total={total_price}")
+
+        biz = db.query(Business).filter(Business.id == business_id).first()
+        horarios = biz.horarios if biz and biz.horarios else "nuestro horario de atención"
+
+        await send_interactive_buttons(
+            phone=phone, 
+            body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de:\n- {names}\nTotal: ${total_price:,.0f}\n\nEstá asentada. Puedes pasar a retirarlo por el local en {horarios}.",
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+        )
+        log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "productos": names, "total": total_price})
+        await clear_user_state(phone)
+    except Exception as e:
+        logger.exception(f"Error crítico en execute_product_reservation: {e}")
+        db.rollback()
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="⚠️ Ocurrió un inconveniente al guardar tu pedido. Por favor intenta nuevamente.",
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+        )
+        await clear_user_state(phone)
 
 # =============================================================================
 # CONSULTA, CANCELACIÓN Y FAQ
@@ -540,7 +576,7 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
         if visits:
             last_visit = visits[-1]
             if (last_visit["date_str"] == local_dt.strftime("%d/%m/%Y") and
-                abs((local_dt - last_visit["end_dt"]).total_seconds()) <= 300):
+                abs((last_visit["end_dt"] - local_dt).total_seconds()) <= 300):
                 last_visit["services"].append(svc_name)
                 last_visit["appt_ids"].append(appt.id)
                 last_visit["end_dt"] = local_dt + timedelta(minutes=svc_duration)
@@ -613,7 +649,7 @@ async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_
         if visits:
             last_visit = visits[-1]
             if (last_visit["date_str"] == local_dt.strftime("%d/%m/%Y") and
-                abs((local_dt - last_visit["end_dt"]).total_seconds()) <= 300):
+                abs((last_visit["end_dt"] - local_dt).total_seconds()) <= 300):
                 last_visit["services"].append(svc_name)
                 last_visit["end_dt"] = local_dt + timedelta(minutes=svc_duration)
                 continue
@@ -774,7 +810,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                     short_id = parts[0]
                     client_phone = await get_client_by_short_id(current_business_id, short_id)
                     if client_phone:
-                        # Es un mensaje del dueño para responder o cerrar chat con cliente
                         if len(parts) > 1 and parts[1].strip().lower() == "#fin":
                             await close_human_proxy(current_business_id, short_id)
                             await send_message(phone_number, f"✅ Chat #{short_id} cerrado. Asistente virtual reactivado para el cliente.")
@@ -828,7 +863,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             if message_type == "text":
                 user_text = message.get("text", {}).get("body", "").strip()
 
-                # Comandos de reseteo de demo
                 if user_text.lower() == "/reset_demo estetica":
                     await _reset_demo_tenant(db, phone_number, 1, "Peluquería")
                     return {"status": "success"}
@@ -838,9 +872,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                 elif user_text.lower() in ["/reset_demo odontologia", "/reset_demo odontología", "/reset_demo centro odontologico"]:
                     await _reset_demo_tenant(db, phone_number, 3, "Centro Odontológico")
                     return {"status": "success"}
-                
 
-                # Comando para abrir ventana de 24hs del dueño sin activar menú de cliente
                 biz = db.query(Business).filter(Business.id == current_business_id).first()
                 owner_phone = format_phone_for_meta(biz.owner_phone) if biz else None
 
@@ -978,6 +1010,6 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                         await send_message(phone_number, "Tu turno ha sido cancelado. ¡Gracias por avisar!")
 
     except Exception as e:
-        logger.error(f"Error procesando webhook: {str(e)}")
+        logger.exception(f"Error procesando webhook: {str(e)}")
 
     return {"status": "success"}

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
+from datetime import datetime
 
 class ServicioRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -29,3 +30,17 @@ class ProductoResponse(ProductoRequest):
     model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(..., description="Identificador único del producto")
+
+class PedidoEstadoRequest(BaseModel):
+    estado: str = Field(..., description="Nuevo estado: pendiente, entregado, cancelado")
+
+class PedidoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_name: Optional[str]
+    user_phone: Optional[str]
+    items_json: list
+    total_price: float
+    status: str
+    created_at: datetime

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.database import get_db
-from app.schemas.catalog import ProductoRequest, ProductoResponse
+from app.schemas.catalog import ProductoRequest, ProductoResponse, PedidoResponse, PedidoEstadoRequest
+from app.db.models.product_order import ProductOrder
 from app.services.catalog import (
     create_product,
     delete_product,
@@ -71,6 +72,32 @@ async def crear_producto_endpoint(
         activo=new_prod.is_active if new_prod.is_active is not None else True
     )
 
+@router.get("/pedidos", response_model=List[PedidoResponse], status_code=status.HTTP_200_OK)
+async def listar_pedidos(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    business_id = current_user.get("business_id", 1)
+    pedidos = db.query(ProductOrder).filter(ProductOrder.business_id == business_id).order_by(ProductOrder.created_at.desc()).all()
+    return pedidos
+
+@router.put("/pedidos/{pedido_id}/estado", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
+async def actualizar_estado_pedido(
+    pedido_id: int,
+    payload: PedidoEstadoRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    business_id = current_user.get("business_id", 1)
+    pedido = db.query(ProductOrder).filter(ProductOrder.id == pedido_id, ProductOrder.business_id == business_id).first()
+    
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        
+    pedido.status = payload.estado
+    db.commit()
+    db.refresh(pedido)
+    return pedido
 
 @router.put("/{producto_id}", response_model=ProductoResponse, status_code=status.HTTP_200_OK)
 async def actualizar_producto_endpoint(

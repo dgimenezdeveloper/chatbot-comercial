@@ -20,3 +20,13 @@ export async function updateProducto(id, payload) {
 export async function deleteProducto(id) {
   await apiClient.delete(`/catalog/productos/${id}`);
 }
+
+export async function fetchPedidos() {
+  const { data } = await apiClient.get(`${ENDPOINT}pedidos`);
+  return data;
+}
+
+export async function updatePedidoEstado(id, estado) {
+  const { data } = await apiClient.put(`${ENDPOINT}pedidos/${id}/estado`, { estado });
+  return data;
+}

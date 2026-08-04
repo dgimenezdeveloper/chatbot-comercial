@@ -1,8 +1,4 @@
-"""Modelos SQLAlchemy — capa de persistencia.
-
-Importar todos los modelos aquí garantiza que ``Base.metadata`` los registre
-para ``create_all()`` y Alembic autogenerate.
-"""
+"""Modelos SQLAlchemy — capa de persistencia."""
 
 from app.db.models.business import Business
 from app.db.models.user import User
@@ -16,6 +12,7 @@ from app.db.models.feedback import Feedback
 from app.db.models.turno_apuesta import TurnoApuesta
 from app.db.models.metric_threshold import MetricThreshold
 from app.db.models.reminder_log import ReminderLog
+from app.db.models.product_order import ProductOrder
 
 __all__ = [
     "Business",
@@ -30,4 +27,5 @@ __all__ = [
     "TurnoApuesta",
     "MetricThreshold",
     "ReminderLog",
+    "ProductOrder",
 ]
