@@ -87,9 +87,6 @@ def is_action_valid_for_state(selected_id: str, current_step: str) -> bool:
     if selected_id in global_allowed or selected_id.startswith("rem_") or selected_id.startswith("btn_mod_appt_") or selected_id.startswith("btn_confirm_cancel_"):
         return True
 
-    if current_step == "NUEVO":
-        return True
-
     allowed_prefixes_per_state = {
         "MENU_PRINCIPAL": ["srv_", "action_ver_turno", "action_cancelar_turno", "prod_", "faq_", "btn_hablar_humano"],
         "SELECCIONANDO_SERVICIO": ["srv_", "action_ver_turno", "action_cancelar_turno"],
@@ -201,7 +198,11 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             
         services = get_active_services(db, business_id)
         if not services:
-            await send_message(phone=phone, text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.")
+            await send_interactive_buttons(
+                phone=phone, 
+                body_text=f"💇‍♀️ {nombre_negocio} no tiene servicios disponibles en este momento.",
+                buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
+            )
             return
 
         rows_services = [{"id": f"srv_{s.id}", "title": s.name[:24], "description": f"{s.duration_minutes or 30} min | ${float(s.price):,.0f}"[:72]} for s in services[:7]]
@@ -226,7 +227,11 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
             
         products = get_products(db, business_id)
         if not products:
-            await send_message(phone=phone, text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.")
+            await send_interactive_buttons(
+                phone=phone, 
+                body_text=f"🛒 {nombre_negocio} no tiene productos en catálogo actualmente.",
+                buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
+            )
             return
 
         rows = [{"id": f"prod_{p.id}", "title": p.name[:24], "description": f"Stock: {p.stock_quantity or 0} | ${float(p.price):,.0f}"[:72]} for p in products[:9]]
@@ -245,18 +250,19 @@ async def handle_main_menu_selection(phone: str, button_id: str, user_state: dic
         business = db.query(Business).filter(Business.id == business_id).first()
         rows = []
         
-        if business.horarios: rows.append({"id": "faq_sys_horarios", "title": "⏰ Horarios", "description": business.horarios[:72]})
-        if business.contacto: rows.append({"id": "faq_sys_contacto", "title": "📞 Contacto", "description": business.contacto[:72]})
+        # FIX: Descripciones como Call to Actions para evitar duplicidad visual
+        if business.horarios: rows.append({"id": "faq_sys_horarios", "title": "⏰ Horarios", "description": "Toca para conocer nuestros horarios"})
+        if business.contacto: rows.append({"id": "faq_sys_contacto", "title": "📞 Contacto", "description": "Toca para ver vías de comunicación"})
         
         pagos = []
         if business.accepts_cash: pagos.append("Efectivo")
         if business.accept_cards: pagos.append("Tarjetas")
-        if pagos: rows.append({"id": "faq_sys_pagos", "title": "💳 Métodos de pago", "description": " y ".join(pagos)[:72]})
+        if pagos: rows.append({"id": "faq_sys_pagos", "title": "💳 Métodos de pago", "description": "Toca para ver medios de pago"})
             
         faqs = get_faqs(db, business_id)
         for f in faqs:
             if len(rows) < 8:
-                rows.append({"id": f"faq_{f.id}", "title": f.question[:24], "description": f.answer[:72]})
+                rows.append({"id": f"faq_{f.id}", "title": f.question[:24], "description": "Toca para leer la respuesta"})
         
         rows.append({"id": "btn_hablar_humano", "title": "👤 Hablar con un humano", "description": "Conectar con un representante real"})
 
@@ -286,7 +292,14 @@ async def handle_service_selection(phone: str, selected_id: str, row_title: str,
     svc_db_id = int(selected_id.replace("srv_", "")) if selected_id.startswith("srv_") else 1
     service = db.query(Service).filter(Service.id == svc_db_id).first()
     if not service:
-        await send_message(phone, "Servicio no encontrado.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="Servicio no encontrado. 😔\n\n¿Qué deseas hacer?",
+            buttons=[
+                {"id": "btn_turnos", "title": "📅 Ver servicios"},
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal"}
+            ]
+        )
         return
 
     servicios = user_state.get("servicios", [])
@@ -347,7 +360,7 @@ async def show_date_selection(phone: str, user_state: dict, business_id: int, db
         days_checked += 1
 
     if not rows:
-        await send_interactive_buttons(phone=phone, body_text="No hay fechas disponibles próximamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await send_interactive_buttons(phone=phone, body_text="No hay fechas disponibles próximamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
         return
 
     sections = [
@@ -429,7 +442,11 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
     servicios = user_state.get("servicios", [])
     
     if not servicios:
-        await send_message(phone, "Error: No hay servicios seleccionados.")
+        await send_interactive_buttons(
+            phone=phone, 
+            body_text="Error: No hay servicios seleccionados.", 
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
+        )
         return
 
     tz_str = get_business_timezone(db, business_id)
@@ -457,9 +474,9 @@ async def execute_appointment_creation(phone: str, client_name: str, user_state:
     if created_appts:
         log_event(session_id=phone, business_id=business_id, event_type="appointment_created", payload={"appointment_ids": [a.id for a in created_appts], "via_bot": True, "servicios": names, "fecha": fecha_iso, "hora": hora_str})
         confirm_msg = f"🎉 *¡Turno Confirmado!*\n\n👤 *Cliente:* {client_name.strip()}\n💇‍♀️ *Servicios:* {names}\n📅 *Fecha:* {fecha_iso}\n⏰ *Hora de inicio:* {hora_str} hs\n\nTe esperamos en nuestro local."
-        await send_interactive_buttons(phone=phone, body_text=confirm_msg, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await send_interactive_buttons(phone=phone, body_text=confirm_msg, buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
     else:
-        await send_interactive_buttons(phone=phone, body_text="Error al procesar la reserva. Intenta nuevamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await send_interactive_buttons(phone=phone, body_text="Error al procesar la reserva. Intenta nuevamente.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
     
     await clear_user_state(phone)
 
@@ -471,7 +488,26 @@ async def handle_product_selection(phone: str, selected_id: str, row_title: str,
     prod_db_id = int(selected_id.replace("prod_", ""))
     product = db.query(Product).filter(Product.id == prod_db_id).first()
     if not product:
-        await send_message(phone, "Producto no encontrado.")
+        await send_interactive_buttons(
+            phone=phone,
+            body_text="Producto no encontrado. 😔\n\n¿Qué deseas hacer?",
+            buttons=[
+                {"id": "btn_catalogo", "title": "🛍️ Ver catálogo"},
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal"}
+            ]
+        )
+        return
+
+    # FIX: Validación de Stock Cero (Punto 3) - Flujo Circular
+    if product.stock_quantity is None or product.stock_quantity <= 0:
+        await send_interactive_buttons(
+            phone=phone,
+            body_text=f"Lo sentimos, el producto *{product.name}* se encuentra sin stock en este momento. 😔\n\n¿Qué deseas hacer?",
+            buttons=[
+                {"id": "btn_catalogo", "title": "🛍️ Ver catálogo"},
+                {"id": "btn_volver_menu", "title": "🔙 Menú Principal"}
+            ]
+        )
         return
 
     productos = user_state.get("productos", [])
@@ -529,7 +565,7 @@ async def execute_product_reservation(phone: str, client_name: str, user_state: 
         await send_interactive_buttons(
             phone=phone, 
             body_text=f"✅ ¡Pedido Guardado {client_name.strip()}!\n\nTu reserva de:\n- {names}\nTotal: ${total_price:,.0f}\n\nEstá asentada. Puedes pasar a retirarlo por el local en {horarios}.",
-            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
         )
         log_event(session_id=phone, business_id=business_id, event_type="conversation_closed", payload={"resultado_final": "producto_comprado", "productos": names, "total": total_price})
         await clear_user_state(phone)
@@ -539,7 +575,7 @@ async def execute_product_reservation(phone: str, client_name: str, user_state: 
         await send_interactive_buttons(
             phone=phone,
             body_text="⚠️ Ocurrió un inconveniente al guardar tu pedido. Por favor intenta nuevamente.",
-            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
         )
         await clear_user_state(phone)
 
@@ -559,7 +595,7 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
         await send_interactive_buttons(
             phone=phone, 
             body_text="👀 No tienes turnos próximos agendados.", 
-            buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}]
+            buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}]
         )
         await clear_user_state(phone)
         return
@@ -618,7 +654,7 @@ async def handle_view_appointment(phone: str, user_state: dict, business_id: int
         buttons=[
             {"id": f"btn_mod_appt_{primary_visit['primary_id']}", "title": "🔄 Modificar Turno"},
             {"id": f"btn_confirm_cancel_{primary_visit['primary_id']}", "title": "❌ Cancelar Turno"},
-            {"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}
+            {"id": "btn_volver_menu", "title": "🔙 Menú Principal"}
         ]
     )
 
@@ -633,7 +669,7 @@ async def handle_cancel_appointment_flow(phone: str, user_state: dict, business_
     upcoming = [a for a in appointments if a.status in ["scheduled", "confirmed"] and a.scheduled_date >= now_tz]
 
     if not upcoming:
-        await send_interactive_buttons(phone=phone, body_text="❌ No tienes turnos activos para cancelar.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await send_interactive_buttons(phone=phone, body_text="❌ No tienes turnos activos para cancelar.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
         await clear_user_state(phone)
         return
 
@@ -708,11 +744,11 @@ async def handle_cancel_confirmation(phone: str, button_id: str, user_state: dic
                     cancel_appointment(db=db, appointment_id=a.id, business_id=business_id, reason="Cancelado por el cliente")
                     log_event(session_id=phone, business_id=business_id, event_type="appointment_cancelled", payload={"appointment_id": a.id, "reason": "cancelado_por_cliente"})
                     
-                await send_interactive_buttons(phone=phone, body_text="✅ Tu turno ha sido cancelado con éxito. El horario fue liberado.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+                await send_interactive_buttons(phone=phone, body_text="✅ Tu turno ha sido cancelado con éxito. El horario fue liberado.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
             else:
-                await send_interactive_buttons(phone=phone, body_text="⚠️ Ocurrió un inconveniente al cancelar tu turno.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+                await send_interactive_buttons(phone=phone, body_text="⚠️ Ocurrió un inconveniente al cancelar tu turno.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
         except ValueError:
-            await send_interactive_buttons(phone=phone, body_text="Error al procesar la cancelación.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+            await send_interactive_buttons(phone=phone, body_text="Error al procesar la cancelación.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
         await clear_user_state(phone)
 
 async def handle_faq_selection(phone: str, selected_id: str, row_title: str, user_state: dict, business_id: int, db: Session):
@@ -740,14 +776,14 @@ async def handle_faq_selection(phone: str, selected_id: str, row_title: str, use
         else:
             respuesta_text = "No se encontró la respuesta."
             
-    await send_interactive_buttons(phone=phone, body_text=respuesta_text, buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+    await send_interactive_buttons(phone=phone, body_text=respuesta_text, buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
     await clear_user_state(phone)
 
 async def handle_faq_query(phone: str, user_text: str, user_state: dict, business_id: int, db: Session):
     faqs_encontradas = search_faqs(db, business_id, user_text)
     if faqs_encontradas:
         faq = faqs_encontradas[0]
-        await send_interactive_buttons(phone=phone, body_text=f"💡 *{faq.question}*\n\n{faq.answer}", buttons=[{"id": "btn_volver_menu", "title": "🔙 Volver al Menú"}])
+        await send_interactive_buttons(phone=phone, body_text=f"💡 *{faq.question}*\n\n{faq.answer}", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
         await clear_user_state(phone)
     else:
         await trigger_human_escalation(phone, user_text, user_state, business_id, db, reason="faq_not_found")
@@ -786,6 +822,23 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             raw_from = message.get("from")
             phone_number = clean_phone_number(raw_from)
             message_type = message.get("type")
+
+            # -----------------------------------------------------------------
+            # 0. VALIDACIÓN DE MENSAJES NO SOPORTADOS (Punto 5) - Flujo Circular
+            # -----------------------------------------------------------------
+            if message_type not in ["text", "interactive", "button"]:
+                # Obtener el business_id de la sesión si existe, sino usar el MOCK
+                db_session = db.query(ChatSession).filter(ChatSession.session_id == phone_number).first()
+                biz_id = db_session.business_id if db_session else MOCK_BUSINESS_ID
+                
+                botones_dinamicos = get_dynamic_menu(db, biz_id)
+                await send_interactive_buttons(
+                    phone=phone_number, 
+                    body_text="Por el momento solo puedo procesar mensajes de texto y botones del menú. 🤖\n\n¿Qué deseas realizar?",
+                    buttons=botones_dinamicos
+                )
+                await clear_user_state(phone_number)
+                return {"status": "success"}
 
             # -----------------------------------------------------------------
             # 1. ATENCIÓN DE SESIÓN DE CLIENTE BASE
@@ -831,13 +884,19 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             # 3. ¿EL CLIENTE ESTÁ EN MODO ATENCIÓN HUMANA?
             # -----------------------------------------------------------------
             if current_step == "HUMAN_ESCALATION":
-                if message_type == "interactive":
-                    interactive_data = message.get("interactive", {})
-                    if interactive_data.get("type") == "button_reply":
-                        selected_id = interactive_data.get("button_reply", {}).get("id")
-                        if selected_id in ["btn_volver_menu", "btn_cancelar_humano"]:
-                            await handle_welcome_flow(phone_number, current_business_id, db)
-                            return {"status": "success"}
+                if message_type in ["interactive", "button"]:
+                    selected_id = None
+                    if message_type == "interactive":
+                        interactive_data = message.get("interactive", {})
+                        interactive_type = interactive_data.get("type")
+                        if interactive_type == "button_reply":
+                            selected_id = interactive_data.get("button_reply", {}).get("id")
+                    elif message_type == "button":
+                        selected_id = message.get("button", {}).get("payload")
+
+                    if selected_id in ["btn_volver_menu", "btn_cancelar_humano"]:
+                        await handle_welcome_flow(phone_number, current_business_id, db)
+                        return {"status": "success"}
 
                 elif message_type == "text":
                     user_text = message.get("text", {}).get("body", "").strip()
@@ -904,17 +963,22 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
             # -----------------------------------------------------------------
             # 5. RESPUESTAS INTERACTIVAS (BOTONES Y LISTAS)
             # -----------------------------------------------------------------
-            elif message_type == "interactive":
-                interactive_data = message.get("interactive", {})
-                interactive_type = interactive_data.get("type")
-
+            elif message_type in ["interactive", "button"]:
                 selected_id = None
                 row_title = ""
-                if interactive_type == "button_reply":
-                    selected_id = interactive_data.get("button_reply", {}).get("id")
-                elif interactive_type == "list_reply":
-                    selected_id = interactive_data.get("list_reply", {}).get("id")
-                    row_title = interactive_data.get("list_reply", {}).get("title", "")
+                
+                if message_type == "interactive":
+                    interactive_data = message.get("interactive", {})
+                    interactive_type = interactive_data.get("type")
+
+                    if interactive_type == "button_reply":
+                        selected_id = interactive_data.get("button_reply", {}).get("id")
+                    elif interactive_type == "list_reply":
+                        selected_id = interactive_data.get("list_reply", {}).get("id")
+                        row_title = interactive_data.get("list_reply", {}).get("title", "")
+                elif message_type == "button":
+                    selected_id = message.get("button", {}).get("payload")
+                    row_title = message.get("button", {}).get("text", "")
 
                 if selected_id:
                     if not is_action_valid_for_state(selected_id, current_step):
@@ -961,7 +1025,7 @@ async def receive_webhook(payload: dict, db: Session = Depends(get_db)):
                             appt_id = int(selected_id.replace("cancel_appt_", ""))
                             await handle_cancel_confirmation(phone_number, f"btn_confirm_cancel_{appt_id}", user_state, current_business_id, db)
                         except ValueError:
-                            await send_message(phone_number, "Error al procesar la lista de cancelación.")
+                            await send_interactive_buttons(phone=phone_number, body_text="Error al procesar la lista de cancelación.", buttons=[{"id": "btn_volver_menu", "title": "🔙 Menú Principal"}])
                             await clear_user_state(phone_number)
                     elif selected_id.startswith("btn_mod_appt_") or selected_id.startswith("rem_mod_"):
                         appt_id = int(selected_id.replace("btn_mod_appt_", "").replace("rem_mod_", ""))

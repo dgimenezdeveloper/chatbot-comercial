@@ -36,6 +36,7 @@ export default function ServiciosPage() {
 
   const [deletingService, setDeletingService] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -46,6 +47,7 @@ export default function ServiciosPage() {
 
   const handleOpenAdd = () => {
     setEditingService(null);
+    setFormError("");
     setFormData({
       name: "",
       description: "",
@@ -59,6 +61,7 @@ export default function ServiciosPage() {
     const svc = services.find((s) => String(s.id) === String(serviceId));
     if (svc) {
       setEditingService(svc);
+      setFormError("");
       setFormData({
         name: svc.name,
         description: svc.description || "",
@@ -104,7 +107,22 @@ export default function ServiciosPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setFormError("");
+
     if (!formData.name.trim()) return;
+
+    // Validación de caracteres alfanuméricos (mínimo 3)
+    const alnumCount = (formData.name.match(/[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]/g) || []).length;
+    if (alnumCount < 3) {
+      setFormError("El nombre debe contener al menos 3 caracteres alfanuméricos.");
+      return;
+    }
+
+    // Validación de precio mayor a 0
+    if (formData.basePrice <= 0) {
+      setFormError("El precio del servicio debe ser mayor a $0.");
+      return;
+    }
 
     if (editingService) {
       updateService(
@@ -148,6 +166,12 @@ export default function ServiciosPage() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            {formError && (
+              <div className="text-sm font-medium text-destructive bg-destructive/10 p-3 rounded-md">
+                {formError}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="svc-name">Nombre del servicio</Label>
               <Input
