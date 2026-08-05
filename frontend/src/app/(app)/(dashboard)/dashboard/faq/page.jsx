@@ -31,30 +31,42 @@ export default function FaqPage() {
       />
 
       <div className="space-y-6">
-        {/* Banner principal Pymio Branding */}
-        <Card className="border-primary/20 bg-accent/40 overflow-hidden relative">
+        {/* Banner principal Pymio Branding con anuncio de IA */}
+        <Card className="border-primary/30 bg-gradient-to-br from-accent/50 to-primary/5 overflow-hidden relative">
           <CardContent className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-3 max-w-xl text-center md:text-left">
+            <div className="space-y-4 max-w-xl text-center md:text-left">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <Badge variant="default" className="bg-primary text-primary-foreground font-semibold">
+                <Badge variant="default" className="bg-primary text-primary-foreground font-semibold px-3 py-1">
                   MÓDULO ACTIVO
                 </Badge>
-                <Badge variant="outline" className="border-primary/40 text-primary">
-                  <Sparkles className="size-3 mr-1" /> IA & RAG Próximamente
+                <Badge variant="outline" className="border-purple-500 text-purple-700 bg-purple-50 px-3 py-1 animate-pulse">
+                  <Sparkles className="size-3 mr-1" /> Próximamente: IA & RAG
                 </Badge>
               </div>
 
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
                 Base de Conocimiento de Pymio
               </h2>
 
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Tus clientes pueden consultar automáticamente esta información desde el menú de WhatsApp. Pymio responderá instantáneamente tus horarios, dirección, métodos de pago y preguntas frecuentes.
+              <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+                Tus clientes ya pueden consultar esta información desde el menú de WhatsApp.
               </p>
+
+              {/* Caja destacada de IA */}
+              <div className="mt-4 p-4 rounded-lg bg-purple-100/50 border border-purple-200 text-left">
+                <h3 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+                  <Sparkles className="size-4" />
+                  Gestión de base de conocimiento mediante RAG e Inteligencia Artificial
+                </h3>
+                <p className="text-xs text-purple-800 mt-1">
+                  Muy pronto Pymio podrá leer tus documentos, PDFs y catálogos para responder cualquier duda de tus clientes de forma natural y autónoma, sin depender de menús fijos.
+                </p>
+              </div>
             </div>
 
-            <div className="shrink-0 flex items-center justify-center bg-card rounded-2xl p-4 shadow-sm border border-border">
-              <RobotPymio className="h-28 w-auto text-primary" />
+            <div className="shrink-0 flex items-center justify-center bg-card rounded-2xl p-4 shadow-md border border-border relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-primary rounded-2xl blur opacity-20"></div>
+              <RobotPymio className="h-32 w-auto text-primary relative z-10" />
             </div>
           </CardContent>
         </Card>

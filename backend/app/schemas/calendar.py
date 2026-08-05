@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class TurnoRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    nombre_cliente: Optional[str] = Field(None, description="Nombre del cliente")
     telefono: str = Field(..., description="Número de teléfono del cliente")
     servicio_id: int = Field(..., description="ID del servicio a reservar")
     fecha: str = Field(..., description="Fecha del turno en formato YYYY-MM-DD")
@@ -18,6 +19,5 @@ class TurnoResponse(TurnoRequest):
 
     id: int = Field(..., description="Identificador único del turno")
     estado: str = Field(default="confirmado", description="Estado actual del turno")
-    nombre_cliente: Optional[str] = Field(None, description="Nombre legible del cliente")
     nombre_servicio: Optional[str] = Field(None, description="Nombre legible del servicio")
     duracion_minutos: Optional[int] = Field(30, description="Duración del servicio en minutos")

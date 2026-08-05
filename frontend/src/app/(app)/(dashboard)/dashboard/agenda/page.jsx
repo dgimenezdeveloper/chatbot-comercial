@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import AgendaView from "@/components/features/agenda/agenda-view/agenda-view";
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { ErrorState } from "@/components/ui/error-state/error-state";
 import { useTurnos } from "@/hooks/useTurnos";
 import { Loader2 } from "lucide-react";
+import { CreateAppointmentDialog } from "@/components/features/agenda/CreateAppointmentDialog";
 
 /**
  * Mapeo de respaldo para traducir ID de servicio a su nombre descriptivo
@@ -93,6 +95,7 @@ function toAgendaAppointment(turno) {
 
 export default function AgendaPage() {
   const { turnos = [], isLoading, isError, error, refetch } = useTurnos();
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -122,7 +125,12 @@ export default function AgendaPage() {
 
   return (
     <DashboardPageLayout>
-      <AgendaView appointments={appointments} initialDate={new Date()} />
+      <AgendaView 
+        appointments={appointments} 
+        initialDate={new Date()} 
+        onNewAppointment={() => setIsAddModalOpen(true)} 
+      />
+      <CreateAppointmentDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
     </DashboardPageLayout>
   );
 }

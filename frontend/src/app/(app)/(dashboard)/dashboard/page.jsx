@@ -1,9 +1,9 @@
 import { auth } from "@/auth";
-import { Plus, LayoutDashboard } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 
 import { DashboardPageLayout } from "@/components/layout/DashboardPageLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button/button";
+import { AddAppointmentButton } from "@/components/features/agenda/AddAppointmentButton";
 import {
   Table,
   TableBody,
@@ -113,10 +113,7 @@ export default async function DashboardPage() {
           <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">
             Turnos de Hoy
           </h2>
-          <Button variant="outline" size="sm">
-            <Plus className="size-4" />
-            Agregar turno manual
-          </Button>
+          <AddAppointmentButton />
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border">
